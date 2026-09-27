@@ -344,6 +344,30 @@ class ReleaseWorkflowContractTest {
     }
 
     @Test
+    void neoforgeStepDeclaresTheSqliteLibraryModAsARequiredModrinthDependency() {
+        // Issue #304 (2026-09-27, this line): the NeoForge jar ships NO sqlite-jdbc (a
+        // nested copy is a ResolutionException beside the "Minecraft SQLite JDBC"
+        // library mod every other NeoForge SQLite consumer depends on). The mod
+        // declares it OPTIONAL (boots store-less without it); the Modrinth listing
+        // declares it REQUIRED so launchers and server panels install it beside LSS —
+        // the auto-install is the whole mitigation for the manual-install burden.
+        String neo = stepBlock("- name: Upload NeoForge to Modrinth");
+        assertTrue(neo.contains("dependencies: |"),
+                "the NeoForge Modrinth step must declare dependencies explicitly (the "
+                        + "TOML-derived list would publish the OPTIONAL sqlite_jdbc row "
+                        + "under an unknown slug)");
+        assertTrue(neo.contains("minecraft-sqlite-jdbc(required){modrinth:bTTf2DEw}"),
+                "the library mod must be REQUIRED (auto-install) and pinned by project id");
+        // The Fabric and Paper jars BUNDLE the driver — a dependency there would make
+        // launchers install a library those files never load.
+        for (String step : new String[]{"- name: Upload Fabric to Modrinth",
+                                        "- name: Upload Paper to Modrinth"}) {
+            assertFalse(stepBlock(step).contains("dependencies:"),
+                    step + " must not declare Modrinth dependencies (bundled driver)");
+        }
+    }
+
+    @Test
     void neoforgeStepNameIsDataDrivenAndUnderTheLabrinthCap() {
         // The version NAME is the only surface every Modrinth browser sees, and labrinth
         // caps names at 64 chars, 400ing longer ones MID-PUBLISH (N-4 review MAJOR). The

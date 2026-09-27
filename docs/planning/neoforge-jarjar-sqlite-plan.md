@@ -221,3 +221,68 @@ H. Commit per tree (support branches direct-push, main via PR), CI green ×4.
   the stock 3.49.1.0 bytes (that is what the stock-bytes rule buys).
 - **Rollback**: revert the commit(s); the flat-shaded shape remains in history.
   No config flag — packaging cannot be config-gated.
+
+## 8. Amendment 2026-09-27 — sqlite leaves the jar entirely (issue #304, 1.21.1 line only)
+
+**Sighting.** A 1.21.1 NeoForge server running LSS beside Aeroworks and GriefLogger
+failed module resolution: both of those mods depend on the *Minecraft SQLite JDBC*
+library mod (Modrinth `minecraft-sqlite-jdbc`, mod id `sqlite_jdbc`, a plain mod jar
+carrying the stock `org.sqlite.*` classes with no module-info). FML loads that mod as
+an automatic-style mod module exporting `org.sqlite`; our jarJar-nested stock
+sqlite-jdbc is a SECOND exporter of the same packages in the same layer, so the layer
+fails with a `ResolutionException` blaming whichever reader FML resolved first
+(Aeroworks in the report — it merely reads `org.sqlite`). **jarJar dedupe covers only
+jarJar-nested copies** (§2's premise held for the Voxy-port collision, which nested the
+same Maven artifact; it cannot hold against a library MOD). Relocation stays
+impossible (§1).
+
+**Decision (user, 2026-09-27; this line only for now).** The NeoForge jar ships **no
+copy of sqlite-jdbc at all** — flat or nested. The driver becomes:
+
+- an **OPTIONAL** mod dependency in `neoforge.mods.toml` (`modId="sqlite_jdbc"`,
+  `versionRange="[3.45,)"`, `side="BOTH"` — the integrated server opens the store on
+  LAN publish too). Optional because LSS boots and serves without it: the store
+  degrades to store-less. The floor sits below 3.49.1.0 on purpose — the library's
+  versions carry a `+YYYY-MM-DD` build suffix that Maven's ComparableVersion sorts
+  BELOW the bare number, and FML hard-fails an optional dependency that is present
+  but out of range. The row carries `[dependencies.lss.mc-publish] ignore=true` so
+  mc-publish never publishes the TOML-derived optional row under the unknown slug;
+- a **REQUIRED Modrinth dependency of the NeoForge file only** (`release.yml`,
+  `dependencies: minecraft-sqlite-jdbc(required){modrinth:bTTf2DEw}`): "required" is
+  what makes launchers and the Modrinth server panel install the library beside LSS
+  automatically — the user-chosen mitigation for the manual-install burden. The
+  Fabric jar and the Paper plugin bundle their driver and declare nothing;
+- a **boot hint** in the per-line NeoForge entrypoint (`LSSNeoMod.warnIfSqliteDriverAbsent`,
+  registered on `ServerAboutToStartEvent` so it precedes the store open at STARTED):
+  on a DEDICATED server that would open the store (enabled + lodStore not off), a
+  presence-only `Class.forName("org.sqlite.JDBC", false, loader)` miss logs ONE warning
+  naming the library mod, its Modrinth page and mod id, above the shared factory's
+  generic "SQLite engine unavailable" degrade (which stays as is — `common/` is
+  byte-identical across the five lines by the cross-line catalog, so the remedy text
+  cannot live there on one line). Integrated servers skip the hint (singleplayer noise
+  for a LAN-only store). Source-pinned in `NeoForgeModuleContractTest`.
+
+**Dev runs.** `additionalRuntimeClasspath "maven.modrinth:minecraft-sqlite-jdbc:EEE7nXWy"`
+(version ID — the `+` in the version number is unreliable on the Modrinth maven path)
+puts the very jar a server operator installs on the gametest classpath, so
+`storeActiveOnFreshWorld` now runs through the real module shape (our mod module
+reading the library's mod module), not a stock jar on the classpath that would hide a
+module-visibility regression. `test-server.sh run-neoforge` stages the same jar
+(`LSS_NEO_SQLITE=0` parks it — the store-less A/B).
+
+**Re-pins.** `release_check.py`: sqlite moved from `NEOFORGE_NESTED_LIBS` to
+`NEOFORGE_EXTERNAL_LIBS` — `org/sqlite/` forbidden flat AND inside every nested jar,
+no `sqlite-jdbc*.jar` under `META-INF/jarjar/`, `SqliteLodStore.class` still
+references `org/sqlite/SQLiteDataSource` unrelocated, and the TOML row must be
+`type="optional"` + `side="BOTH"`. `NeoForgeModuleContractTest` pins the TOML row
+(incl. the `[3.45,)` floor and the mc-publish ignore marker) and the build.gradle
+absence of any stock sqlite row; `ReleaseWorkflowContractTest` pins the NeoForge-only
+Modrinth dependency. THIRD-PARTY-NOTICES is cross-line identical and still says the
+NeoForge jar carries the sqlite-jdbc license path — an over-declaration on this line
+(the jar redistributes zstd-jni only), corrected when the change reaches every line.
+The cross-line catalog (`config/lines/classification.json`) records the reviewed
+blobs of the adapted files this change touches; `tools/compat/ci.py` must pass.
+
+**Not done (deliberately).** The 1.21.10/1.21.11/26.1/26.2 NeoForge modules still nest
+sqlite-jdbc (§2); the library mod lists 1.21.x through 26.1.2 but not 26.2, so a port
+there needs the library's coverage first. Per-version-surfaces.md records the split.

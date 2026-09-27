@@ -341,26 +341,17 @@ def _is_native(n):
 
 
 # The STOCK jarJar nested libraries (neoforge-jarjar-sqlite-plan.md; zstd-jni joined
-# via issues-275-282-fix-plan.md — issue #275, the XMMP clash). Per library: the
-# Maven identity, the flat-entry prefix that must be ABSENT from the shadow jar, a
-# class of OURS that must still name the library unrelocated (a relocate rule would
-# rewrite only our references — invisible to entry scans, NoClassDefFoundError live)
-# and the library class it names, and the stockness discriminators: where the
-# module-info sits (sqlite's is Multi-Release, zstd-jni's is an explicit module with
-# a ROOT module-info), the bundled license path (zstd-jni ships none — THIRD-PARTY-
+# via issues-275-282-fix-plan.md — issue #275, the XMMP clash; sqlite-jdbc LEFT the
+# tuple with the issue #304 fix, 2026-09-27 — see NEOFORGE_EXTERNAL_LIBS). Per
+# library: the Maven identity, the flat-entry prefix that must be ABSENT from the
+# shadow jar, a class of OURS that must still name the library unrelocated (a relocate
+# rule would rewrite only our references — invisible to entry scans,
+# NoClassDefFoundError live) and the library class it names, and the stockness
+# discriminators: where the module-info sits (zstd-jni's is an explicit module with a
+# ROOT module-info), the bundled license path (zstd-jni ships none — THIRD-PARTY-
 # NOTICES carries its BSD text verbatim), the JPMS module name the dedupe rests on,
 # and the native layout "trimmed" is judged against.
 NEOFORGE_NESTED_LIBS = (
-    {"group": "org.xerial", "artifact": "sqlite-jdbc", "label": "sqlite",
-     "flat_prefix": "org/sqlite/",
-     "probe_class": "dev/vox/lss/common/store/SqliteLodStore.class",
-     "probe_ref": b"org/sqlite/SQLiteDataSource",
-     "lib_class": "org/sqlite/SQLiteDataSource.class",
-     "module_info": "META-INF/versions/9/module-info.class",
-     "license": "META-INF/maven/org.xerial/sqlite-jdbc/LICENSE",
-     "module": "org.xerial.sqlitejdbc",
-     "native_roots": ("org/sqlite/native/",),
-     "kept_dirs": tuple(sorted({n[:n.rfind("/") + 1] for n in SQLITE_NATIVES}))},
     {"group": "com.github.luben", "artifact": "zstd-jni", "label": "zstd",
      "flat_prefix": "com/github/luben/",
      "probe_class": "dev/vox/lss/common/store/StoreCodec.class",
@@ -372,6 +363,93 @@ NEOFORGE_NESTED_LIBS = (
      "native_roots": tuple(r for r in STORE_NATIVE_ROOTS if r != "org/sqlite/native/"),
      "kept_dirs": ZSTD_NATIVE_DIRS},
 )
+
+# Libraries the NeoForge jar must NOT ship in ANY form — flat OR nested (issue #304,
+# 2026-09-27): the "Minecraft SQLite JDBC" library MOD (Modrinth minecraft-sqlite-jdbc,
+# mod id sqlite_jdbc) loads org.sqlite.* as a plain mod module, which every other
+# SQLite consumer on NeoForge (Aeroworks, GriefLogger, ...) depends on; jarJar dedupes
+# only jarJar-NESTED copies, so our nested stock jar was a second exporter of the
+# same packages in the game layer — a JPMS ResolutionException blaming whichever
+# reader FML resolved first. The driver is an OPTIONAL mod dependency (the TOML row
+# pinned below; absent = store-less, LSSNeoMod logs the install hint) and a REQUIRED
+# Modrinth dependency of the NeoForge file (release.yml — the auto-install path).
+# Our consumer class must still reference the library UNRELOCATED (the mod module
+# exports the stock package names).
+NEOFORGE_EXTERNAL_LIBS = (
+    {"label": "sqlite", "prefix": "org/sqlite/", "mod_id": "sqlite_jdbc",
+     "probe_class": "dev/vox/lss/common/store/SqliteLodStore.class",
+     "probe_ref": b"org/sqlite/SQLiteDataSource",
+     "nested_glob_hint": "sqlite-jdbc"},
+)
+
+
+def _check_external_lib(jar, base, names, lib, problems):
+    """One EXTERNAL library (NEOFORGE_EXTERNAL_LIBS): no copy anywhere in the jar,
+    the consumer class still names it unrelocated, the TOML declares the provider
+    mod as an OPTIONAL dependency."""
+    prefix = lib["prefix"]
+    flat = sorted(n for n in names if n.startswith(prefix))
+    if flat:
+        problems.append(f"{base}: {len(flat)} flat {prefix.rstrip('/')} entries (e.g. "
+                        f"{flat[0]}) — the {lib['label']} driver must not ship in the "
+                        "NeoForge jar at all (issue #304: a second org.sqlite exporter "
+                        f"beside the {lib['mod_id']} library mod is a ResolutionException)")
+    for label, nested_names in _nested_jars(jar):
+        hit = sorted(n for n in nested_names if n.startswith(prefix))
+        if hit:
+            problems.append(f"{base}: nested {label} carries {len(hit)} {prefix.rstrip('/')} "
+                            f"entries (e.g. {hit[0]}) — the {lib['label']} driver must not "
+                            "ride NESTED either (jarJar dedupes only jarJar-nested copies; "
+                            f"the {lib['mod_id']} library mod is a plain mod module)")
+    nested_jar = sorted(n for n in names if n.startswith("META-INF/jarjar/")
+                        and n.endswith(".jar") and lib["nested_glob_hint"] in n)
+    if nested_jar:
+        problems.append(f"{base}: {nested_jar[0]} is nested — the {lib['label']} library "
+                        "left the jarJarStore configuration with issue #304")
+    probe = lib["probe_class"]
+    if probe not in names:
+        problems.append(f"{base}: missing {probe} — the {lib['label']} consumer class "
+                        "left the jar")
+    else:
+        with zipfile.ZipFile(jar) as z:
+            if lib["probe_ref"] not in z.read(probe):
+                problems.append(f"{base}: {probe.rsplit('/', 1)[-1][:-6]} no longer "
+                                f"references {lib['probe_ref'].decode()} — a relocate "
+                                "rule rewrote our classes; the external library mod "
+                                "exports the STOCK package names only")
+    try:
+        toml = _read(jar, "META-INF/neoforge.mods.toml")
+    except KeyError:
+        return  # check_neoforge_jar flags the missing descriptor
+    row = _toml_dependency_row(toml, lib["mod_id"])
+    if row is None:
+        problems.append(f"{base}: neoforge.mods.toml declares no [[dependencies.lss]] row "
+                        f"for modId=\"{lib['mod_id']}\" — the {lib['label']} library mod "
+                        "must be an OPTIONAL dependency (the mods screen names it, FML "
+                        "range-checks it) and mc-publish's derived row needs the ignore "
+                        "marker")
+        return
+    if 'type="optional"' not in row:
+        problems.append(f"{base}: the {lib['mod_id']} dependency row must be "
+                        "type=\"optional\" — LSS boots store-less without the driver; a "
+                        "required row would refuse to load a server that never asked "
+                        "for the store")
+    if 'side="BOTH"' not in row:
+        problems.append(f"{base}: the {lib['mod_id']} dependency row must be side=\"BOTH\" "
+                        "— the integrated server opens the store when publishing to LAN")
+
+
+def _toml_dependency_row(toml, mod_id):
+    """The text of the [[dependencies.lss]] array element declaring {@code mod_id}
+    (up to the next unindented table header), or None. Line-based, like every other
+    TOML pin here — the checker stays stdlib-only."""
+    import re as _re
+    parts = _re.split(r"(?m)^\[\[dependencies\.lss\]\][ \t]*$", toml)
+    for chunk in parts[1:]:
+        body = _re.split(r"(?m)^\[", chunk, maxsplit=1)[0]
+        if f'modId="{mod_id}"' in body:
+            return body
+    return None
 
 
 def _check_nested_lib(jar, base, names, jars_list, lib, problems):
@@ -448,16 +526,19 @@ def _check_nested_lib(jar, base, names, jars_list, lib, problems):
 
 
 def check_store_natives_neoforge(jar, problems):
-    """NeoForge nests BOTH native-carrying libraries as STOCK jarJar libraries
-    (neoforge-jarjar-sqlite-plan.md, extended by issues-275-282-fix-plan.md): FML
-    then dedupes each module across mods, closing the JPMS module collision flat
-    shading has — two modules exporting the same packages is a ResolutionException
-    beside any mod nesting the same artifact: sqlite beside the community Voxy
-    NeoForge port (P-1), zstd-jni beside XMMP (issue #275). Neither can be relocated
-    (their native loaders — zstd-jni's JNI symbol names — derive from the package),
-    so the shadow jar itself must carry NO flat library classes and NO flat natives."""
+    """NeoForge nests zstd-jni as a STOCK jarJar library (neoforge-jarjar-sqlite-plan.md,
+    extended by issues-275-282-fix-plan.md): FML then dedupes the module across mods,
+    closing the JPMS module collision flat shading has — two modules exporting the
+    same packages is a ResolutionException beside any mod nesting the same artifact
+    (zstd-jni beside XMMP, issue #275). It cannot be relocated (its JNI symbol names
+    derive from the package), so the shadow jar itself must carry NO flat library
+    classes and NO flat natives. sqlite-jdbc is EXTERNAL since issue #304 (the
+    "Minecraft SQLite JDBC" library mod, a plain mod module jarJar can never dedupe
+    against): no copy of it may ship, flat or nested — NEOFORGE_EXTERNAL_LIBS."""
     base = os.path.basename(jar)
     names = set(_names(jar))
+    for lib in NEOFORGE_EXTERNAL_LIBS:
+        _check_external_lib(jar, base, names, lib, problems)
     for lib in NEOFORGE_NESTED_LIBS:
         prefix = lib["flat_prefix"]
         flat = sorted(n for n in names if n.startswith(prefix))
@@ -489,8 +570,8 @@ def check_store_natives_neoforge(jar, problems):
                         "shipping a second copy beside the nested one")
     meta_path = "META-INF/jarjar/metadata.json"
     if meta_path not in names:
-        problems.append(f"{base}: missing {meta_path} — sqlite and zstd-jni must ride "
-                        "as jarJar nested libraries")
+        problems.append(f"{base}: missing {meta_path} — zstd-jni must ride as a jarJar "
+                        "nested library")
         return
     try:
         meta = json.loads(_read(jar, meta_path))
@@ -516,8 +597,8 @@ def check_store_natives_neoforge(jar, problems):
 
 def check_neoforge_jar(jar, problems):
     """The NeoForge shadow jar (N-2 as amended by neoforge-jarjar-sqlite-plan.md +
-    issues-275-282-fix-plan.md: Paper-style shading for common only, sqlite AND
-    zstd-jni nested via jarJar):
+    issues-275-282-fix-plan.md + the issue #304 fix: Paper-style shading for common
+    only, zstd-jni nested via jarJar, sqlite-jdbc an external library mod):
     descriptor + mixin/AT/services presence, dev-package exclusion, and shading
     hygiene (no MC/loader classes may leak into the flat jar)."""
     names = set(_names(jar))
@@ -1313,41 +1394,38 @@ def _selftest():
             out[d + "libzstd-jni-1.5.7-3" + ext] = "elf"
         return out
 
-    def _store_neoforge_entries(group="org.xerial", drop_native=None, drop_nested_jar=False,
-                                bad_version=False, drop_license=False, raw_meta=None,
-                                stock=True, drop_metadata=False, undeclared_extra=False,
+    def _store_neoforge_entries(nested_sqlite=False, flat_native=False, flat_zstd=False,
+                                raw_meta=None, drop_metadata=False, undeclared_extra=False,
                                 zstd_group="com.github.luben", zstd_drop_native=None,
                                 zstd_drop_nested_jar=False, zstd_stock=True,
-                                flat_zstd=False, flat_native=False, drop_zstd_entry=False):
-        # The jarjar nested shape (neoforge-jarjar-sqlite-plan.md + issue #275): NOTHING
-        # native-carrying flat — sqlite AND zstd-jni as synthesized stock-like nested
-        # jars + a two-entry metadata.json. One VER literal per library so a version
-        # edit cannot half-update the fixture.
-        VER = "3.49.1.0"
+                                zstd_bad_version=False, drop_zstd_entry=False):
+        # The jarjar nested shape as amended by issue #304 (neoforge-jarjar-sqlite-plan.md
+        # §8): NOTHING native-carrying flat, zstd-jni as a synthesized stock-like nested
+        # jar + a ONE-entry metadata.json, and NO sqlite anywhere — nested_sqlite=True
+        # synthesizes the forbidden pre-#304 shape for the catch case. One ZVER literal
+        # so a version edit cannot half-update the fixture.
         ZVER = "1.5.7-3"
+        SVER = "3.49.1.0"
         out = {}
         if flat_zstd:
             out["com/github/luben/zstd/Zstd.class"] = "x"
         if flat_native:
             out[f"linux/amd64/libzstd-jni-{ZVER}.so"] = "elf"
-        nested = {"org/sqlite/JDBC.class": "x",
-                  "org/sqlite/SQLiteDataSource.class": "x"}
-        if not drop_license:
-            nested["META-INF/maven/org.xerial/sqlite-jdbc/LICENSE"] = "Apache-2.0"
-        if stock:
-            # The stockness discriminators: the MR module-info + at least one native
-            # OUTSIDE the supported matrix (a trimmed repack has neither).
-            nested["META-INF/versions/9/module-info.class"] = "x"
-            nested["org/sqlite/native/FreeBSD/x86_64/libsqlitejdbc.so"] = "elf"
-        for native in SQLITE_NATIVES:
-            if native != drop_native:
+        jars = []
+        if nested_sqlite:
+            nested = {"org/sqlite/JDBC.class": "x", "org/sqlite/SQLiteDataSource.class": "x",
+                      "META-INF/versions/9/module-info.class": "x"}
+            for native in SQLITE_NATIVES:
                 nested[native] = "elf"
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as z:
-            for n, v in nested.items():
-                z.writestr(n, v)
-        if not drop_nested_jar:
-            out[f"META-INF/jarjar/sqlite-jdbc-{VER}.jar"] = buf.getvalue()
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w") as z:
+                for n, v in nested.items():
+                    z.writestr(n, v)
+            out[f"META-INF/jarjar/sqlite-jdbc-{SVER}.jar"] = buf.getvalue()
+            jars.append({"identifier": {"group": "org.xerial", "artifact": "sqlite-jdbc"},
+                         "version": {"range": f"[{SVER},4.0.0.0)", "artifactVersion": SVER},
+                         "path": f"META-INF/jarjar/sqlite-jdbc-{SVER}.jar",
+                         "isObfuscated": False})
         znested = {"com/github/luben/zstd/Zstd.class": "x"}
         if zstd_stock:
             # zstd-jni's discriminators: the ROOT module-info (an explicit module,
@@ -1370,17 +1448,12 @@ def _selftest():
             with zipfile.ZipFile(rogue, "w") as z:
                 z.writestr("x.txt", "x")
             out["META-INF/jarjar/rogue.jar"] = rogue.getvalue()
-        meta_ver = "9.9.9.9" if bad_version else VER
-        jars = [{
-            "identifier": {"group": group, "artifact": "sqlite-jdbc"},
-            "version": {"range": f"[{meta_ver},{int(meta_ver.split('.')[0]) + 1}.0.0.0)",
-                        "artifactVersion": meta_ver},
-            "path": f"META-INF/jarjar/sqlite-jdbc-{VER}.jar",
-            "isObfuscated": False}]
         if not drop_zstd_entry:
+            meta_ver = "9.9.9-9" if zstd_bad_version else ZVER
             jars.append({
                 "identifier": {"group": zstd_group, "artifact": "zstd-jni"},
-                "version": {"range": f"[{ZVER},2.0.0.0)", "artifactVersion": ZVER},
+                "version": {"range": f"[{meta_ver},{int(meta_ver.split('.')[0]) + 1}.0.0.0)",
+                            "artifactVersion": meta_ver},
                 "path": f"META-INF/jarjar/zstd-jni-{ZVER}.jar",
                 "isObfuscated": False})
         if raw_meta is not None:
@@ -2147,11 +2220,17 @@ def _selftest():
         _write_tree_paper("lod-server-support-paper.jar", PY_LSS, BRAND_LSS)
         _write_tree_paper("voxy-server-side-paper.jar", PY_VSS, BRAND_VSS)
 
+        # issue #304: the external-driver row every NeoForge TOML must carry
+        SQLITE_DEP_ROW = ('\n[[dependencies.lss]]\n    modId="sqlite_jdbc"\n'
+                          '    type="optional"\n    versionRange="[3.45,)"\n'
+                          '    ordering="NONE"\n    side="BOTH"\n'
+                          '    [dependencies.lss.mc-publish]\n        ignore=true\n')
         TOML_LSS = ('modLoader="javafml"\nloaderVersion="[4,)"\nlicense="MIT"\n\n[[mods]]\n'
                     'modId="lss"\nversion="0.7.0"\ndisplayName="LOD Server Support"\n'
                     'authors="VoX"\nlogoFile="assets/lss/icon.png"\n'
                     'description=\'\'\'LSS.\'\'\'\n\n'
-                    '[[mixins]]\nconfig="lss.neoforge.mixins.json"\n')
+                    '[[mixins]]\nconfig="lss.neoforge.mixins.json"\n'
+                    + SQLITE_DEP_ROW)
         TOML_VSS = (TOML_LSS
                     .replace('displayName="LOD Server Support"', 'displayName="Voxy Server Side"')
                     .replace('authors="VoX"', 'authors="Xantha, VoX"')
@@ -2268,36 +2347,48 @@ def _selftest():
               f"un-rebranded neoforge VSS lang not caught: {p}")
         _write_tree_neoforge("voxy-server-side-neoforge.jar", TOML_VSS, BRAND_VSS)
 
-        # jarjar-shape negatives (neoforge-jarjar-sqlite-plan.md §4): metadata
-        # pointing at a missing nested jar; flat org/sqlite leaking back beside the
-        # nested shape; a foreign identifier group; a native missing INSIDE the
-        # nested jar. Each must red through check_store_natives_neoforge.
+        # jarjar-shape negatives (neoforge-jarjar-sqlite-plan.md §4 as amended by §8 /
+        # issue #304): sqlite riding NESTED (the pre-#304 shape — a ResolutionException
+        # beside the sqlite_jdbc library mod); flat org/sqlite leaking back; the TOML
+        # dependency row missing, non-optional, or not BOTH-sided. Each must red through
+        # check_store_natives_neoforge.
         neo_jar = os.path.join(dneo, "lod-server-support-neoforge.jar")
         _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             store_entries=_store_neoforge_entries(drop_nested_jar=True))
+                             store_entries=_store_neoforge_entries(nested_sqlite=True))
         p = []
         check_store_natives_neoforge(neo_jar, p)
-        check(any("nested sqlite jar is missing" in m for m in p),
-              f"missing nested sqlite jar not caught: {p}")
+        check(any("must not ride NESTED" in m for m in p),
+              f"nested sqlite jar (the #304 collision shape) not caught: {p}")
+        check(any("sqlite-jdbc-3.49.1.0.jar is nested" in m for m in p),
+              f"nested sqlite jar entry not caught by name: {p}")
         _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
                              extra={"org/sqlite/JDBC.class": "x"})
         p = []
         check_store_natives_neoforge(neo_jar, p)
         check(any("flat org/sqlite" in m for m in p),
-              f"flat sqlite leak beside the nested jar not caught: {p}")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             store_entries=_store_neoforge_entries(group="org.example"))
+              f"flat sqlite leak not caught: {p}")
+        _write_tree_neoforge("lod-server-support-neoforge.jar",
+                             TOML_LSS.replace(SQLITE_DEP_ROW, ""), BRAND_LSS)
         p = []
         check_store_natives_neoforge(neo_jar, p)
-        check(any("exactly one org.xerial:sqlite-jdbc" in m for m in p),
-              f"foreign jarjar identifier not caught: {p}")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             store_entries=_store_neoforge_entries(
-                                 drop_native=SQLITE_NATIVES[0]))
+        check(any('no [[dependencies.lss]] row for modId="sqlite_jdbc"' in m for m in p),
+              f"missing sqlite_jdbc dependency row not caught: {p}")
+        _write_tree_neoforge("lod-server-support-neoforge.jar",
+                             TOML_LSS.replace('    type="optional"\n    versionRange="[3.45,)"',
+                                              '    type="required"\n    versionRange="[3.45,)"'),
+                             BRAND_LSS)
         p = []
         check_store_natives_neoforge(neo_jar, p)
-        check(any("missing sqlite native" in m for m in p),
-              f"missing native inside the nested jar not caught: {p}")
+        check(any('must be type="optional"' in m for m in p),
+              f"required sqlite_jdbc row not caught: {p}")
+        _write_tree_neoforge("lod-server-support-neoforge.jar",
+                             TOML_LSS.replace('    ordering="NONE"\n    side="BOTH"\n    [dependencies',
+                                              '    ordering="NONE"\n    side="SERVER"\n    [dependencies'),
+                             BRAND_LSS)
+        p = []
+        check_store_natives_neoforge(neo_jar, p)
+        check(any('must be side="BOTH"' in m for m in p),
+              f"server-only sqlite_jdbc row not caught: {p}")
         _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS)
 
         # Round-2 hardening negatives (the 3-Opus execution review): every remaining
@@ -2314,14 +2405,9 @@ def _selftest():
         _neo_case("has no 'jars' list", "jars-not-a-list not caught",
                   raw_meta='{"jars": "x"}')
         _neo_case("disagrees with the nested jar filename",
-                  "version/filename disagreement not caught", bad_version=True)
-        _neo_case("lost META-INF/maven/org.xerial/sqlite-jdbc/LICENSE",
-                  "missing nested license not caught", drop_license=True)
+                  "version/filename disagreement not caught", zstd_bad_version=True)
         _neo_case("undeclared in jarjar metadata",
                   "undeclared nested jar not caught", undeclared_extra=True)
-        _neo_case("nested sqlite jar looks TRIMMED", "trimmed nested jar not caught", stock=False)
-        _neo_case("nested sqlite jar lost its module-info", "module-info loss not caught",
-                  stock=False)
         # issue #275: zstd-jni nests too — every zstd-specific branch pinned, plus the
         # two flat-leak shapes the old flat-shaded layout would have passed.
         _neo_case("flat com/github/luben entries",
@@ -2349,16 +2435,16 @@ def _selftest():
         check(any("StoreCodec no longer references com/github/luben/zstd/Zstd" in m
                   for m in p), f"relocated zstd references not caught: {p}")
         wrong_range = json.dumps({"jars": [{
-            "identifier": {"group": "org.xerial", "artifact": "sqlite-jdbc"},
-            "version": {"range": "[3.49.1.0,)", "artifactVersion": "3.49.1.0"},
-            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "identifier": {"group": "com.github.luben", "artifact": "zstd-jni"},
+            "version": {"range": "[1.5.7-3,)", "artifactVersion": "1.5.7-3"},
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
             "isObfuscated": False}]})
         _neo_case("jarjar range", "wrong range not caught (the M4 decision unpinned)",
                   raw_meta=wrong_range)
         bad_path = json.dumps({"jars": [{
-            "identifier": {"group": "org.xerial", "artifact": "sqlite-jdbc"},
-            "version": {"range": "[3.49.1.0,4.0.0.0)", "artifactVersion": "3.49.1.0"},
-            "path": "libs/sqlite-jdbc-3.49.1.0.jar", "isObfuscated": False}]})
+            "identifier": {"group": "com.github.luben", "artifact": "zstd-jni"},
+            "version": {"range": "[1.5.7-3,2.0.0.0)", "artifactVersion": "1.5.7-3"},
+            "path": "libs/zstd-jni-1.5.7-3.jar", "isObfuscated": False}]})
         _neo_case("sits outside META-INF/jarjar/",
                   "escaping path not caught", raw_meta=bad_path)
         # relocated store class: the flat class no longer names sqlite unrelocated
@@ -2385,7 +2471,7 @@ def _selftest():
                              store_entries=multi_entries)
         p = []
         check_store_natives_neoforge(neo_jar, p)
-        check(p == [], f"multi-entry metadata with one sqlite entry must pass: {p}")
+        check(p == [], f"multi-entry metadata with one zstd entry must pass: {p}")
         _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS)
 
         # a missing vss family must fail the gate (silently unwired repackage task)

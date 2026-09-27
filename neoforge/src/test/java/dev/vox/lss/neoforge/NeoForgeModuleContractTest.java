@@ -39,6 +39,71 @@ class NeoForgeModuleContractTest {
                 "dependency ranges drive the Modrinth/listing environment metadata");
     }
 
+    @Test
+    void modsTomlDeclaresTheSqliteLibraryModAsAnOptionalDependency() throws IOException {
+        // Issue #304 (2026-09-27): the driver is EXTERNAL on this line's NeoForge jar —
+        // the "Minecraft SQLite JDBC" library mod provides org.sqlite as a plain mod
+        // module; any copy of ours (flat or jarJar-nested) is a second exporter of the
+        // same packages and a ResolutionException. release_check pins the jar side
+        // (no org/sqlite anywhere); this pins the declaration.
+        String toml = read("neoforge/src/main/resources/META-INF/neoforge.mods.toml");
+        int row = toml.indexOf("modId=\"sqlite_jdbc\"");
+        assertTrue(row >= 0, "the sqlite_jdbc library mod must be declared as a dependency");
+        String block = toml.substring(row, Math.min(toml.length(), toml.indexOf("[[", row) < 0
+                ? toml.length() : toml.indexOf("[[", row)));
+        assertTrue(block.contains("type=\"optional\""),
+                "OPTIONAL — LSS boots store-less without the driver (LodStores' install hint);"
+                        + " a required row would refuse to load a server that never wanted"
+                        + " the store");
+        assertTrue(block.contains("side=\"BOTH\""),
+                "BOTH — the integrated server opens the store when publishing to LAN");
+        assertTrue(block.contains("versionRange=\"[3.45,)\""),
+                "the floor must sit BELOW 3.49.1.0: the library's '+YYYY-MM-DD' build"
+                        + " suffix sorts below the bare number in Maven's ComparableVersion,"
+                        + " and an optional dependency present-but-out-of-range is a hard"
+                        + " FML error");
+        assertTrue(block.contains("[dependencies.lss.mc-publish]") && block.contains("ignore=true"),
+                "mc-publish must ignore the TOML-derived row — release.yml declares the"
+                        + " Modrinth dependency explicitly (REQUIRED, for auto-install)");
+        // The jar must never carry a copy again: no jarJarStore row, no runtime row.
+        String gradle = read("neoforge/build.gradle");
+        assertFalse(gradle.contains("jarJarStore \"org.xerial:sqlite-jdbc"),
+                "sqlite-jdbc must not be nested via jarJar (issue #304)");
+        assertFalse(gradle.contains("implementation \"org.xerial:sqlite-jdbc")
+                        || gradle.contains("additionalRuntimeClasspath \"org.xerial:sqlite-jdbc"),
+                "no stock sqlite-jdbc on the NeoForge module's classpath — dev runs load"
+                        + " the library MOD so the smoke exercises the real module shape");
+        assertTrue(gradle.contains("additionalRuntimeClasspath \"maven.modrinth:minecraft-sqlite-jdbc:"),
+                "dev runs must load the Minecraft SQLite JDBC library mod (the gametest"
+                        + " store pin runs through it)");
+    }
+
+    @Test
+    void theEntrypointWarnsWithTheInstallHintWhenTheDriverIsAbsent() throws IOException {
+        // The shared store factory (common, identical on every line) can only say
+        // "SQLite engine unavailable"; the per-line entrypoint is where the NeoForge
+        // remedy lives. Source-level pin (the listener needs a live server to fire):
+        // presence-only probe of the driver class, dedicated servers only, registered
+        // on ServerAboutToStartEvent so it precedes the store open at STARTED, and the
+        // message names the library mod, its Modrinth page and mod id.
+        String src = read("neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoMod.java");
+        assertTrue(src.contains("SQLITE_DRIVER_CLASS = \"org.sqlite.JDBC\""),
+                "the probe must target the DriverManager entry point sqlite-jdbc registers");
+        assertTrue(src.contains("Class.forName(SQLITE_DRIVER_CLASS, false, loader)"),
+                "presence only — initialize=false, a native-load failure is the factory's degrade");
+        assertTrue(src.contains("addListener(ServerAboutToStartEvent.class,")
+                        && src.contains("LSSNeoMod::warnIfSqliteDriverAbsent"),
+                "the hint must be wired BEFORE ServerStartedEvent opens the store");
+        assertTrue(src.contains("isDedicatedServer()) return;"),
+                "integrated servers skip the hint (singleplayer noise for a LAN-only store)");
+        for (String needle : new String[]{"Minecraft SQLite JDBC",
+                "https://modrinth.com/mod/minecraft-sqlite-jdbc", "sqlite_jdbc"}) {
+            assertTrue(src.contains(needle), "the hint must name " + needle);
+        }
+        assertTrue(LSSNeoMod.sqliteDriverPresent(new ClassLoader(null) { }) == false,
+                "a bootstrap-only loader sees no driver — the absent shape");
+    }
+
     // ---- registrar census (the §1.2 loader-bound invariants) ----
 
     @Test

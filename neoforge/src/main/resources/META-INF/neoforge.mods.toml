@@ -33,6 +33,33 @@ config="lss-sodium-legacy.mixins.json"
     ordering="NONE"
     side="BOTH"
 
+# The SQLite JDBC driver (issue #304): on NeoForge the driver is the "Minecraft
+# SQLite JDBC" library MOD (Modrinth minecraft-sqlite-jdbc) instead of a copy inside
+# this jar — a nested copy is a JPMS ResolutionException beside that mod (both
+# export org.sqlite.*; jarJar dedupes only jarJar-nested copies), and every SQLite
+# consumer in the ecosystem (Aeroworks, GriefLogger, ...) depends on the mod.
+# OPTIONAL: LSS boots and serves without it, only the LOD store degrades to
+# store-less with a log line naming this mod (LSSNeoMod.warnIfSqliteDriverAbsent).
+# The Modrinth listing declares it REQUIRED (release.yml) so launchers and server
+# panels install it automatically. Floor [3.45,): every published build is
+# 3.49.1.0+, but the library's versions carry a "+YYYY-MM-DD" build suffix that
+# Maven's ComparableVersion sorts BELOW the bare number, so a "[3.49.1.0,)" range
+# would reject 3.49.1.0+2025-04-20 itself — an optional dependency that is present
+# but out of range is a hard FML error. BOTH: the integrated server opens the store
+# when publishing to LAN too.
+[[dependencies.lss]]
+    modId="sqlite_jdbc"
+    type="optional"
+    versionRange="[3.45,)"
+    ordering="NONE"
+    side="BOTH"
+    # mc-publish reads this TOML for Modrinth dependency metadata; the Modrinth
+    # declaration is made explicitly (and as REQUIRED) by the release.yml step, so
+    # the derived optional row must not be published beside it under an unknown
+    # slug.
+    [dependencies.lss.mc-publish]
+        ignore=true
+
 # Sodium 0.8+ options page (sodium-options-page-generations-plan.md, NeoForge
 # amendment): sodium-neoforge's ConfigLoaderForge reads this property from every
 # mod and instantiates the named ConfigEntryPoint — the same key Fabric declares

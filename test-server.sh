@@ -44,6 +44,9 @@ if [ -z "$NEOFORGE_VERSION" ]; then
     exit 1
 fi
 NEOFORGE_INSTALLER_URL="https://maven.neoforged.net/releases/net/neoforged/neoforge/${NEOFORGE_VERSION}/neoforge-${NEOFORGE_VERSION}-installer.jar"
+# The MC version the NeoForge rig's Modrinth lookups filter on (the library mod
+# staged in setup_neoforge) — the module's compile target, same source of truth.
+NEOFORGE_MC_VERSION="${NEOFORGE_MC_VERSION:-$(sed -n 's/^minecraft_version=//p' "$SCRIPT_DIR/gradle.properties" | tr -d '\r')}"
 
 # --- Download URLs ---
 FABRIC_SERVER_URL="https://meta.fabricmc.net/v2/versions/loader/${FABRIC_MC_VERSION}/${FABRIC_LOADER_VERSION}/${FABRIC_INSTALLER_VERSION}/server/jar"
@@ -109,6 +112,9 @@ LSS_MOVE_TRACE="${LSS_MOVE_TRACE:-0}"
 # Version resolution rides the Modrinth API (latest for this MC line) rather than pinned
 # URLs, so the variant keeps working as Via ships new builds.
 LSS_VIA="${LSS_VIA:-0}"
+# NeoForge only: stage (1, default) or park (0) the Minecraft SQLite JDBC library mod
+# — the external sqlite provider since issue #304 (see setup_neoforge).
+LSS_NEO_SQLITE="${LSS_NEO_SQLITE:-1}"
 # The guard's rig kill switch (review MAJOR-1): the staging REWRITES the config each
 # run, so a hand-edited enableViaMismatchGuard=false would be silently clobbered before
 # the JVM starts — this knob is the supported A/B lever. Default 1 (the shipped default).
@@ -671,6 +677,22 @@ setup_neoforge() {
     rm -f "$mods_dir"/lod-server-support-neoforge*.jar
     cp "$lss_jar" "$mods_dir/"
     echo "  Installed: $(basename "$lss_jar")"
+
+    # The SQLite JDBC driver is EXTERNAL on NeoForge (issue #304): the LSS jar ships no
+    # copy, the "Minecraft SQLite JDBC" library mod provides it (what the Modrinth
+    # dependency auto-installs on a real server). LSS_NEO_SQLITE=1 (default) stages
+    # it; 0 parks it as .disabled — the store-less A/B (LodStores must log the
+    # install hint, store=unavailable in diag, serving unaffected).
+    local sqlite_jar="$mods_dir/minecraft-sqlite-jdbc.jar"
+    if [ "$LSS_NEO_SQLITE" = 1 ]; then
+        [ -f "$sqlite_jar.disabled" ] && mv "$sqlite_jar.disabled" "$sqlite_jar"
+        echo "  Installing Minecraft SQLite JDBC (the NeoForge sqlite provider)..."
+        download_modrinth_latest minecraft-sqlite-jdbc neoforge "$NEOFORGE_MC_VERSION" "$sqlite_jar" \
+            || echo "  WARNING: could not stage minecraft-sqlite-jdbc — the store will be unavailable" >&2
+    else
+        [ -f "$sqlite_jar" ] && mv "$sqlite_jar" "$sqlite_jar.disabled"
+        echo "  Minecraft SQLite JDBC PARKED (LSS_NEO_SQLITE=0) — store-less A/B"
+    fi
 }
 
 run_neoforge() {

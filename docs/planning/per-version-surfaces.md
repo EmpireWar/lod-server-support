@@ -22,10 +22,18 @@ compatibility and far-player rendering are separate checks.
 | 26.1 | true | Intentional stub |
 | 26.2 | true | Intentional stub |
 
-On every line, `neoforge/build.gradle` shades common code and nests **both
-sqlite-jdbc and zstd-jni as stock jarJar libraries** under `META-INF/jarjar/`.
-`scripts/release_check.py` checks both metadata entries and rejects flat
-`org/sqlite/`, `com/github/luben/` and native-library entries. Paper's flat native
+On every line, `neoforge/build.gradle` shades common code and nests **zstd-jni as a
+stock jarJar library** under `META-INF/jarjar/`. **sqlite-jdbc is line data since
+2026-09-27 (issue #304):** on THIS line (1.21.1) the NeoForge jar ships NO copy of
+it — flat or nested — and declares the "Minecraft SQLite JDBC" library mod
+(Modrinth `minecraft-sqlite-jdbc`, mod id `sqlite_jdbc`) as an OPTIONAL mod
+dependency in `neoforge.mods.toml` and a REQUIRED Modrinth dependency of the
+NeoForge file in `release.yml` (auto-install by launchers and server panels);
+without it the store degrades to store-less and `LSSNeoMod` logs the install hint. The
+other lines still nest sqlite-jdbc (the pre-#304 contract; port on demand).
+`scripts/release_check.py` checks the zstd metadata entry, rejects `org/sqlite/`
+anywhere in the jar (flat AND nested), flat `com/github/luben/` and flat
+native-library entries, and pins the TOML dependency row. Paper's flat native
 packaging and Fabric's stripped nested jars are different artifact contracts.
 
 Use [the current live-profile inventory](../testing/astra-live-profiles.md) for

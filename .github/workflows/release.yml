@@ -262,4 +262,15 @@ jobs:
           version-type: release
           loaders: neoforge
           game-versions: ${{ env.GV_NEOFORGE }}
+          # The SQLite JDBC driver is EXTERNAL on NeoForge (issue #304): the jar ships
+          # no copy, the "Minecraft SQLite JDBC" library mod (bTTf2DEw, mod id
+          # sqlite_jdbc) provides org.sqlite. Declared REQUIRED here — the mod itself
+          # boots store-less without it (neoforge.mods.toml says optional) but
+          # "required" is what makes launchers and the Modrinth server panel install
+          # it beside LSS automatically, the user-chosen mitigation for the manual
+          # install burden. This input REPLACES the TOML-derived list (which is why
+          # the TOML row carries the mc-publish ignore marker). NeoForge file ONLY —
+          # the Fabric and Paper jars bundle the driver.
+          dependencies: |
+            minecraft-sqlite-jdbc(required){modrinth:bTTf2DEw}
           changelog: ${{ steps.release_notes.outputs.notes }}

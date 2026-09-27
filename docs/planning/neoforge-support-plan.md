@@ -314,7 +314,10 @@ must be generalized BEFORE the neoforge checks can mean anything) with
 **fallback pre-authorized: Paper-style shading** — known-good in-repo,
 (AMENDED 2026-08-15: sqlite-jdbc moved to a nested jarJar library — the flat
 shade collided with the community Voxy port's module; neoforge-jarjar-sqlite-plan.md;
-AMENDED AGAIN 2026-09-06: zstd-jni nests too, issue #275 — issues-275-282-fix-plan.md)
+AMENDED AGAIN 2026-09-06: zstd-jni nests too, issue #275 — issues-275-282-fix-plan.md;
+AMENDED AGAIN 2026-09-27 on the 1.21.1 line: sqlite-jdbc is NOT shipped at all —
+the "Minecraft SQLite JDBC" library mod provides it as an optional mod dependency
++ a required Modrinth dependency, issue #304 — neoforge-jarjar-sqlite-plan.md §8)
 no-relocate-org.sqlite rule applies. Server parity gates: the neoforge
 contract suite (§5.1), the gametest smoke subset (§5.2), the §5.3/§5.5
 soak-or-floor.

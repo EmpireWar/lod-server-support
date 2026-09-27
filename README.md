@@ -38,6 +38,8 @@ LOD Server Support is backwards and forwards compatible from v0.4.0 through the 
 
 Install **LOD Server Support** on **both** the **server** (Fabric, Paper, or NeoForge on a line that ships it) and **every participating client** (the matching Fabric or NeoForge LSS mod, with Voxy or the enabled Xaero map bridge). The server and client both need LSS for its terrain download service.
 
+**NeoForge 1.21.1 and the LOD store.** The NeoForge jar does not bundle an SQLite driver (a bundled copy conflicts with the [Minecraft SQLite JDBC](https://modrinth.com/mod/minecraft-sqlite-jdbc) library mod that Aeroworks, GriefLogger and other NeoForge mods depend on). The Modrinth listing declares that library as a dependency of the NeoForge file, so launchers and the Modrinth server panel install it automatically; if you install by hand, drop `minecraft-sqlite-jdbc` into `mods/` next to LSS. Without it LSS still serves terrain normally, but the LOD store stays off and the log says which mod to install. Fabric and Paper need nothing extra.
+
 NeoForge ships on MC 1.21.1, 26.1 and 26.2; the 1.21.10/1.21.11 modules remain maintained builds. NeoForge far-player rendering is live on 1.21.1 and remains an intentional stub on the other lines. See the [loader/artifact matrix](docs/planning/per-version-surfaces.md#current-loader-and-artifact-surfaces-2026-09-08) and [validation profiles](docs/testing/astra-live-profiles.md) for the separate packaging, consumer and live-test boundaries.
 
 ## Commands

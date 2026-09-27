@@ -61,9 +61,9 @@
     ".github/workflows/release.yml": {
       "axes": "Per-line tag, loader, release display and game JDK rules preserved. 26.x additionally installs Java 21 for common tests; publication permissions, dispatch refusal and artifact safety remain shared obligations.",
       "kind": "adapted",
-      "review": "Original plan baseline-to-current diff reviewed: only separate common Java 21 setup added on 26.x; release/tag guards, build commands and publication conditions unchanged. Final independent review remains pending.",
+      "review": "Original plan baseline-to-current diff reviewed: only separate common Java 21 setup added on 26.x; release/tag guards, build commands and publication conditions unchanged. Final independent review remains pending. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "f07296a7392e6738885bf75afe19a67d87b1abeb",
+        "1.21.1": "f12ab16caa1ca723a94691beb71a7f33ca59de69",
         "1.21.10": "7b6ac277d5e2f39d036b24d053de486ac4a6949b",
         "1.21.11": "37acda2de9aa5358d66fd55d8b597ab62fe8ad84",
         "26.1": "52aebf664c86a967834bb1ced8741c6b8d812606",
@@ -4433,9 +4433,9 @@
     "neoforge/build.gradle": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "ff0099a4ca6887693f0bd19a56172e4f9e36871d",
+        "1.21.1": "077c6dc11cea8074186065ef72b1707f7dd8ea9b",
         "1.21.10": "f294e80bdd5727bc9f86cd111b98e7a2306ca773",
         "1.21.11": "24a6311f36e6da2cbaacc65dd5c38ff0c02b032f",
         "26.1": "c75b4e56dd4ceb99851bc15c4a3a6ec2b106b9d6",
@@ -4606,9 +4606,9 @@
     "neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoMod.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "5f472076ab088bdfe86338c686f6b2909ee4ed45",
+        "1.21.1": "5dff355a2da0864bb6bf394e65547ed5d40b39c5",
         "1.21.10": "4e738ec74a332d42b67aa575af61c98cc899ba5a",
         "1.21.11": "4e738ec74a332d42b67aa575af61c98cc899ba5a",
         "26.1": "4e738ec74a332d42b67aa575af61c98cc899ba5a",
@@ -4913,9 +4913,9 @@
     "neoforge/src/main/resources/META-INF/neoforge.mods.toml": {
       "axes": "Loader/game/version entrypoint identity, declared gametests and packaging metadata.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "e0d13e045517ed9848d2273b447aadb703181c2b",
+        "1.21.1": "6739bb6d96e17ba8545852e56c6e9a083fe9af82",
         "1.21.10": "01894c07684fb4ba920424ac80ea8cb867ea6104",
         "1.21.11": "2e9710f22cbaff5abfe2761d2355c9d0a3f1e7b0",
         "26.1": "c7f4e30ef50cfa1e9f268e7912fa46ab4f553a96",
@@ -5004,9 +5004,9 @@
     "neoforge/src/test/java/dev/vox/lss/neoforge/NeoForgeModuleContractTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "5dd9dccf6cd81f5853dd7863129e15a130aa43c6",
+        "1.21.1": "6fa5db2d49f67dbc3be4f42729771d0c861d001d",
         "1.21.10": "6c781f2e1b33427444afa7e6d9820381e62a5abd",
         "1.21.11": "6c781f2e1b33427444afa7e6d9820381e62a5abd",
         "26.1": "6c781f2e1b33427444afa7e6d9820381e62a5abd",
@@ -5601,9 +5601,9 @@
     "paper/src/test/java/dev/vox/lss/paper/ReleaseWorkflowContractTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "bffe9982775cf8d150ec8a26cb130afa4289b4a0",
+        "1.21.1": "894f5586a36be37911919f010f5a556200c8bc53",
         "1.21.10": "4245bcd659033a1c397058f0869ad5af92b4eeec",
         "1.21.11": "b1a3ec242eed9cdde8943822a6ccb2b5a9194215",
         "26.1": "23c2d51f1ba33ddf4d13a08e4891211deeee70a1",
@@ -6098,9 +6098,9 @@
     "scripts/release_check.py": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "77e7f03be7b526fb2565314db80c3c3d058d497e",
+        "1.21.1": "128dc7e1ed0cb1a34d11aede7906db6ecdd03706",
         "1.21.10": "bc20a29a28d8d455d24dff5bd56f1fdca141752b",
         "1.21.11": "cf9d2184a89fcae68c20afe8ed39ab64c571f74f",
         "26.1": "6038bfe6aa871c379f2fd65c41cac04d70631bec",
@@ -7335,9 +7335,9 @@
     "test-server.sh": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-27 issue #304 (1.21.1 only, PR #306): the NeoForge jar stops nesting sqlite-jdbc and depends on the Minecraft SQLite JDBC library mod (optional TOML dependency, required Modrinth dependency, entrypoint install hint, release_check/contract/rig re-pins); reviewed against :neoforge:build + gametest smoke, release_check + selftest, Paper contract tests and both live rig boots.",
       "reviewed_blobs": {
-        "1.21.1": "1557af678e9a1a719b9520324857b37f54475257",
+        "1.21.1": "1d97dcb8ff92d48f2fb378e02b5b21d5bf4b478c",
         "1.21.10": "74f461784e32abc6264a1d0aebebcbcd2341dedc",
         "1.21.11": "c47942aac390062411f955dce5c00eb6213919c4",
         "26.1": "0050a0e03b4bb463ff25eaf3d0f72114d9db10c8",

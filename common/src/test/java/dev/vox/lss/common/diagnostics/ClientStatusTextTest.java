@@ -15,6 +15,9 @@ class ClientStatusTextTest {
         for (String locale : List.of("en_us", "zh_cn", "zh_tw"))
             languages.add(JsonParser.parseString(Files.readString(root.resolve("fabric/src/main/resources/assets/lss/lang/"+locale+".json"))).getAsJsonObject());
         check(ClientStatusText.lines(null,0), languages);
+        for (var status : dev.vox.lss.common.config.SettingsReload.Status.values())
+            check(List.of(new ClientStatusText.Message(ClientReloadText.outcomeKey(status),List.of())),languages);
+        check(List.of(ClientReloadText.normalization(new dev.vox.lss.common.config.SettingsSchema.Normalization("lod.distance_chunks",-1,0))),languages);
         var defaults=SettingsSchema.client().defaults();
         var settings=ClientSettingsStatus.capture(true,defaults,defaults,defaults,Set.of("integrations.xaero_map.enabled"));
         for (var discovery : ClientStatusSnapshot.Discovery.values())

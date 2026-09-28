@@ -47,7 +47,33 @@ class ClientSettingsStatusTest {
                 Set.of("cache.address_aliases", "private.example", "/home/person/config"));
         assertEquals(List.of("cache.address_aliases"), status.pendingReconnect());
     }
+    @Test void failedFutureRemainsDistinctFromPublicationUntilIdenticalRetrySucceeds() throws Exception {
+        var store = new SettingsStore<ClientSettings>(directory, "lss", SettingsSchema.client());
+        var handle = new SettingsHandle<>(store);
+        var saved = store.saveDraft(store.read().hash(), Map.of("lod.receive", false)).configured();
+        try (var reload = new SettingsReload<>(handle)) {
+            var receipt = new java.util.concurrent.CompletableFuture<Void>();
+            var entered = new java.util.concurrent.CountDownLatch(1);
+            var future = reload.reload(Runnable::run, (before, after, revision) -> { entered.countDown(); return receipt; });
+            assertTrue(entered.await(10, java.util.concurrent.TimeUnit.SECONDS));
+            var published = capture(saved, handle);
+            assertFalse(published.effective().receptionEnabled());
+            assertEquals(1,published.publishedRevision());
+            assertEquals(0,published.adoptedRevision());
+            assertEquals(List.of("lod.receive"),published.pendingAdoption());
+            receipt.completeExceptionally(new IllegalStateException("private.example /private/path"));
+            assertEquals(SettingsReload.Status.RECONCILIATION_FAILED,future.get(10,java.util.concurrent.TimeUnit.SECONDS).status());
+            assertEquals(published,capture(saved,handle));
+            var repaired=reload.reload(Runnable::run,(before,after,revision)->java.util.concurrent.CompletableFuture.completedFuture(null))
+                    .get(10,java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(SettingsReload.Status.APPLIED,repaired.status());
+            var adopted=capture(saved,handle);
+            assertEquals(adopted.publishedRevision(),adopted.adoptedRevision());
+            assertTrue(adopted.pendingAdoption().isEmpty());
+        }
+    }
     private ClientSettingsStatus capture(ClientSettings saved, SettingsHandle<ClientSettings> handle) {
-        var s=handle.state();return ClientSettingsStatus.capture(true,saved,s.configured(),s.effective(),s.pendingReconnect());
+        var s=handle.state();return ClientSettingsStatus.capture(true,saved,s.configured(),s.effective(),s.pendingReconnect(),s.revision(),handle.adoptedRevision(),
+                handle.pendingAdoption()==null?Set.of():handle.pendingAdoption().paths());
     }
 }

@@ -55,7 +55,7 @@
   "lss.settings.recovery": "復原草稿",
   "lss.settings.conflict_detail": "YAML 檔案已變更或無法讀取。您的編輯已保留。「合併並儲存」會重新讀取檔案，僅合併您選擇的編輯。「捨棄草稿」會保留磁碟檔案。任何編輯均未生效。",
   "lss.settings.failure_detail": "儲存失敗。即使 Sodium 顯示沒有變更，您的編輯仍已保留。您可直接重試、保留草稿以便稍後處理，或捨棄草稿。執行中的設定未變更。",
-  "lss.settings.inactive": "設定未啟用：%s。修復 YAML 後執行用戶端重新載入命令；遷移或建立失敗需要重新啟動。",
+  "lss.settings.inactive": "設定未啟用：%s。請修復設定檔並重新啟動用戶端。",
   "lss.status.waiting": "正在等待目前連線的狀態快照…",
   "lss.status.on": "開",
   "lss.status.off": "關",
@@ -107,5 +107,9 @@
   "lss.status.reason.ingest_queue_pending": "等待接收模組處理",
   "lss.status.reason.xaero_unavailable": "Xaero 無法使用",
   "lss.status.reason.xaero_failed": "Xaero 失敗",
-  "lss.status.reason.xaero_rebuilds": "等待 Xaero 重建"
+  "lss.status.reason.xaero_rebuilds": "等待 Xaero 重建",
+  "lss.settings.adoption_pending": "設定已接受；部分功能仍在等待啟用。可再次執行用戶端重載指令以重試。",
+  "lss.settings.adoption_failed": "設定已接受，但部分功能啟用失敗。請檢查記錄並再次執行用戶端重載指令以重試。",
+  "lss.settings.normalized": "已調整 %s：要求值 %s；生效值 %s。YAML 未變更。",
+  "lss.status.settings.adoption": "功能套用版本：%s/%s；等待啟用：%s"
 }

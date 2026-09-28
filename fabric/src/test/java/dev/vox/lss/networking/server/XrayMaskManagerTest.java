@@ -28,8 +28,8 @@ class XrayMaskManagerTest {
     }
 
     private static LSSServerConfig config(String mode) {
-        var c = new LSSServerConfig();
-        c.xrayObfuscation = mode;
+        var c = new MutableServerSettings();
+        MutableServerSettings.set(c, "privacy.xray.mode", mode);
         return c;
     }
 

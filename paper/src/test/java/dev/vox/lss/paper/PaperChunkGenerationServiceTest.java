@@ -108,12 +108,12 @@ class PaperChunkGenerationServiceTest {
     }
 
     private static PaperConfig config(int globalLimit, int perPlayerLimit, int timeoutSeconds) {
-        var c = new PaperConfig();
-        c.generationConcurrencyLimitGlobal = globalLimit;
-        c.generationConcurrencyLimitPerPlayer = perPlayerLimit;
-        c.generationTimeoutSeconds = timeoutSeconds;
-        c.validate();
-        return c;
+        var values = new java.util.LinkedHashMap<>(dev.vox.lss.common.config.SettingsSchema.server(true).defaultValues());
+        values.put("generation.enabled", true);
+        values.put("generation.concurrency.global", globalLimit);
+        values.put("generation.concurrency.per_player", perPlayerLimit);
+        values.put("generation.timeout_ticks", timeoutSeconds * 20);
+        return new PaperConfig(dev.vox.lss.common.config.SettingsSchema.server(true).fromValues(values).normalized());
     }
 
     private static ServerLevel overworldLevel() {
@@ -803,4 +803,33 @@ class PaperChunkGenerationServiceTest {
         org.junit.jupiter.api.Assertions.assertEquals(16, svc.getNullChunkFailures(),
                 "sixteen concurrent null completions count exactly sixteen");
     }
+    @Test
+    void reloadDisablesAdmissionWhileOldJobsDrainAndNewJobsCaptureNewTimeout() {
+        var svc = new CapturingGenService(config(8, 8, 60));
+        var level = overworldLevel();
+        var player = UUID.randomUUID();
+        var other = UUID.randomUUID();
+        svc.updatePolicy(false, 8, 8, 1200, 1);
+        assertFalse(svc.submitGeneration(player, registration(player), level, 0, 0, 1));
+        assertTrue(svc.launches.isEmpty(), "disabled at boot must be dormant");
+        svc.updatePolicy(true, 8, 8, 1200, 2);
+        assertTrue(svc.submitGeneration(player, registration(player), level, 0, 0, 2));
+        var old = svc.launches.getFirst();
+        svc.updatePolicy(false, 1, 1, 20, 3);
+        assertFalse(svc.submitGeneration(other, registration(other), level, 0, 0, 3),
+                "disable closes piggyback admission too");
+        for (int i = 0; i < 21; i++) assertTrue(svc.tick().isEmpty(), "old job retains its long deadline");
+        svc.updatePolicy(true, 2, 2, 20, 4);
+        assertTrue(svc.submitGeneration(other, registration(other), level, 1, 0, 4));
+        for (int i = 0; i < 20; i++) assertTrue(svc.tick().isEmpty());
+        var timedOut = svc.tick();
+        assertEquals(1, timedOut.size());
+        assertEquals(1, timedOut.getFirst().cx());
+        assertTrue(timedOut.getFirst().transientFailure());
+        svc.onChunkReady(old.key(), columnData(), old.cx(), old.cz(), old.token());
+        assertEquals(1, svc.tick().size(), "old admitted job still completes normally");
+        assertEquals(0, svc.getActiveCount());
+        svc.shutdown();
+    }
+
 }

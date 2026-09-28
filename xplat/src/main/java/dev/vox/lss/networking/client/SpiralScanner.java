@@ -142,7 +142,7 @@ class SpiralScanner {
      *  lever, and the safety net for the silent-orphan failure class no conservation law
      *  can see. */
     BooleanSupplier prefixRetentionEnabled =
-            () -> LSSClientConfig.CONFIG.enableScanPrefixRetention;
+            () -> LSSClientConfig.CONFIG.enableScanPrefixRetention();
     /** Kill switch seam for the section-store ring fast path
      *  (docs/planning/quadtree-client-state-plan.md; {@code enableQuadtreeScan}, default
      *  true). ON: a ring whose crossed leaves all have clear needs-masks confirms in
@@ -154,7 +154,7 @@ class SpiralScanner {
      *  WALK only; the section-backed state store is not switchable (jar rollback is the
      *  store's lever). */
     BooleanSupplier quadtreeScanEnabled =
-            () -> LSSClientConfig.CONFIG.enableQuadtreeScan;
+            () -> LSSClientConfig.CONFIG.enableQuadtreeScan();
     /** Rings the fast path confirmed without a position walk — session diagnostic
      *  (diag {@code ring_skips=}, exporter {@code scan.quad_ring_skips}). */
     long quadRingSkips; // package-private: the hybrid walk's phase-1 ring skips feed it too (§7)
@@ -183,7 +183,7 @@ class SpiralScanner {
     /** Config seam ({@code enableAdaptiveScanCadence} kill switch) — injectable so tests
      *  don't mutate the global CONFIG (the ingestBacklogSupplier pattern). */
     BooleanSupplier adaptiveCadenceEnabled =
-            () -> LSSClientConfig.CONFIG.enableAdaptiveScanCadence;
+            () -> LSSClientConfig.CONFIG.enableAdaptiveScanCadence();
     /**
      * Manual column-rate cap seam (docs/planning/client-column-rate-cap-design.md), the
      * {@link #adaptiveCadenceEnabled} pattern so tests don't mutate the global CONFIG.
@@ -197,7 +197,7 @@ class SpiralScanner {
      * only self-heal and must stay un-gateable, and with the budget clamped to R the
      * fallback alone stays {@code <= R/sec} anyway.
      */
-    IntSupplier columnRateCap = () -> LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+    IntSupplier columnRateCap = () -> LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
     /**
      * The BUDGET-CLAMP half of the cap seam (the transfer governor's seam split —
      * adaptive-transfer-rate-plan.md review M2). Defaults to whatever
@@ -1014,7 +1014,7 @@ class SpiralScanner {
 
     int getEffectiveLodDistance() {
         int serverDistance = this.sessionConfig.lodDistanceChunks();
-        int clientDistance = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int clientDistance = LSSClientConfig.CONFIG.lodDistanceChunks();
         int effective;
         if (clientDistance > 0) {
             effective = Math.min(clientDistance, serverDistance);

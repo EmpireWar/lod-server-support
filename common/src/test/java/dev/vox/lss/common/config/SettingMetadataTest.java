@@ -1,27 +1,29 @@
 package dev.vox.lss.common.config;
 
 import org.junit.jupiter.api.Test;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
+import java.util.*;
 import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SettingMetadataTest {
-    @Test void everySerializedServerFieldIsExplicitlyInventoried() {
-        var actual = Arrays.stream(ServerConfigBase.class.getFields())
-                .filter(field -> !Modifier.isStatic(field.getModifiers()) && !Modifier.isTransient(field.getModifiers()))
-                .map(java.lang.reflect.Field::getName).collect(Collectors.toSet());
-        var described = RuntimeSettings.descriptors().stream().map(SettingDescriptor::key).collect(Collectors.toSet());
-        assertEquals(actual, described);
-        assertEquals(described.size(), RuntimeSettings.descriptors().size());
-    }
-    @Test void runtimeMetadataKeepsSentinelsAndGlobalScope() {
-        assertTrue(RuntimeSettings.byName("maxConcurrentDiskReads").descriptor().domain().contains("AUTO"));
-        assertTrue(RuntimeSettings.byName("dirtyBroadcastIntervalSeconds").descriptor().domain().contains("disables"));
-        for (var key : RuntimeSettings.keys()) {
-            assertFalse(key.descriptor().restartRequired());
-            assertEquals(key.name().equals("lodDistanceChunks"), key.descriptor().supports(SettingDescriptor.Scope.WORLD_DISTANCE));
-            assertEquals(key.applyNote(), key.descriptor().applyTiming());
+    @Test void immutableRecordsAndMetadataCoverTheSamePaths() {
+        for (var schema : List.of(SettingsSchema.server(false), SettingsSchema.server(true), SettingsSchema.client())) {
+            var keys = schema.descriptors().stream().map(SettingsSchema.Descriptor::path).collect(Collectors.toSet());
+            assertEquals(schema.descriptors().size(), keys.size());
+            assertEquals(schema.defaultValues().keySet(), keys);
+            assertFalse(keys.stream().anyMatch(k -> k.startsWith("bytesPerSecond")));
+            assertTrue(schema.descriptors().stream().allMatch(d -> !d.description().isBlank()));
         }
+    }
+    @Test void performancePoliciesAreReloadableButIdentityAndTopologyRemainDeferred() {
+        var fields = SettingsSchema.server(false).descriptorsByPath();
+        for (String key : List.of("generation.enabled", "generation.timeout_ticks", "storage.lod_store.max_size_mib",
+                "storage.lod_store.backfill.enabled", "storage.lod_store.backfill.columns_per_second",
+                "storage.timestamp_cache_mib_per_dimension", "storage.miss_memo_ttl_seconds",
+                "network.yield_to_vanilla", "serialization.nbt_transcode"))
+            assertEquals(SettingsSchema.Timing.H, fields.get(key).timing(), key);
+        for (String key : List.of("storage.lod_store.enabled", "privacy.xray.mode", "storage.disk.reader_threads"))
+            assertEquals(SettingsSchema.Timing.R, fields.get(key).timing(), key);
+        assertEquals(SettingsSchema.Timing.S, SettingsSchema.client().descriptorsByPath().get("integrations.xaero_map.enabled").timing());
     }
 }

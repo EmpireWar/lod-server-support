@@ -101,8 +101,8 @@ class LSSPaperPluginGlueTest {
     }
 
     private static PaperConfig config(boolean enabled) {
-        var c = new PaperConfig();
-        c.enabled = enabled;
+        var c = new MutablePaperSettings();
+        MutablePaperSettings.set(c, "service.enabled", enabled);
         return c;
     }
 
@@ -177,7 +177,7 @@ class LSSPaperPluginGlueTest {
 
     private static PaperConfig gatedConfig() {
         var c = config(true);
-        c.requireServicePermission = true;
+        MutablePaperSettings.set(c, "service.require_permission", true);
         return c;
     }
 
@@ -244,9 +244,9 @@ class LSSPaperPluginGlueTest {
         // produces a wire-valid frame that live runs survive, so this is the only place a
         // swap can fail. (4-field frame — the concurrency caps left the wire.)
         var config = config(true);
-        config.lodDistanceChunks = 101;
-        config.generationConcurrencyLimitPerPlayer = 7; // pairwise-distinct from the 200 sync cap
-        config.enableChunkGeneration = false; // differs from effectiveEnabled=true
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 101);
+        MutablePaperSettings.set(config, "generation.concurrency.per_player", 7); // pairwise-distinct from the 200 sync cap
+        MutablePaperSettings.set(config, "generation.enabled", false); // differs from effectiveEnabled=true
         var sender = new RecordingSender();
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS),
                 "Steve", config, true, sender, (caps, dialect, reply) -> reply.run());
@@ -259,8 +259,8 @@ class LSSPaperPluginGlueTest {
     @Test
     void handshakeReplyUsesPerWorldLodOverrideWhenPlayerIsKnown() {
         var config = config(true);
-        config.lodDistanceChunks = 512;
-        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 64);
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 512);
+        MutablePaperSettings.dimension(config, "minecraft:the_nether", 64);
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         var nmsPlayer = org.mockito.Mockito.mock(net.minecraft.server.level.ServerPlayer.class);
@@ -283,9 +283,9 @@ class LSSPaperPluginGlueTest {
         // caps (they are the old client's pacing), and the registrar learns the dialect so
         // it can create the compat session before the mailboxed registration.
         var config = config(true);
-        config.lodDistanceChunks = 101;
-        config.generationConcurrencyLimitPerPlayer = 7;
-        config.enableChunkGeneration = false; // opposed to effectiveEnabled=true (swap guard)
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 101);
+        MutablePaperSettings.set(config, "generation.concurrency.per_player", 7);
+        MutablePaperSettings.set(config, "generation.enabled", false); // opposed to effectiveEnabled=true (swap guard)
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(16, VOXEL_CAPS),
@@ -302,7 +302,7 @@ class LSSPaperPluginGlueTest {
     @Test
     void v16HandshakeWithCompatDisabledSendsNothing() {
         var config = config(true);
-        config.enableV16Compat = false;
+        MutablePaperSettings.set(config, "compatibility.protocols.v16", false);
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(16, VOXEL_CAPS),
@@ -321,9 +321,9 @@ class LSSPaperPluginGlueTest {
         // (v18-compat design §2.1, review F5). The reply is deferred exactly like every
         // registering outcome: the pre-registration gap applies to v18 joins too.
         var config = config(true);
-        config.lodDistanceChunks = 101;
-        config.generationConcurrencyLimitPerPlayer = 7;
-        config.enableChunkGeneration = false; // opposed to effectiveEnabled=true (swap guard)
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 101);
+        MutablePaperSettings.set(config, "generation.concurrency.per_player", 7);
+        MutablePaperSettings.set(config, "generation.enabled", false); // opposed to effectiveEnabled=true (swap guard)
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(18, VOXEL_CAPS),
@@ -340,7 +340,7 @@ class LSSPaperPluginGlueTest {
     @Test
     void v18HandshakeWithCompatDisabledSendsNothing() {
         var config = config(true);
-        config.enableV18Compat = false;
+        MutablePaperSettings.set(config, "compatibility.protocols.v18", false);
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(18, VOXEL_CAPS),
@@ -358,8 +358,8 @@ class LSSPaperPluginGlueTest {
         // would drop v19 clients to the v16 discovery fallback) fails HERE (the C1
         // recon's named drift hazard).
         var config = config(true);
-        config.lodDistanceChunks = 103;
-        config.generationConcurrencyLimitPerPlayer = 9;
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 103);
+        MutablePaperSettings.set(config, "generation.concurrency.per_player", 9);
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(19, VOXEL_CAPS),
@@ -399,7 +399,7 @@ class LSSPaperPluginGlueTest {
     @Test
     void v19HandshakeWithCompatDisabledSendsNothing() {
         var config = config(true);
-        config.enableV19Compat = false;
+        MutablePaperSettings.set(config, "compatibility.protocols.v19", false);
         var sender = new RecordingSender();
         var registrar = new RecordingRegistrar();
         LSSPaperPlugin.handleHandshake(handshakeFrame(19, VOXEL_CAPS),
@@ -499,7 +499,7 @@ class LSSPaperPluginGlueTest {
         var registrar = new RecordingRegistrar();
         var gate = new RecordingGate(); // holds nothing
         var config = config(true);
-        assertFalse(config.requireServicePermission, "the gate must ship OFF");
+        assertFalse(config.requireServicePermission(), "the gate must ship OFF");
 
         LSSPaperPlugin.handleHandshake(handshakeFrame(V, VOXEL_CAPS), "Steve", config, true,
                 dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL, 0, gate, sender, registrar);
@@ -526,9 +526,9 @@ class LSSPaperPluginGlueTest {
                     dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL, 0, gate, sender, registrar);
 
             assertEquals(1, sender.replies.size(), "the denial REPLIES — silence would make the client retry");
-            assertEquals(new Reply(HandshakeGate.WireDialect.CURRENT, false, config.lodDistanceChunks,
-                            LSSConstants.SYNC_ON_LOAD_SLOT_CAP, config.generationConcurrencyLimitPerPlayer,
-                            config.enableChunkGeneration), sender.replies.get(0),
+            assertEquals(new Reply(HandshakeGate.WireDialect.CURRENT, false, config.lodDistanceChunks(),
+                            LSSConstants.SYNC_ON_LOAD_SLOT_CAP, config.generationConcurrencyLimitPerPlayer(),
+                            config.enableChunkGeneration()), sender.replies.get(0),
                     "the denial rides the existing enabled=false slot; every other slot is untouched");
             assertEquals(List.of(), registrar.caps, "a denied player must never be registered");
             assertEquals(List.of(LSSPaperPlugin.PERMISSION_SERVICE_LSS), gate.checked,
@@ -716,7 +716,7 @@ class LSSPaperPluginGlueTest {
         // and would burn the release before the gate ever decided anything.
         var gate = new RecordingGate();
         var offConfig = config(false);
-        offConfig.requireServicePermission = true;
+        MutablePaperSettings.set(offConfig, "service.require_permission", true);
 
         try (var capture = new LssLogCapture()) {
             var sender = new RecordingSender();
@@ -912,7 +912,7 @@ class LSSPaperPluginGlueTest {
 
     private static final class RecordingSteps implements LSSPaperPlugin.EnableSteps {
         final List<String> order = new ArrayList<>();
-        final PaperConfig config = new PaperConfig();
+        final PaperConfig config = new MutablePaperSettings();
         // Mock: the real service needs a live NMS MinecraftServer; the plan must treat it as opaque.
         final PaperRequestProcessingService service = mock(PaperRequestProcessingService.class);
         PaperConfig startServiceConfig;
@@ -920,7 +920,7 @@ class LSSPaperPluginGlueTest {
         PaperConfig worldHandlerConfig;
 
         RecordingSteps(boolean enabled) {
-            config.enabled = enabled;
+            MutablePaperSettings.set(config, "service.enabled", enabled);
         }
 
         @Override

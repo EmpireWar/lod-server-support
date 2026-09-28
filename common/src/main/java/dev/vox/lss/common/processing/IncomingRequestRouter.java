@@ -38,7 +38,8 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
     private final ColumnTimestampCache timestampCache;
     private final DedupTracker dedupTracker;
     private final boolean diskReadingAvailable;
-    private final boolean generationAvailable;
+    private boolean generationAvailable;
+    void updateGenerationPolicy(boolean enabled) { this.generationAvailable = enabled; }
     private final ProcessingContext ctx;
 
     // Per-cycle state (processing thread only), set by routeAll for the duration of a cycle
@@ -516,7 +517,7 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             this.processor.addGenerationInFlight(state.registration(), dimension, packed);
             this.ctx.generationTicketRequests().add(
                     new OffThreadProcessor.GenerationTicketRequest(playerUuid, state.registration(), req.cx(), req.cz(),
-                            dimension, this.ctx.sequence().next()));
+                            dimension, this.ctx.sequence().next(), this.processor.adoptedSettingsRevision()));
             return AdmitResult.SUBMITTED;
         } else {
             // No disk reader AND no generation — can't serve

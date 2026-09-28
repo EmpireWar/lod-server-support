@@ -45,8 +45,10 @@ public class LSSConfigMenu implements ConfigEntryPoint {
 
     @Override
     public void registerConfigLate(ConfigBuilder builder) {
-        var cfg = LSSClientConfig.CONFIG;
-        var ctx = MenuContext.current();
+        registerDraft(builder, LSSClientConfig.CONFIG.edits(), MenuContext.current());
+    }
+
+    void registerDraft(ConfigBuilder builder, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx) {
 
         Optional<IModInfo> info = ModList.get().getModContainerById(LSSConstants.MOD_ID)
                 .map(c -> c.getModInfo());
@@ -83,7 +85,7 @@ public class LSSConfigMenu implements ConfigEntryPoint {
     }
 
     private static OptionBuilder buildOption(ConfigBuilder builder, OptionSpec spec,
-                                             LSSClientConfig cfg, MenuContext ctx,
+                                             dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx,
                                              StorageEventHandler save) {
         Identifier id = Identifier.parse(spec.id());
         StatefulOptionBuilder<?> option = switch (spec) {
@@ -98,12 +100,14 @@ public class LSSConfigMenu implements ConfigEntryPoint {
                 o.setDefaultValue(s.defaultValue());
                 o.setRange(new Range(s.min(), s.max(), s.step()));
                 o.setValueFormatter(v -> component(s.label().apply(v)));
-                o.setBinding(v -> s.setter().accept(cfg, v), () -> s.getter().apply(cfg));
+                o.setBinding(v -> s.setter().accept(cfg, v), () -> s.displayValue(cfg));
                 yield o;
             }
         };
         option.setName(Component.translatable(spec.nameKey()));
-        option.setTooltip(Component.translatable(spec.tooltip().resolve(ctx)));
+        option.setTooltip(unused -> Component.translatable(spec.tooltip().resolve(
+                spec.tooltip().condition() == dev.vox.lss.config.menu.Tooltip.Condition.GOVERNOR_ON
+                        ? MenuContext.current() : ctx)));
         if (spec.impact() != null) {
             option.setImpact(OptionImpact.valueOf(spec.impact().name()));
         }

@@ -6,7 +6,7 @@ import java.util.UUID;
 
 /**
  * The client-side far-player tracker (E1, FARP §3.3 phase A — tracked state only, no
- * rendering until E2). Mirrors SeeU's generational latest-wins map plus the roster
+ * rendering until E2). Maintains a generational latest-wins map plus the roster
  * layer: identities arrive once per epoch (index ↔ UUID+name), updates address them by
  * index, and an update stamped with an epoch this tracker has not seen is DROPPED — the
  * misbinding armor (a stale in-flight updates frame crossing a roster rebuild must
@@ -14,7 +14,7 @@ import java.util.UUID;
  *
  * <p>R-5 (decided at E1, recorded in the progress doc): the tracker is owned OUTSIDE
  * the request-manager lifecycle — a mid-session SessionConfig re-push (stage C's
- * `/lsslod set`) retires and rebuilds the manager, but the SERVER's subscription state
+ * `/lsslod reload`) retires and rebuilds the manager, but the SERVER's subscription state
  * survives untouched, so the tracker must too (rebuild-and-resubscribe would turn one
  * `set lodDistanceChunks` on an N-player server into N roster floods). It dies at
  * disconnect and at the R-3 reset re-subscribe.

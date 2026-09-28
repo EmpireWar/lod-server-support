@@ -326,7 +326,7 @@ class PaperWorldHandlerTest {
 
     @Test
     void defaultUpdateEventsAllResolveAndExcludeChunkPopulate() {
-        List<String> defaults = new PaperConfig().updateEvents;
+        List<String> defaults = new PaperConfig().updateEvents();
         assertFalse(defaults.contains("org.bukkit.event.world.ChunkPopulateEvent"),
                 "ChunkPopulateEvent must not be a default: it re-marks every LSS-generated chunk");
         assertTrue(defaults.contains("org.bukkit.event.block.BlockBreakEvent"));
@@ -615,7 +615,7 @@ class PaperWorldHandlerTest {
     void everyDefaultUpdateEventYieldsAPositionExtractorAndFluidFlowStaysExcluded() throws Exception {
         // PP-017: resolvable-but-extractor-less defaults register fine and then silently
         // extract nothing forever; pin that discoverMethod finds a rung for each default.
-        List<String> defaults = new PaperConfig().updateEvents;
+        List<String> defaults = new PaperConfig().updateEvents();
         assertFalse(defaults.contains("org.bukkit.event.block.BlockFromToEvent"),
                 "high-frequency fluid flow is deliberately opt-in, never a default");
         for (String name : defaults) {

@@ -16,31 +16,55 @@ import net.minecraft.server.permissions.Permissions;
  *  per-loader {@code LSSServerNetworking.getRequestService()} holder (same-FQN twin
  *  contract, plan §1.1). */
 public class LSSServerCommands {
-    private static int preset(CommandSourceStack source, String action) {
-        try {
-            var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
-            int previousDistance = config.lodDistanceChunks;
-            var feedback = config.presetCommand(action);
-            if (config.lodDistanceChunks != previousDistance) {
-                var service = LSSServerNetworking.getRequestService();
-                if (service != null) {
-                    int[] counts = service.repushSessionConfig();
-                    source.sendSuccess(() -> Component.literal("Re-pushed to " + counts[0] + " client(s)"
-                            + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : "")), false);
+    private static int reload(CommandSourceStack source) {
+        var config = LSSServerConfig.CONFIG;
+        var service = LSSServerNetworking.getRequestService();
+        dev.vox.lss.common.config.SettingsReload.Owner owner = action -> {
+            if (service != null) return service.submitSettingsControl(() -> { action.run(); return null; });
+            var receipt = new java.util.concurrent.CompletableFuture<Void>();
+            source.getServer().execute(() -> {
+                if (source.getServer().isStopped()) {
+                    receipt.completeExceptionally(new IllegalStateException("Server stopped"));
+                    return;
                 }
+                try { action.run(); receipt.complete(null); }
+                catch (Throwable failure) { receipt.completeExceptionally(failure); }
+            });
+            return receipt;
+        };
+        source.sendSuccess(() -> Component.literal("Reading " + config.settingsPath() + "…"), false);
+        config.reloadOwned(owner, (previous, next, revision) -> service == null
+                ? java.util.concurrent.CompletableFuture.completedFuture(null)
+                : service.reconcileSettings(previous, next, revision)).whenComplete((result, failure) -> {
+            if (failure != null) {
+                String message = "Reload failed: " + dev.vox.lss.common.config.SettingsReload.message(failure);
+                dev.vox.lss.common.LSSLogger.warn(message);
+                source.getServer().execute(() -> source.sendFailure(Component.literal(message)));
+            } else {
+                var lines = new java.util.ArrayList<>(dev.vox.lss.common.config.ReloadFeedback.lines(config.settingsPath(), result));
+                if (service != null && result.status() != dev.vox.lss.common.config.SettingsReload.Status.UNCHANGED) {
+                    // Captured on the service owner before reconciliation completed.
+                    var feedback = service.settingsFeedback();
+                    if (feedback.revision() == result.revision()) {
+                        lines.removeIf(line -> line.startsWith("Existing legacy clients may"));
+                        if (feedback.legacyReconnects() > 0)
+                            lines.add(feedback.legacyReconnects() + " legacy client(s) need to reconnect for the new distance or generation policy.");
+                        lines.addAll(feedback.draining());
+                    }
+                }
+                lines.forEach(dev.vox.lss.common.LSSLogger::info);
+                source.getServer().execute(() -> lines.forEach(line ->
+                        source.sendSuccess(() -> Component.literal(line), false)));
             }
-            for (String line : feedback) source.sendSuccess(() -> Component.literal(line), false);
-        } catch (IllegalArgumentException | IllegalStateException failure) {
-            source.sendFailure(Component.literal(failure.getMessage()));
-        }
-        return com.mojang.brigadier.Command.SINGLE_SUCCESS;
+        });
+        return 1;
     }
 
     private static int exportDiagnostics(CommandSourceStack source) {
         var service = LSSServerNetworking.getRequestService();
         var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
         var snapshot = new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
-                service != null, config.enabled, config.enableChunkGeneration, config.generationConfiguredForRestart(), config.lodDistanceChunks,
+                service != null, config.enabled(), config.enableChunkGeneration(), config.generationConfiguredForRestart(), config.lodDistanceChunks(),
                 service == null ? 0 : service.getUptimeSeconds(),
                 service == null ? 0 : service.getTickDiag().getTotalSectionsSent(),
                 service == null ? 0 : service.getTickDiag().getTotalBytesSent(),
@@ -74,34 +98,12 @@ public class LSSServerCommands {
                             .then(Commands.literal("stats")
                                     .executes(ctx -> showStats(ctx.getSource()))
                             )
-                            .then(Commands.literal("preset")
-                                    .then(Commands.literal("conservative").executes(ctx -> preset(ctx.getSource(), "conservative")))
-                                    .then(Commands.literal("pregenerated-world").executes(ctx -> preset(ctx.getSource(), "pregenerated-world")))
-                                    .then(Commands.literal("apply").executes(ctx -> preset(ctx.getSource(), "apply")))
-                                    .then(Commands.literal("undo").executes(ctx -> preset(ctx.getSource(), "undo"))))
                             .then(Commands.literal("diagnostics")
                                     .then(Commands.literal("export").executes(ctx -> exportDiagnostics(ctx.getSource()))))
                             .then(Commands.literal("diag")
                                     .executes(ctx -> showDiagnostics(ctx.getSource()))
                             )
-                            .then(Commands.literal("set")
-                                    .executes(ctx -> listSettings(ctx.getSource()))
-                                    .then(Commands.argument("key",
-                                                    com.mojang.brigadier.arguments.StringArgumentType.word())
-                                            .suggests((c, b) -> {
-                                                for (var name : dev.vox.lss.common.config.RuntimeSettings.keyNames()) {
-                                                    if (name.toLowerCase().startsWith(b.getRemainingLowerCase())) {
-                                                        b.suggest(name);
-                                                    }
-                                                }
-                                                return b.buildFuture();
-                                            })
-                                            .then(Commands.argument("value",
-                                                            com.mojang.brigadier.arguments.StringArgumentType.greedyString())
-                                                    .executes(ctx -> setSetting(ctx.getSource(),
-                                                            com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "key"),
-                                                            com.mojang.brigadier.arguments.StringArgumentType.getString(ctx, "value")))))
-                            )
+                            .then(Commands.literal("reload").executes(ctx -> reload(ctx.getSource())))
                             .then(Commands.literal("store")
                                     .then(Commands.literal("status")
                                             .executes(ctx -> storeStatus(ctx.getSource())))
@@ -124,54 +126,6 @@ public class LSSServerCommands {
         for (var line : dev.vox.lss.common.CommandHelp.lines(Brand.serverCommand(), true)) {
             source.sendSuccess(() -> Component.literal(line), false);
         }
-        return 1;
-    }
-
-    private static int listSettings(CommandSourceStack source) {
-        source.sendSuccess(() -> Component.literal(
-                "Runtime-settable keys (applied + persisted to "
-                        + dev.vox.lss.common.Brand.lowerShortName() + "-server-config.json):"), false);
-        for (var line : dev.vox.lss.common.config.RuntimeSettings.listLines(LSSServerConfig.CONFIG)) {
-            source.sendSuccess(() -> Component.literal("  " + line), false);
-        }
-        return 1;
-    }
-
-    /** The /lsslod set apply path (v0.11.0 stage C): parse → per-key clamp → assign once
-     *  → validate() → save() → reply. Fabric commands run on the SERVER thread (= tick
-     *  thread), so the mutation and the re-push are direct — the tick-poll consumers
-     *  pick the change up at the next tick. */
-    private static int setSetting(CommandSourceStack source, String keyName, String rawValue) {
-        var key = dev.vox.lss.common.config.RuntimeSettings.byName(keyName);
-        if (key == null) {
-            source.sendFailure(Component.literal("Unknown key '" + keyName + "'. Settable: "
-                    + String.join(", ", dev.vox.lss.common.config.RuntimeSettings.keyNames())));
-            return 0;
-        }
-        var config = LSSServerConfig.CONFIG;
-        dev.vox.lss.common.config.RuntimeSettings.ApplyResult result;
-        try {
-            result = dev.vox.lss.common.config.RuntimeSettings
-                    .applyAndPersist(config, key, rawValue);
-        } catch (IllegalArgumentException e) {
-            source.sendFailure(Component.literal(keyName + ": " + e.getMessage()));
-            return 0;
-        }
-        String repushNote = "";
-        // Re-push keyed on the MUTATION, not a reply-string diff: a per-world set leaves
-        // the scalar unchanged, so a string compare would miss it (and never re-push).
-        if (result.repush()) {
-            var service = LSSServerNetworking.getRequestService();
-            if (service != null) {
-                int[] counts = service.repushSessionConfig();
-                repushNote = "; re-pushed to " + counts[0] + " client(s)"
-                        + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : "");
-            }
-        }
-        String reply = keyName + " = "
-                + dev.vox.lss.common.config.RuntimeSettings.renderReplyValue(key, result, rawValue)
-                + " — " + key.applyNote() + repushNote + result.persistenceNote();
-        source.sendSuccess(() -> Component.literal(reply), true);
         return 1;
     }
 
@@ -246,6 +200,10 @@ public class LSSServerCommands {
         }
         switch (verb) {
             case "start" -> {
+                if (!LSSServerConfig.CONFIG.lodStoreBackfill()) {
+                    source.sendFailure(Component.literal("Backfill is disabled; edit storage.lod_store.backfill.enabled and reload."));
+                    return 0;
+                }
                 boolean started = backfill.start();
                 source.sendSuccess(() -> Component.literal(started
                         ? "Store backfill started (background, yields to players)"
@@ -294,23 +252,23 @@ public class LSSServerCommands {
         var config = LSSServerConfig.CONFIG;
         var genService = service.getGenerationService();
         var data = DiagnosticsFormatter.collectDiagData(
-                config.enabled, config.lodDistanceChunks,
+                config.enabled(), config.lodDistanceChunks(),
                 config.bytesPerSecondPerPlayer(), config.bytesPerSecondGlobal(),
-                config.sendQueueLimitPerPlayer,
+                config.sendQueueLimitPerPlayer(),
                 service.getUptimeSeconds(), service.getTickDiagnostics(), service.getWindowBandwidthRate(),
                 service.getTickDiag().getTotalSectionsSent(), service.getTickDiag().getTotalBytesSent(),
                 service.getTickDiag().getTotalWireBytesSent(),
                 service.getOffThreadProcessor().getDiagnostics(), service.getDiskReader(),
                 service.getBandwidthLimiter(),
-                genService != null ? genService.getDiagnostics() : null,
+                config.enableChunkGeneration() && genService != null ? genService.getDiagnostics() : null,
                 // LIVE store mode, not the config's ask (review MINOR-3): a codec-probe
                 // degrade renders store=unavailable, never a lying store=memory h=0.
                 // enabled=false is an OFF store, not a degraded one — without that term
                 // a disabled server rendered store=unavailable, which reads as the
                 // degraded-boot state (codec or SQLite-init failure), sending admins
                 // after a problem that does not exist (v0.9.0 final review).
-                !config.enabled
-                        || dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore)
+                !config.enabled()
+                        || dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
                                 == dev.vox.lss.common.store.LodStoreMode.OFF
                         ? dev.vox.lss.common.store.LodStoreMode.OFF
                         : (service.getLodStore() != null ? service.getLodStore().mode() : null),
@@ -323,7 +281,7 @@ public class LSSServerCommands {
                 .withXrayLine(xrayDiagLine())
                 .withMoveTraceLine(moveTraceDiagLineOrNull())
                 .withYieldLine(DiagnosticsFormatter.yieldDiagLineOrNull(
-                        config.lodYieldsToVanillaTransport, service.getTickDiag()))
+                        config.lodYieldsToVanillaTransport(), service.getTickDiag()))
                 .withGateLine(serviceGateDiagLineOrNull(config, service))
                 .withDirtyLine(dirtyDiagLine(service));
 
@@ -350,7 +308,7 @@ public class LSSServerCommands {
      *  no backend resolved, the armed-gate-serves-everyone shape an admin must see). */
     private static String serviceGateDiagLineOrNull(LSSServerConfig config,
                                                     RequestProcessingService service) {
-        if (!config.requireServicePermission) return null;
+        if (!config.requireServicePermission()) return null;
         return "Gate: requireServicePermission=on denied="
                 + service.getServiceGateState().deniedCount()
                 + " provider=" + dev.vox.lss.platform.LoaderServices.get().permissionProviderToken();

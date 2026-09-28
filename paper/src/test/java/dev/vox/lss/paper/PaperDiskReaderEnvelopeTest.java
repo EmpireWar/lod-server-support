@@ -209,4 +209,54 @@ class PaperDiskReaderEnvelopeTest {
         assertEquals(34L, reader.getDiag().getCompletedCount(),
                 "completion partition stays exact across the saturation bounce");
     }
+    @Test
+    void serializationReloadCapturesPolicyForQueuedReadsAndKeepsWireBytesEqual() throws Exception {
+        var nbt = new CompoundTag();
+        nbt.putString("Status", "minecraft:full");
+        var section = new CompoundTag();
+        section.putByte("Y", (byte) 0);
+        var blocks = new CompoundTag();
+        var palette = new ListTag();
+        var stone = new CompoundTag();
+        stone.putString("Name", "minecraft:stone");
+        palette.add(stone);
+        blocks.put("palette", palette);
+        section.put("block_states", blocks);
+        var biomes = new CompoundTag();
+        var biomePalette = new ListTag();
+        biomePalette.add(net.minecraft.nbt.StringTag.valueOf("minecraft:plains"));
+        biomes.put("palette", biomePalette);
+        section.put("biomes", biomes);
+        var sections = new ListTag();
+        sections.add(section);
+        nbt.put("sections", sections);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        reader.setReadOverride((cx, cz) -> {
+            entered.countDown();
+            try {
+                if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("read was not released");
+            } catch (InterruptedException failure) { Thread.currentThread().interrupt(); throw new AssertionError(failure); }
+            return CompletableFuture.completedFuture(Optional.of(nbt));
+        });
+        long before = PaperNbtSectionSerializer.DIRECT_V20_EMITS.get();
+        try {
+            reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 0, 0, 1, 0);
+            assertTrue(entered.await(10, TimeUnit.SECONDS));
+            reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 1, 0, 2, 0);
+            reader.updateSerializationPolicy(false, false);
+            reader.submitReadDirect(uuid, registration(uuid), "minecraft:overworld", level, 2, 0, 3, 0);
+            release.countDown();
+            var first = awaitResult();
+            var queued = awaitResult();
+            var changed = awaitResult();
+            assertFalse(first.notFound());
+            org.junit.jupiter.api.Assertions.assertNotNull(first.sectionBytes());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(first.sectionBytes(), queued.sectionBytes());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(first.sectionBytes(), changed.sectionBytes());
+            assertEquals(before + 2, PaperNbtSectionSerializer.DIRECT_V20_EMITS.get(),
+                    "running and queued submissions retain transcode; only the later read uses object decoding");
+        } finally { release.countDown(); }
+    }
+
 }

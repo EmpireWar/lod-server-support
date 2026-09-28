@@ -182,7 +182,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         // ChunkSaveDataHook gate): the service tick — and so the dirty-broadcast drain — is
         // disabled, so marking would grow the DirtyColumnTracker without bound for the whole
         // server run. enabled is immutable per run, so skipping registration is safe.
-        if (config.enabled) {
+        if (config.enabled()) {
             steps.registerWorldHandler(service, config);
         }
 
@@ -241,7 +241,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
             @Override
             public void registerWorldHandler(PaperRequestProcessingService service, PaperConfig config) {
                 var worldHandler = new PaperWorldHandler(LSSPaperPlugin.this, service.getDirtyTracker());
-                worldHandler.registerUpdateListeners(config.updateEvents);
+                worldHandler.registerUpdateListeners(config.updateEvents());
             }
 
             @Override
@@ -284,6 +284,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
 
     @Override
     public void onDisable() {
+        if (this.lssConfig != null) this.lssConfig.close();
         // Null the field BEFORE shutting down so the next pump fire no-ops — a runtime
         // plugin-manager disable can arrive from a region thread while the pump is mid-tick
         // (the service's shuttingDown flag covers the one already-in-flight tick).
@@ -425,7 +426,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         if (service != null) service.markConnection(nmsPlayer.getUUID());
         // XVER §7: capture Via's answer once per handshake (the && keeps a disabled
         // guard from ever triggering probe resolution); the pure seam applies the rule.
-        int viaProtocol = this.lssConfig.enableViaMismatchGuard
+        int viaProtocol = this.lssConfig.enableViaMismatchGuard()
                 ? dev.vox.lss.common.compat.ViaProbe.playerProtocol(nmsPlayer.getUUID())
                 : dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL;
         handleHandshake(data, nmsPlayer.getName().getString(), nmsPlayer, this.lssConfig, service != null,
@@ -439,6 +440,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                         service == null ? null
                                 : () -> service.enqueueServiceGateUnregister(nmsPlayer.getUUID())),
                 (dialect, enabled, lodDistanceChunks, syncCap, genCap, generationEnabled) -> {
+                    if (service != null) generationEnabled = service.generationEnabledForSession();
                     // A cross-dialect re-handshake sheds the stale compat identities it is
                     // NOT — otherwise columns keep shipping the old dialect's shape and
                     // hard-kick the re-armed decoder. Placed on the sender seam because it
@@ -599,12 +601,12 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         // the client's discovery ladder into its retry rungs, while enabled=false is the
         // clean disarm ClientSessionGate already implements. Evaluated BEFORE the ladder
         // because the ladder is pure; the log below waits until the reply-bearing rungs.
-        boolean serviceDenied = config.requireServicePermission
+        boolean serviceDenied = config.requireServicePermission()
                 && !holdsServicePermission(serviceGate);
 
         var decision = HandshakeGate.evaluate(handshake.protocolVersion(),
-                handshake.capabilities(), config.enabled && !serviceDenied, servicePresent,
-                config.enableV16Compat, config.enableV18Compat, config.enableV19Compat,
+                handshake.capabilities(), config.enabled() && !serviceDenied, servicePresent,
+                config.enableV16Compat(), config.enableV18Compat(), config.enableV19Compat(),
                 dev.vox.lss.common.compat.ViaProbe.isMismatch(viaProtocol, nativeProtocol));
 
         if (decision.outcome() == HandshakeGate.Outcome.VIA_MISMATCH) {
@@ -646,12 +648,12 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
         //     line below AND spend the session's one release on a handshake the gate never
         //     decided — the client's later, consumer-bearing handshake would then be denied
         //     in silence.
-        //   * config.enabled + servicePresent: with LSS off server-wide (or its service
+        //   * config.enabled() + servicePresent: with LSS off server-wide (or its service
         //     absent) the player is dark regardless, so naming a permission would send the
         //     admin hunting a grant that changes nothing.
         //   * past the two silent rungs (above): a version/Via denial is a protocol skew,
         //     not a missing grant.
-        boolean deniedByServiceGate = serviceDenied && config.enabled && servicePresent
+        boolean deniedByServiceGate = serviceDenied && config.enabled() && servicePresent
                 && decision.outcome() == HandshakeGate.Outcome.DISABLED;
         if (deniedByServiceGate && serviceGate.claimDenialLog()) {
             LSSLogger.info("LOD unavailable for " + playerName
@@ -672,7 +674,7 @@ public class LSSPaperPlugin extends JavaPlugin implements PluginMessageListener,
                 // (ignored by the V18 sender branch; see the v16 compat design §4.1).
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                 config.generationLimits().perPlayer(),
-                config.enableChunkGeneration);
+                config.enableChunkGeneration());
 
         if (decision.outcome() == HandshakeGate.Outcome.NO_CONSUMER) {
             // Reply-only outcome: no state will exist, so the inline reply cannot race it.

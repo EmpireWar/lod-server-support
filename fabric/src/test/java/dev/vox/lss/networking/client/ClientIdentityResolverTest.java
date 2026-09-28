@@ -91,16 +91,16 @@ class ClientIdentityResolverTest {
 
     @BeforeEach
     void pinConfig() {
-        priorFallback = LSSClientConfig.CONFIG.unknownBlockFallback;
-        priorCurated = LSSClientConfig.CONFIG.crossVersionBlockFallbacks;
-        LSSClientConfig.CONFIG.unknownBlockFallback = "minecraft:stone";
-        LSSClientConfig.CONFIG.crossVersionBlockFallbacks = new HashMap<>();
+        priorFallback = LSSClientConfig.CONFIG.unknownBlockFallback();
+        priorCurated = LSSClientConfig.CONFIG.crossVersionBlockFallbacks();
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "minecraft:stone");
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.overrides", new HashMap<>());
     }
 
     @AfterEach
     void restoreConfig() {
-        LSSClientConfig.CONFIG.unknownBlockFallback = priorFallback;
-        LSSClientConfig.CONFIG.crossVersionBlockFallbacks = priorCurated;
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", priorFallback);
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.overrides", priorCurated);
     }
 
     private static ClientIdentityResolver newResolver() {
@@ -181,9 +181,9 @@ class ClientIdentityResolverTest {
 
     @Test
     void curatedTableMapsUnknownNamesAndCountsAsFallback() {
-        LSSClientConfig.CONFIG.crossVersionBlockFallbacks = new HashMap<>(Map.of(
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.overrides", new HashMap<>(Map.of(
                 "ancient:sulfur", "minecraft:sandstone",
-                "ancient:ruby_stairs", "minecraft:oak_stairs[half=top]"));
+                "ancient:ruby_stairs", "minecraft:oak_stairs[half=top]")));
         var r = newResolver();
         // The curated rung keys on the NAME — the wire identity's properties are
         // dropped by design (they belong to the REMOVED block's state space).
@@ -201,8 +201,7 @@ class ClientIdentityResolverTest {
     void curatedEntryPointingAtAnUnknownTargetFallsThroughToTerminal() {
         // A stale curated entry (its target renamed away too) must not wedge the
         // ladder: the resolve continues to the terminal default.
-        LSSClientConfig.CONFIG.crossVersionBlockFallbacks =
-                new HashMap<>(Map.of("ancient:junk", "ancient:also_missing"));
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.overrides", new HashMap<>(Map.of("ancient:junk", "ancient:also_missing")));
         var r = newResolver();
         assertEquals(stoneId(), r.blockIdFor("ancient:junk"));
         assertEquals(1, r.fallbackCount());
@@ -219,7 +218,7 @@ class ClientIdentityResolverTest {
 
     @Test
     void configuredTerminalFallbackIsHonoredWhenItResolves() {
-        LSSClientConfig.CONFIG.unknownBlockFallback = "minecraft:sandstone";
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "minecraft:sandstone");
         var r = newResolver();
         assertEquals(idOf(Blocks.SANDSTONE.defaultBlockState()),
                 r.blockIdFor("voidcraft:aetherium_ore"));
@@ -231,10 +230,10 @@ class ClientIdentityResolverTest {
         // grammar rejects outright, and one that parses but names no local block. Both
         // must coerce to stone at CONSTRUCTION time — a resolver with no valid
         // terminal id would turn every unknown identity into a throw mid-decode.
-        LSSClientConfig.CONFIG.unknownBlockFallback = "Not A Block!!";
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "Not A Block!!");
         assertEquals(stoneId(), newResolver().blockIdFor("voidcraft:aetherium_ore"));
 
-        LSSClientConfig.CONFIG.unknownBlockFallback = "minecraft:no_such_block_here";
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "minecraft:no_such_block_here");
         assertEquals(stoneId(), newResolver().blockIdFor("voidcraft:aetherium_ore"));
     }
 
@@ -243,7 +242,7 @@ class ClientIdentityResolverTest {
         // The NEVER-air pin (the ViaVersion air default is the wrong answer for LOD:
         // air punches holes in distant terrain) — a configured fallback that RESOLVES
         // but to an air state takes the warn-and-coerce branch.
-        LSSClientConfig.CONFIG.unknownBlockFallback = "minecraft:air";
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "minecraft:air");
         assertEquals(stoneId(), newResolver().blockIdFor("voidcraft:aetherium_ore"));
     }
 
@@ -314,8 +313,8 @@ class ClientIdentityResolverTest {
         // repack + count/light pass-through). A wiring slip between resolver and
         // translator (wrong lookup bound, swapped block/biome fns) passes every
         // per-rung pin and corrupts every real column.
-        LSSClientConfig.CONFIG.unknownBlockFallback = "minecraft:stone";
-        LSSClientConfig.CONFIG.crossVersionBlockFallbacks = new HashMap<>();
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "minecraft:stone");
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.overrides", new HashMap<>());
         var r = newResolver();
         String stoneId = dev.vox.lss.networking.server.IdentityTables.blockIdentityFor(
                 Block.BLOCK_STATE_REGISTRY.getId(Blocks.STONE.defaultBlockState()));
@@ -363,8 +362,8 @@ class ClientIdentityResolverTest {
         // the words. Pin: a >256-identity dictionary forces the native direct tier
         // at ceillog2(client Block.BLOCK_STATE_REGISTRY.size()) — if a size drift
         // ever changed the width derivation, the packed words would desync at parse.
-        LSSClientConfig.CONFIG.unknownBlockFallback = "minecraft:stone";
-        LSSClientConfig.CONFIG.crossVersionBlockFallbacks = new HashMap<>();
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.default", "minecraft:stone");
+        dev.vox.lss.config.ClientConfigTestSupport.set("compatibility.block_fallbacks.overrides", new HashMap<>());
         var r = newResolver();
         var dict = new java.util.ArrayList<String>();
         int taken = 0;

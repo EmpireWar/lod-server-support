@@ -69,13 +69,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The far-player proxy renderer (E2, FARP §3.3/§7-B — the SeeU
- * {@code RemotePlayer}-proxy + {@code WorldRenderContext} submission approach, proven
- * on 26.2, reimplemented in LSS idiom). Differences from SeeU that are DECISIONS, not
- * drift (all review-pinned in the FARP plan):
+ * Far-player RemotePlayer proxies submitted through WorldRenderContext.
+ * Renderer decisions are review-pinned in the far-player plan.
  *
  * <ul>
- *   <li><b>No glow, ever, by default</b> — SeeU's {@code setGlowingTag(true)} is a
+ *   <li><b>No glow, ever, by default</b> — {@code setGlowingTag(true)} is a
  *       through-wall outline that contradicts the privacy stance.</li>
  *   <li><b>No fog mixin</b> — a proxy beyond fog-end fades like terrain would;
  *       {@code farPlayersMaxRenderDistanceBlocks} is the alignment knob.</li>
@@ -128,7 +126,7 @@ public final class FarPlayerRenderer {
     public static final boolean RENDER_AVAILABLE = true;
 
     /** Proxy entity-id base: far above vanilla's server-assigned counter AND disjoint
-     *  from SeeU's 1_000_000_000 block (both installed must never collide). Each id is
+     *  from common mod-assigned blocks. Each id is
      *  additionally probed against the live level before use. */
     private static final int PROXY_ID_BASE = 1_900_000_000;
 
@@ -274,14 +272,14 @@ public final class FarPlayerRenderer {
     }
 
     private void renderContained(WorldRenderContext context) {
-        var config = LSSClientConfig.CONFIG;
+        var config = LSSClientConfig.CONFIG.snapshot().farPlayers();
         // The bit gate covers arm + the soak/benchmark properties; the EFFECTIVE
-        // enabled term (config AND the SeeU-coexist gate, E3) is checked HERE because
+        // enabled term (explicit client visibility) is checked HERE because
         // the bit deliberately no longer carries it (the subscription is the prefs
         // carrier — E2 review M2): a disabled viewer still delivers its shareSelf
         // opt-out, it just renders nothing.
         if (FarPlayerClientSupport.capabilityBit() == 0
-                || !FarPlayerClientSupport.effectiveFarPlayersEnabled()) {
+                || !config.enabled()) {
             if (!proxies.isEmpty() || !vehicles.isEmpty()) clear();
             return;
         }
@@ -310,10 +308,10 @@ public final class FarPlayerRenderer {
         float partialTick = minecraft.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         int animationTick = localPlayer.tickCount;
         long now = FarPlayerClientSupport.monotonicMillis();
-        int maxRender = config.farPlayersMaxRenderDistanceBlocks;
-        int minRender = config.farPlayersMinDistanceBlocks;
-        boolean fullBright = config.farPlayersFullBright;
-        boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames(); // F1/hide-GUI hides every tag (fold D3)
+        int maxRender = config.renderDistanceBlocks();
+        int minRender = config.distance().minBlocks();
+        boolean fullBright = config.fullBright();
+        boolean nameTags = config.nameTags() && Minecraft.renderNames(); // F1/hide-GUI hides every tag (fold D3)
         // Fold (e2): the client-side equipment assets behind the armor layer's render types
         // (the dispatcher's private field, reached through the accessor; absent = every armor
         // piece on one tier, the pre-(e2) shape — never a throw).
@@ -357,8 +355,8 @@ public final class FarPlayerRenderer {
                     current == null || current.level() != level
                             ? new Proxy(level, uuid, tracked.name(), nextEntityId(level))
                             : current);
-            boolean allowWalk = config.farPlayersMaxAnimationDistanceBlocks > 0
-                    && distance <= config.farPlayersMaxAnimationDistanceBlocks;
+            boolean allowWalk = config.animationDistanceBlocks() > 0
+                    && distance <= config.animationDistanceBlocks();
             // Rider-while-seated attribution (issue-#160 review MINOR-1): from frame 2
             // of a ride the proxy IS a passenger, and apply's snapTo/setPose reach
             // makeBoundingBox — which Create-class mixins wrap with vehicle-state
@@ -393,8 +391,7 @@ public final class FarPlayerRenderer {
             // R-10 v1.3 mounts: the rider renders at its OWN wire position (the
             // server-side seated position already encodes the seat offset); the ride
             // link exists ONLY to make isPassenger() true at render-state extraction
-            // (the one vanilla path to seated legs). Edge-triggered — never SeeU's
-            // per-frame eject/re-seat.
+            // (the one vanilla path to seated legs). Edge-triggered — no per-frame eject/re-seat.
             var wireVehicle = tracked.latest().vehicle();
             if (wireVehicle != null) {
                 // Per-type render containment (E3 review m6, symmetric with rung 2):
@@ -708,7 +705,7 @@ public final class FarPlayerRenderer {
         entity.setXRot(s.pitch());
         entity.xRotO = s.pitch();
         if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
-            // E3 review MAJOR (a deliberate SeeU deviation — theirs omits this): body
+            // E3 review MAJOR: body
             // rot is only ever written by tick logic render-only entities never run,
             // and 26.2's solveBodyRot reads yBodyRot for BOTH the living mount AND
             // (via the passenger branch) its rider — unset, a horse renders locked
@@ -1090,7 +1087,7 @@ public final class FarPlayerRenderer {
         if (r == null) return "FarPlayerRender: off";
         return "FarPlayerRender: drawn=" + r.lastDrawn
                 + ", mounts=" + r.lastMounts + ", tags=" + r.lastTags
-                + ", light=" + (LSSClientConfig.CONFIG.farPlayersFullBright ? "full" : "floor");
+                + ", light=" + (LSSClientConfig.CONFIG.farPlayersFullBright() ? "full" : "floor");
     }
 
     /** Monotonic id from the LSS block, probed against the live level (a taken id —
@@ -1294,7 +1291,7 @@ public final class FarPlayerRenderer {
 
         @Override
         protected PlayerInfo getPlayerInfo() {
-            // TAB-listed players carry skins; the proxy borrows them (SeeU's approach).
+            // TAB-listed players carry skins; the proxy borrows them.
             var connection = Minecraft.getInstance().getConnection();
             if (connection != null) {
                 PlayerInfo info = connection.getPlayerInfo(trackedUuid);

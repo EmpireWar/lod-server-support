@@ -118,7 +118,7 @@ class PaperPumpRouterAlignmentTest {
         boolean started;
         Rig() { this(true); }
         Rig(boolean initialOffer) {
-            var config = new PaperConfig(); config.validate();
+            var config = new MutablePaperSettings(); MutablePaperSettings.normalize(config);
             var server = mock(MinecraftServer.class);
             when(server.getPlayerList()).thenReturn(mock(PlayerList.class));
             var level = mock(ServerLevel.class); when(level.dimension()).thenReturn(Level.OVERWORLD);

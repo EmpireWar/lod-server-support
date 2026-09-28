@@ -70,6 +70,15 @@ def prepare(source,output,client,server,observer,platform,port):
         runtime['stage_files'].append(dict(source=str(frozen),target='server/'+name,sha256=sha(frozen)))
     launch=next(row for row in runtime['launches'] if row['id']=='server')
     flags=['-javaagent:{run}/server/lss-rig-settings-agent.jar','-Dlss.rig.settingsObserver={run}/server/lss-rig-settings-observer.jar']
+    if platform=='fabric':
+        # Knot must share the bootstrap recorder used by premain, preserving any
+        # libraries the source recipe already exposes to the game classloader.
+        prefix='-Dfabric.systemLibraries='
+        libraries=[path for arg in launch['argv'] if arg.startswith(prefix)
+                   for path in arg[len(prefix):].split(':') if path]
+        libraries += ['{run}/server/lss-rig-settings-agent.jar','{run}/server/lss-rig-settings-observer.jar']
+        launch['argv']=[arg for arg in launch['argv'] if not arg.startswith(prefix)]
+        flags.append(prefix+':'.join(dict.fromkeys(libraries)))
     flags += ['-Dlss.rig.settings.'+kind+'Sha256='+checksum for kind,checksum in identity['target_sha256'].items()]
     launch['argv'][1:1]=flags
     runtime['settings_observer']=dict(identity,config_relative=config)

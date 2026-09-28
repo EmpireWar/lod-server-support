@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `4ee7e545e4b4a35ba8cf9890e2c602c703a16209`
-- MC 26.1: `cae2279ac36177a2783b33b982a20a821587bbb8`
-- MC 1.21.11: `3896643e173553d3bbdf1800f5181e877134bf13`
-- MC 1.21.10: `0dcd2038f2705357ee7320bdab70c4b6d6e87685`
-- MC 1.21.1: `6a6cb21b33a217af4c7d7adea6419dc522ddf55c`
+- MC 26.2: `c82ea6ac0d180402b9ce15fd7d9051361fdcebe1`
+- MC 26.1: `6e1a5755a3e79409708409bdbb7d85b831b2ec77`
+- MC 1.21.11: `e2257c4e7136baa5524fafedbdc66516786e9606`
+- MC 1.21.10: `5ab9ba7afc3e93f3b442b9e1db1a055c4d98d010`
+- MC 1.21.1: `f36cc4279142317281812fced1ceced6e71fa30d`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -38,12 +38,14 @@ Final localization followup `c91c3a65` translates export feedback on the client 
 
 Final server diagnostics followup `4b3d62fa` captures the actual generation owner admission gate together with whole-service enablement, retains the documented schema-1 configured field, and removes false restart guidance. The same getter/capture/test deltas are present on every port without changing native API adaptations. Updated troubleshooting and smoke expectations match explicit save/reload behavior.
 
+Final native checker registration `c82ea6ac` declares both the YAML reload checker and driver as scenario identity roots. Its regression changes each root and a transitive evidence helper to prove identity invalidation, and excludes unselected known branches from unrelated routes. Both files remain byte-identical across all five reviewed commits; their existing identical classifications are unchanged. Fourteen focused closure tests passed.
+
 ## Classification and verification
 
 Added 103 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Earlier focused checks passed eight rig receive tests and seven native YAML checker tests. The final diagnostic and numeric-preflight unit evidence is recorded in the progress ledger; this refresh performs only classification/catalog and whitespace checks. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final4-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final4-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final5-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final5-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

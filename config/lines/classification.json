@@ -2030,9 +2030,9 @@
     "fabric/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java": {
       "axes": "Fabric render API generations; Neo only1.21.1 live, others intentional stubs.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. Compared feature changes against each line\u2019s prior reviewed blob; config reads become immutable snapshot/getter reads, draft bindings replace immediate save/push, connection-scoped preferences retain transport retry, and manual renderer toggle replaces automatic coexistence detection. Residual renderer capability, field/accessor, identifier and packet-distributor differences preserve the existing MC/loader implementations. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 cross-line YAML residual review. Compared feature changes against each line\u2019s prior reviewed blob; config reads become immutable snapshot/getter reads, draft bindings replace immediate save/push, connection-scoped preferences retain transport retry, and manual renderer toggle replaces automatic coexistence detection. Residual renderer capability, field/accessor, identifier and packet-distributor differences preserve the existing MC/loader implementations. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger. Followup b3f39c3e reviewed: 1.21.1 renderer runtime is unchanged; comments describe the local switch and preference carrier. Loader contract pins snapshot capture and capability/enabled gate instead of the removed getter.",
       "reviewed_blobs": {
-        "1.21.1": "3c6c9b3de8f94255fc70e20fa8408547fad4b923",
+        "1.21.1": "9902ce0e861f14ed584d86ea3e3f49975454479c",
         "1.21.10": "b4334ab99d21b3ea546711b0ae8804b5373f7b6d",
         "1.21.11": "ca053d1b0eb223e64449e36bada1fe4bccc10ee3",
         "26.1": "fddb15eb9466b4becc5f3eeda3a18b6c06631285",
@@ -4801,9 +4801,9 @@
     "neoforge/src/main/java/dev/vox/lss/networking/client/FarPlayerRenderer.java": {
       "axes": "Fabric render API generations; Neo only1.21.1 live, others intentional stubs.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. Compared feature changes against each line\u2019s prior reviewed blob; config reads become immutable snapshot/getter reads, draft bindings replace immediate save/push, connection-scoped preferences retain transport retry, and manual renderer toggle replaces automatic coexistence detection. Residual renderer capability, field/accessor, identifier and packet-distributor differences preserve the existing MC/loader implementations. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 cross-line YAML residual review. Compared feature changes against each line\u2019s prior reviewed blob; config reads become immutable snapshot/getter reads, draft bindings replace immediate save/push, connection-scoped preferences retain transport retry, and manual renderer toggle replaces automatic coexistence detection. Residual renderer capability, field/accessor, identifier and packet-distributor differences preserve the existing MC/loader implementations. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger. Followup b3f39c3e reviewed: 1.21.1 renderer runtime is unchanged; comments describe the local switch and preference carrier. Loader contract pins snapshot capture and capability/enabled gate instead of the removed getter.",
       "reviewed_blobs": {
-        "1.21.1": "2520fdee342ed111aa62bb0255d269485a6b4eff",
+        "1.21.1": "db947cd7181c504fd6de92b3fffcb0510275845b",
         "1.21.10": "9deb6d2016cee768c30b8f5ce1b34fe7578cdbfb",
         "1.21.11": "9deb6d2016cee768c30b8f5ce1b34fe7578cdbfb",
         "26.1": "056495674fe5238df84e6d3b3ea1e9a96f8bb10e",
@@ -5161,9 +5161,9 @@
     "neoforge/src/test/java/dev/vox/lss/neoforge/NeoForgeLoaderSeamContractTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. Followup b3f39c3e reviewed: 1.21.1 renderer runtime is unchanged; comments describe the local switch and preference carrier. Loader contract pins snapshot capture and capability/enabled gate instead of the removed getter.",
       "reviewed_blobs": {
-        "1.21.1": "afb5037cfd1a411e3384cbee4aedd1b4ce489c28",
+        "1.21.1": "bb02f4eb3953245a062dfd319516510dcba37956",
         "1.21.10": "857abe7407f53550a0de19e77dbd50303db3f901",
         "1.21.11": "857abe7407f53550a0de19e77dbd50303db3f901",
         "26.1": "857abe7407f53550a0de19e77dbd50303db3f901",

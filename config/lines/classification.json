@@ -7488,6 +7488,9 @@
     "test-fixtures/settings-observer/build.py": {
       "kind": "identical"
     },
+    "test-fixtures/settings-observer/checks/ObserverChecks.java": {
+      "kind": "identical"
+    },
     "test-fixtures/settings-observer/src/dev/vox/lssfixture/settings/SettingsAgent.java": {
       "kind": "identical"
     },

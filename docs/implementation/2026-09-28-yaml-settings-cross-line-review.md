@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `a173d929c409bdc57a6c681b1e07526603495a89`
-- MC 26.1: `2911da0bc0d76dbb85a33a0bbbd2140ad52b7457`
-- MC 1.21.11: `362fbdc57ce0d256040113baa6c0e82785624be5`
-- MC 1.21.10: `fd7c212636b3d1db09924cc1c87bd9b85b3ec2ca`
-- MC 1.21.1: `88a07f572cccf89c307ecb171fb20b21ee34fa7d`
+- MC 26.2: `88028b3aceedf2d9aaca128a8628fddda89ee3f3`
+- MC 26.1: `965cbffe090f5939e4313b351bf70aabd88feb97`
+- MC 1.21.11: `3e87a5f97a4bbf89cd19d108722c8be07a70e9fb`
+- MC 1.21.10: `7f2cc016a33559d6b3cdb5146f286b6960086349`
+- MC 1.21.1: `4c2c2221b7bd1147ebcae239b4443f6a59633e6d`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -48,12 +48,16 @@ Final Fabric observer visibility correction `153daf44` adds the two owned observ
 
 Native driver timing correction `a173d929` stages the inert generation-disable file before fixture movement, then requires a fresh enabled/active sample after both teleports and sends reload without another codec subprocess. The checker still requires active work at the actual disable callback and unchanged drain/conservation checks; a remaining timing miss fails the premise. No runtime behavior or acceptance threshold was weakened. The driver is identical on all five lines.
 
+Paper observer followup `88028b3a` accounts for the actual PluginClassLoader call to `UnsafeValues.processClass` before class definition. The observer first verifies the frozen raw CodeSource class hash and actual plugin/loader/source identity, then reproduces the platform transformation using the real description and requires complete byte equality with incoming class bytes. Exact hashes and method descriptors remain mandatory; unexpected source or transformed bytes fail observation. Build checks parse both actual target classes with the packaged ASM and reject mutated source/incoming bytes. Cached Commodore probe evidence confirms the expected conversion. The fresh-world recipe now uses normal terrain to give the strict in-flight premise a realistic generation interval; checker thresholds remain unchanged.
+
+The companion WI5 correction `585a1d71` observes the instance `LSSClientConfig.reconcile()V` reload-adoption boundary instead of ordinary client tick reconciliation, retaining required HEAD/RETURN hooks. All six changed/new fixture files are identical across the five reviewed snapshots; no product rebuild is implied by these fixture changes.
+
 ## Classification and verification
 
-Added 103 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
+Added 104 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Earlier focused checks passed eight rig receive tests and seven native YAML checker tests. The final diagnostic and numeric-preflight unit evidence is recorded in the progress ledger; this refresh performs only classification/catalog and whitespace checks. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final9-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final9-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final10-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final10-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

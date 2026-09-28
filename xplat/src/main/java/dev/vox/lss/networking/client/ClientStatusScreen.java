@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Component;
 
 /** Small loader-neutral status surface; render performs no collection or I/O. */
 public final class ClientStatusScreen extends Screen {
+    public static Screen currentScreen() { return net.minecraft.client.Minecraft.getInstance().screen; }
     private final Screen parent;
     private final Runnable onReturn;
     private final dev.vox.lss.common.diagnostics.ScreenEscapeRelease escape =

@@ -33,7 +33,7 @@
   "lss.status.done": "完成",
   "lss.status.page": "第 %s/%s 页",
   "lss.settings.reload_busy": "设置正在重载，请稍候。",
-  "lss.settings.reload_failed": "设置未更改：%s",
+  "lss.settings.reload_failed": "设置未更改。重载未能完成；请查看游戏日志后重试。",
   "lss.settings.reload_unchanged": "当前生效的客户端设置未改变。",
   "lss.settings.reloaded": "客户端设置已重载。",
   "lss.settings.pending_reconnect": "已接受；需要重新连接：%s",
@@ -55,7 +55,7 @@
   "lss.settings.recovery": "恢复草稿",
   "lss.settings.conflict_detail": "YAML 文件已更改或无法读取。您的编辑已保留。“合并并保存”会重新读取文件，仅合并您选择的编辑。“丢弃草稿”会保留磁盘文件。任何编辑均未生效。",
   "lss.settings.failure_detail": "保存失败。即使 Sodium 显示没有更改，您的编辑仍已保留。您可直接重试、保留草稿以便稍后处理，或丢弃草稿。运行中的设置未更改。",
-  "lss.settings.inactive": "设置未启用：%s。请修复设置文件并重启客户端。",
+  "lss.settings.inactive": "设置未启用。请修复设置文件并重启客户端；详情请查看游戏日志。",
   "lss.status.waiting": "正在等待当前连接的状态快照…",
   "lss.status.on": "开",
   "lss.status.off": "关",
@@ -111,5 +111,10 @@
   "lss.settings.adoption_pending": "设置已接受；部分功能仍在等待启用。可再次运行客户端重载命令以重试。",
   "lss.settings.adoption_failed": "设置已接受，但部分功能启用失败。请检查日志并再次运行客户端重载命令以重试。",
   "lss.settings.normalized": "已调整 %s：请求值 %s；生效值 %s。YAML 未更改。",
-  "lss.status.settings.adoption": "功能应用版本：%s/%s；等待启用：%s"
+  "lss.status.settings.adoption": "功能应用版本：%s/%s；等待启用：%s",
+  "lss.status.export_waiting": "正在等待当前会话的状态快照；请稍后重试。",
+  "lss.status.export_busy": "诊断导出正在进行；请在本次导出完成后重试。",
+  "lss.status.export_success": "诊断信息已导出：%s",
+  "lss.status.export_failed": "诊断信息导出失败；请检查目录权限和剩余磁盘空间。",
+  "lss.settings.error_logged": "技术细节已记录到游戏日志。"
 }

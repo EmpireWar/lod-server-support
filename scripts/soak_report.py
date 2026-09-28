@@ -455,7 +455,7 @@ def section_identities(rep, d):
 
 def section_margins(rep, d):
     """Best-effort law headroom. B2 needs the per-tick byte cap from the scenario config; if a
-    <scenario>-config.json copy is in the dir we use it, else we report the raw byte rate."""
+    <scenario>-config.yaml copy is in the dir we use it, else we report the raw byte rate."""
     if not d["server"]:
         return ["no server log"]
     snaps = d["server"]["snapshots"]

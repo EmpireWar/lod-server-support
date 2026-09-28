@@ -11,6 +11,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -104,6 +105,11 @@ class HarnessTest(unittest.TestCase):
         for key in list(self.env):
             if key.startswith(('SOAK_', 'BENCHMARK_', 'LSS_HARNESS_', 'PROFILE_', 'PROC_SAMPLER_')):
                 del self.env[key]
+        if not self.env.get('LSS_SETTINGS_CLASSPATH'):
+            classpath = REPO / 'common/build/settings-cli/classpath.txt'
+            if not classpath.is_file():
+                self.fail('Build :common:settingsCliClasspath before running harness controls; tests never launch Gradle')
+            self.env['LSS_SETTINGS_CLASSPATH'] = classpath.read_text().strip()
 
     @staticmethod
     def executable(path, content):
@@ -114,6 +120,10 @@ class HarnessTest(unittest.TestCase):
     def clone(self, name):
         root = self.base / name
         shutil.copytree(REPO / 'scripts', root / 'scripts', ignore=shutil.ignore_patterns('__pycache__'))
+        shutil.copytree(REPO / 'tools/settings', root / 'tools/settings', ignore=shutil.ignore_patterns('__pycache__'))
+        marker = root / 'common/src/main/java/dev/vox/lss/common/config/SettingsSchema.java'
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO / 'common/src/main/java/dev/vox/lss/common/config/SettingsSchema.java', marker)
         # The one path seam redirects the stable /tmp ownership namespace. Both
         # fixture worktrees share it; tests never acquire the production lock.
         lock = root / 'scripts/lib/harness-lock.sh'
@@ -121,7 +131,7 @@ class HarnessTest(unittest.TestCase):
                                                 f'local root="{self.base}/locks"'))
         shutil.copy2(REPO / 'gradle.properties', root / 'gradle.properties')
         source = Path('common/src/main/java/dev/vox/lss/common/LSSConstants.java')
-        (root / source.parent).mkdir(parents=True)
+        (root / source.parent).mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / source, root / source)
         self.executable(root / 'gradlew', FAKE_GRADLE)
         self.executable(root / 'scripts/lib/proc_sampler.sh', '#!/usr/bin/env python3\nimport os,sys,time\nfrom pathlib import Path\n(Path(__file__).resolve().parents[2] / "observer-pid").write_text(str(os.getpid()))\nPath(sys.argv[1]).write_text("{}\\n")\ntime.sleep(60)\n')
@@ -129,6 +139,12 @@ class HarnessTest(unittest.TestCase):
         self.executable(root / 'scripts/store_gate_check.py', '#!/usr/bin/env python3\nprint("fixture gate")\n')
         self.executable(root / 'scripts/soak_report.py', '#!/usr/bin/env python3\nprint("fixture digest")\n')
         return root
+
+    def config_values(self, path):
+        result = subprocess.run([sys.executable, str(self.root / 'tools/settings/settings_file.py'),
+                                 'read', '--path', str(path)], cwd=self.root, env=self.env,
+                                text=True, capture_output=True, check=True)
+        return json.loads(result.stdout)['configured']
 
     def invoke(self, script='benchmark.sh', args=('fresh', '1'), root=None, **env):
         root = root or self.root
@@ -162,7 +178,7 @@ class HarnessTest(unittest.TestCase):
             'fabric/build/run/soak-server/logs/latest.log',
             'fabric/build/run/benchmark-server/world/region/sentinel',
             'fabric/build/run/benchmark-client/.lss/cache/sentinel',
-            'fabric/build/run/benchmark-server/config/lss-server-config.json',
+            'fabric/build/run/benchmark-server/config/lss-server-config.yaml',
             'benchmark-results/server.json', 'soak-results/store-migration-carry.sentinel/world')]
         for p in paths:
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -278,12 +294,12 @@ class HarnessTest(unittest.TestCase):
 
     def test_warm_success_keeps_both_cycles_and_staged_config(self):
         (self.root / 'benchmark-worlds/base/world').mkdir(parents=True)
-        config = self.root / 'fabric/build/run/benchmark-server/config/lss-server-config.json'
+        config = self.root / 'fabric/build/run/benchmark-server/config/lss-server-config.yaml'
         config.parent.mkdir(parents=True)
-        config.write_text('{"lodDistanceChunks":123,"lodStore":"full"}')
+        config.write_text('config_version: 1\nlod:\n  distance:\n    default_chunks: 123\n    by_dimension: {}\nstorage:\n  lod_store:\n    enabled: true\n')
         result = self.invoke(args=('warm-join', '1'), BENCHMARK_CONFIG_STAGED='1')
         self.assertEqual(0, result.returncode, result.stdout)
-        self.assertEqual(123, json.loads(config.read_text())['lodDistanceChunks'])
+        self.assertEqual(123, self.config_values(config)['lod.distance.default_chunks'])
         self.assertEqual({'populate', 'measure'}, set(self.manifest()['cycles']))
         self.assertTrue((self.root / 'benchmark-results/server-populate.json').exists())
 
@@ -375,8 +391,8 @@ class HarnessTest(unittest.TestCase):
         identities = [json.loads(p.read_text()) for p in manifests]
         self.assertTrue(all(m['status'] == 'complete' for m in identities))
         self.assertEqual(2, len({m['run_id'] for m in identities}))
-        config = self.root / 'fabric/build/run/benchmark-server/config/lss-server-config.json'
-        self.assertEqual('full', json.loads(config.read_text())['lodStore'])
+        config = self.root / 'fabric/build/run/benchmark-server/config/lss-server-config.yaml'
+        self.assertTrue(self.config_values(config)['storage.lod_store.enabled'])
 
     def test_multi_phase_wrapper_completes_with_inherited_ownership(self):
         # A normal prepared rig already has a version-matched base. Auto-prime

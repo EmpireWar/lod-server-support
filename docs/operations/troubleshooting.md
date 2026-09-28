@@ -1,6 +1,6 @@
 # Troubleshooting terrain and status
 
-Start with `/lss status` and `/lss diag`. They work without an active request manager and do not start a handshake or download. The status screen is also available from Sodium's options screen. **More** pages through text; **Export** saves a local report. The detailed CLI retains its connection counters, while the summary counts progress from its first sample in the current world. A disconnect or replacement world invalidates the summary immediately.
+Start with `/lss status` and `/lss diag`. They work without an active request manager and do not start a handshake or download. **More** pages through text; **Export** saves a local report. The detailed CLI retains its connection counters, while the summary counts progress from its first sample in the current world. A disconnect or replacement world invalidates the summary immediately.
 
 | Observation | Check next |
 | --- | --- |

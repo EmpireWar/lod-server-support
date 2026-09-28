@@ -1,7 +1,6 @@
 # Status, local diagnostics and settings
 
-`/lss status` opens a client screen without Sodium. Sodium's options screens also
-have a **LOD status** entry. The screen shows effective reception and any saved/pending choice; **More** cycles text pages on small screens. VSS uses `/vss` for these local commands. `/lss diag`
+`/lss status` opens the standalone client status screen. The screen shows effective reception and any saved/pending choice; **More** cycles text pages on small screens. VSS uses `/vss` for these local commands. `/lss diag`
 retains the detailed troubleshooting counters and also describes OFF, dormant,
 negotiation and missing-consumer states without creating a request manager.
 
@@ -43,8 +42,9 @@ Settings are activated only at startup or by `/lss reload` on the client and
 The old `set`, preset preview/apply/undo and reception-toggle paths are removed.
 
 Sodium edits a draft. Apply validates and atomically saves YAML while keeping live
-settings unchanged. A saved notice identifies the reload command; pending sharing
-changes are shown separately from active privacy. A failed save retains the draft
+settings unchanged. Run `/lss reload` after saving to activate changes. Sodium
+uses its normal layout, without an LSS banner or status button. The standalone
+status screen shows pending sharing separately from active privacy. A failed save retains the draft
 for retry. If the file changed elsewhere, reload/rebase or discard the draft
 explicitly before retrying; unrelated file edits must not be overwritten.
 

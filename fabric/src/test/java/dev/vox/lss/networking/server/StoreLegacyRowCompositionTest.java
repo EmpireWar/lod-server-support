@@ -196,8 +196,7 @@ class StoreLegacyRowCompositionTest {
             store.shutdown();
         }
 
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir.resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir.resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement();
              ResultSet rs = st.executeQuery(
                      "SELECT wirefmt, usize, chash, fhash, blob FROM lods_1 WHERE pos=" + pos)) {
@@ -217,8 +216,7 @@ class StoreLegacyRowCompositionTest {
     /** Arm the walk bookkeeping the lazy upgrade would have written — the forged row
      *  lives in a schema-4 store, so the meta keys must be planted by hand. */
     private void armMigrationBookkeeping(Path storeDir) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir.resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir.resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.executeUpdate("INSERT OR REPLACE INTO meta (k, v) VALUES"
                     + " ('migrate_pending', '1'), ('migrate_total', '1'), ('migrate_done', '0')");
@@ -228,8 +226,7 @@ class StoreLegacyRowCompositionTest {
     /** Retag the (single) deposited row to the lazy-upgrade legacy shape: wirefmt 19 +
      *  FNV hashes over the SAME body/frame bytes the deposit wrote. */
     private void forgeRowToLegacy(Path storeDir, byte[] nativeBody) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir.resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir.resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             byte[] blob;
             try (ResultSet rs = st.executeQuery("SELECT blob FROM lods_1")) {
@@ -256,8 +253,7 @@ class StoreLegacyRowCompositionTest {
         Path mca = regionDir.resolve("r." + (cx >> 5) + "." + (cz >> 5) + ".mca");
         Files.write(mca, buf.array());
         long mtime = Files.getLastModifiedTime(mca).toMillis();
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir.resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir.resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.executeUpdate("INSERT OR REPLACE INTO regions (dim, rpos, seen_mtime)"
                     + " VALUES (1, " + regionOf(pos) + ", " + mtime + ")");

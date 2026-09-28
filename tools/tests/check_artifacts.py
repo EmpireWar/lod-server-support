@@ -4,7 +4,10 @@ import argparse
 import io
 from pathlib import Path
 import re
+import sys
 import zipfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.packaging.classfile import class_name
 
 
 def fixture_classes(root):
@@ -26,11 +29,15 @@ def violations(data, forbidden, prefix='', depth=0):
     with zipfile.ZipFile(io.BytesIO(data)) as jar:
         for info in jar.infolist():
             name = info.filename
-            if name.endswith('.class'):
+            if name == 'dev/vox/lss/internal/jdbc/bridge.class.bin':
+                outer = class_name(jar.read(info)).split('$', 1)[0]
+                if outer in forbidden:
+                    found.append(prefix + name)
+            elif name.endswith('.class'):
                 outer = name[:-6].split('$', 1)[0]
                 if outer in forbidden:
                     found.append(prefix + name)
-            elif name.endswith('.jar'):
+            elif name.endswith('.jar') or name == 'dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin':
                 if info.file_size > 256 * 1024 * 1024:
                     raise ValueError('Nested jar exceeds inspection bound: ' + name)
                 found += violations(jar.read(info), forbidden, prefix + name + '!/', depth + 1)

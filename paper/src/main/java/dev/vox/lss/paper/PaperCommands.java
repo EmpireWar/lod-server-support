@@ -183,6 +183,8 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                     // "latched" / "sweeping" / "ok", never a healthy token with frozen
                     // counters.
                     + " state=" + store.stateToken()
+                    + (store instanceof dev.vox.lss.common.store.SqliteLodStore
+                       ? " driver=private/" + dev.vox.lss.common.store.SqliteDriverRuntime.VERSION : "")
                     + " db=" + (store.diagnostics().getDbBytes() >> 20) + "MB wal="
                     + (store.diagnostics().getWalBytes() >> 20) + "MB sweep_drops="
                     + store.diagnostics().getSweepDrops()

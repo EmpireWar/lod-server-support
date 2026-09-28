@@ -253,7 +253,6 @@ public final class LegacySodiumPage {
             pages.add(h.pageCtor().invoke(title, ImmutableList.copyOf(groups)));
             first = false;
         }
-        SodiumDraftRefresh.rememberLegacyPages(pages);
         return pages;
     }
 

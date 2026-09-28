@@ -21,6 +21,6 @@
     "AccessorLivingEntity",
     "AccessorEntityRenderDispatcher",
     "AccessorBiomeManager",
-    "SodiumStatusEntryHook"
+    "SodiumDraftHook"
   ]
 }

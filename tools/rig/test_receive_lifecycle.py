@@ -4,6 +4,8 @@ from check_receive_lifecycle import check,SAME_WORLD,REPLACEMENT
 class ReceiveLifecycleTest(unittest.TestCase):
     def valid(self):
         details={
+            'SAVED_OFF_INERT':'requested=false receive=true',
+            'SAVED_ON_INERT':'requested=true receive=false',
             'PASS_SAME_WORLD_OFF_ON':'sameNativeWorld=true sameXaeroWorld=true sameConnection=true freshManager=true nativeRebuildsDrained=true',
             'REAL_CALLBACK_HELD':'preparedTile=true originOpen=true',
             'NATIVE_RETIRE_PREMISE':'pendingRebuildsPositive=true realCallbackHeld=true',
@@ -23,3 +25,8 @@ class ReceiveLifecycleTest(unittest.TestCase):
         self.assertFalse(check('\n'.join(reversed(self.valid().splitlines())))['passed'])
     def test_duplicate_callback_fails(self):
         self.assertFalse(check(self.valid()+'\n[WI5-REPLACEMENT] REAL_CALLBACK_HELD preparedTile=true originOpen=true')['passed'])
+
+    def test_saved_only_or_missing_reload_receipt_never_proves_activation(self):
+        for marker in ('SAVED_OFF_INERT', 'SAVED_ON_INERT', 'RELOAD_OFF_ACK', 'RELOAD_ON_ACK'):
+            self.assertFalse(check('\n'.join(line for line in self.valid().splitlines() if marker not in line))['passed'])
+        self.assertFalse(check(self.valid().replace('requested=false receive=true', 'requested=false receive=false'))['passed'])

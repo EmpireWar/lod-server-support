@@ -38,6 +38,8 @@ def check(rows,phases,platform):
     require(initial.get('players')==2 and initial['sent']>0,'two real registered serving clients absent')
     require(off['event']=='generation_policy' and off['enabled'] is False and off['active']>0,'disable lacked exact positive admitted-work premise')
     require(drained['enabled'] is False and drained['active']==0,'admitted generation did not drain')
+    require(drained['submitted']==quiet['submitted']==off['submitted'],'new generation was admitted during disable drain')
+    require(drained['revision']==quiet['revision']==off['revision'],'disabled drain crossed a policy revision')
     require(drained['submitted']==drained['completed']+drained['timeouts']+drained['removed'],'generation conservation failed')
     require(drained['timeouts']==initial['timeouts'] and drained['removed']==initial['removed'],'drain timed out or removed admitted work')
     require(quiet['enabled'] is False and quiet['active']==0 and quiet['time_ns']-drained['time_ns']>=2_000_000_000 and quiet['submitted']==drained['submitted'],'disabled generation admitted new work')

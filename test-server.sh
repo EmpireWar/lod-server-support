@@ -985,7 +985,7 @@ case "${1:-run}" in
         echo "     server to generate it on demand, so cold terrain fills in — the full LOD"
         echo "     experience. Already-generated terrain (near spawn / where players walked)"
         echo "     also renders. To test strict Tier A load-only instead, set"
-        echo "     \"compatibility.v16.allow_generation\": false in the CLIENT's config/lss-client-config.yaml"
+        echo "     \"compatibility.v16_generation\": false in the CLIENT's config/lss-client-config.yaml"
         echo "     and rejoin — then cold terrain will NOT fill (only already-generated shows)."
         echo "   - Old-server command is '/lsslod' (this jar predates any /vss rebrand)."
         echo ""

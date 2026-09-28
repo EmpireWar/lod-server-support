@@ -233,9 +233,9 @@ def create(profile, runtime, scenario, state):
     write(root / 'scenario.json', scenario)
     # Runtime contains local launch context paths, but never account contents.
     write(root / 'runtime.json', runtime)
-    from toolchain import snapshot
+    from toolchain import snapshot, settings_codec
     run_manifest = {'storage_estimate':storage['estimate'],'profile_hash': digest(profile), 'scenario_hash': digest(scenario), 'runtime_hash': digest(runtime),
-                    'runtime_tools': snapshot(REPO),
+                    'runtime_tools': snapshot(REPO), 'settings_codec': settings_codec(runtime),
                     'runner_sha256': sha(Path(__file__)), 'checker_sha256': digest({name: sha(Path(__file__).with_name(name)) for name in ('proof.py', 'check_source_seed.py', 'check_regions.py', 'check_workload.py', 'performance.py', 'metrics.py', 'measure.py')}),
                     'staged_inputs': [{k: row[k] for k in ('sha256', 'target')} for row in runtime.get('stage_files', [])],
                     'generated_config_hash': digest(runtime.get('generated_files', {}))}
@@ -392,6 +392,8 @@ def run(root):
     from toolchain import verify
     verify(REPO, manifest.get('run_manifest', {}).get('runtime_tools'))
     verify(root/'tool-sources',manifest['run_manifest']['runtime_tools'])
+    from toolchain import verify_settings_codec
+    verify_settings_codec(runtime, manifest['run_manifest'].get('settings_codec'))
     from runtime_trees import verify as verify_trees
     verify_trees(root, runtime.get('immutable_trees', {}))
     if manifest['profile_hash'] != digest(profile) or manifest['scenario_hash'] != digest(scenario) or manifest['runtime_hash'] != digest(runtime):
@@ -706,6 +708,8 @@ def main():
             try:
                 verify(REPO, manifest.get('run_manifest', {}).get('runtime_tools'))
                 verify(root/'tool-sources',manifest['run_manifest']['runtime_tools'])
+                from toolchain import verify_settings_codec
+                verify_settings_codec(read(root/'runtime.json'), manifest['run_manifest'].get('settings_codec'))
             except ValueError as error:
                 errors.append(str(error))
             runtime = read(root / 'runtime.json')

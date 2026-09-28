@@ -941,7 +941,7 @@ public class GenerationLifecycleGameTests {
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
     public void generationReloadRetainsTicketOwnershipWhileDisabled(GameTestHelper helper) {
         var level = helper.getLevel();
-        var origin = chunkAt(helper.absolutePos(BlockPos.ZERO));
+        var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
         int cx = origin.x() + 251, cz = origin.z() + 7;
         var gen = newGenService(2, 2, 60);
         var player = UUID.randomUUID();

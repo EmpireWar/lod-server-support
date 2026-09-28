@@ -23,6 +23,7 @@ public abstract class SodiumStatusEntryHook {
     @org.spongepowered.asm.mixin.Unique private Button lss$statusButton;
     @org.spongepowered.asm.mixin.Unique private boolean lss$statusModern;
     @org.spongepowered.asm.mixin.Unique private boolean lss$statusLayoutPending;
+    @org.spongepowered.asm.mixin.Unique private int lss$physicalHeight;
     @Shadow protected abstract <T extends GuiEventListener & Renderable & NarratableEntry> T addRenderableWidget(T widget);
 
     @Inject(method = "clearWidgets", at = @At("RETURN"))
@@ -41,6 +42,12 @@ public abstract class SodiumStatusEntryHook {
             }
         }
         if (!sodium) return;
+        // Sodium rebuilds its controls after clearWidgets. Give it an explicitly
+        // smaller viewport and keep the remaining strip for wrapped settings notices.
+        lss$physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getGuiScaledHeight();
+        height = dev.vox.lss.common.diagnostics.SettingsNoticeLayout.fit(lss$physicalHeight,
+                dev.vox.lss.config.menu.SodiumSettingsNotice.reservedHeight(
+                        net.minecraft.client.Minecraft.getInstance().font, width)).usableHeight();
         Screen parent = (Screen) (Object) this;
         dev.vox.lss.config.menu.SodiumDraftRefresh.open(parent);
 
@@ -60,25 +67,8 @@ public abstract class SodiumStatusEntryHook {
             int mouseX, int mouseY, float delta, CallbackInfo callback) {
         if (lss$statusButton == null) return;
         var draft = dev.vox.lss.config.LSSClientConfig.CONFIG.edits();
-        var font = net.minecraft.client.Minecraft.getInstance().font;
-        String noticeKey = switch (draft.outcome()) {
-            case FAILED -> "lss.settings.failure_notice";
-            case CONFLICT -> "lss.settings.conflict_notice";
-            case UNSAVED -> "lss.settings.unsaved_notice";
-            case SAVED -> "lss.settings.saved_notice";
-            case CLEAN -> draft.pendingReload() ? "lss.settings.saved_notice" : "lss.settings.save_notice";
-        };
-        graphics.drawCenteredString(font, Component.translatable(noticeKey,
-                dev.vox.lss.common.Brand.clientCommand()), width / 2, 5, 0xffffff88);
-        graphics.drawCenteredString(font, Component.translatable("lss.settings.sharing_state",
-                Component.translatable(draft.activeSharing() ? "options.on" : "options.off"),
-                Component.translatable(dev.vox.lss.config.menu.SodiumDraftRefresh.previewSharing(this) ? "options.on" : "options.off")),
-                width / 2, 16, 0xffffff88);
         if (draft.hasRetainedEdits()) lss$statusButton.setMessage(Component.translatable("lss.settings.recovery"));
         else lss$statusButton.setMessage(Component.translatable("lss.status.open"));
-        if (!dev.vox.lss.config.LSSClientConfig.CONFIG.pendingReconnect().isEmpty())
-            graphics.drawCenteredString(font, Component.translatable("lss.settings.pending_reconnect_notice"),
-                    width / 2, 27, 0xffffff88);
         if (!lss$statusLayoutPending) return;
         lss$statusLayoutPending = false;
         var bounds = dev.vox.lss.common.diagnostics.StatusEntryLayout.find(width, height, lss$statusModern,
@@ -94,4 +84,21 @@ public abstract class SodiumStatusEntryHook {
         lss$statusButton.visible = true;
     }
 
+
+    @Inject(method = "render", at = @At("RETURN"))
+    private void lss$settingsNotice(net.minecraft.client.gui.GuiGraphics graphics,
+            int mouseX, int mouseY, float delta, CallbackInfo callback) {
+        if (lss$statusButton == null) return;
+        var font = net.minecraft.client.Minecraft.getInstance().font;
+        graphics.enableScissor(0, height, width, lss$physicalHeight);
+        graphics.fill(0, height, width, lss$physicalHeight, 0xf0101010);
+        int y = height + 4;
+        for (var component : dev.vox.lss.config.menu.SodiumSettingsNotice.lines(this)) {
+            for (var line : font.split(component, dev.vox.lss.config.menu.SodiumSettingsNotice.textWidth(width))) {
+                graphics.drawString(font, line, 8, y, 0xffffff88);
+                y += 11;
+            }
+        }
+        graphics.disableScissor();
+    }
 }

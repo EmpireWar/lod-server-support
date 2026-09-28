@@ -67,6 +67,8 @@ public final class ClientSettingsEditSession {
         else changes.put(path, value);
         outcome = changes.isEmpty() ? Outcome.CLEAN : Outcome.UNSAVED;
     }
+    /** Last valid disk observation, excluding staged/retained unsaved edits. No IO. */
+    public ClientSettings savedSnapshot() { return ClientSettings.fromValues(persisted); }
     public Map<String, Object> changedPaths() { return Map.copyOf(changes); }
     public Outcome outcome() { return outcome; }
     public String error() { return error; }

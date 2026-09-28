@@ -2101,13 +2101,13 @@
     "fabric/src/main/resources/assets/lss/lang/en_us.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "6bfa1f6a665c57d3c0b02e0b0d76070bb20895c3",
-        "26.1": "894da3ac12c0ba8ea05f5052ebc80418b267de7c",
-        "1.21.11": "894da3ac12c0ba8ea05f5052ebc80418b267de7c",
-        "1.21.10": "894da3ac12c0ba8ea05f5052ebc80418b267de7c",
-        "1.21.1": "894da3ac12c0ba8ea05f5052ebc80418b267de7c"
+        "1.21.1": "deb5a78639a2627310bd4f720977c38d4b339825",
+        "1.21.10": "deb5a78639a2627310bd4f720977c38d4b339825",
+        "1.21.11": "deb5a78639a2627310bd4f720977c38d4b339825",
+        "26.1": "deb5a78639a2627310bd4f720977c38d4b339825",
+        "26.2": "779ff4cbc590950d0617e6fa635d029ac2ab701c"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/en_us.json",
       "tests": [
@@ -2118,13 +2118,13 @@
     "fabric/src/main/resources/assets/lss/lang/zh_cn.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "a0a5ef402c2e7f72a26de6c5480ba711a14a21ae",
-        "26.1": "1d6063eeac7179998e86152573f1f048c3ad6a1b",
-        "1.21.11": "1d6063eeac7179998e86152573f1f048c3ad6a1b",
-        "1.21.10": "1d6063eeac7179998e86152573f1f048c3ad6a1b",
-        "1.21.1": "1d6063eeac7179998e86152573f1f048c3ad6a1b"
+        "1.21.1": "e95eddcc84c52f635bc3fcdd44c7486f1bbaff44",
+        "1.21.10": "e95eddcc84c52f635bc3fcdd44c7486f1bbaff44",
+        "1.21.11": "e95eddcc84c52f635bc3fcdd44c7486f1bbaff44",
+        "26.1": "e95eddcc84c52f635bc3fcdd44c7486f1bbaff44",
+        "26.2": "ff57b51df52f099d8c77e753140e31636675f482"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/zh_cn.json",
       "tests": [
@@ -2135,13 +2135,13 @@
     "fabric/src/main/resources/assets/lss/lang/zh_tw.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "c34ef068102744c98473a5cf84ac2b19d8de6d65",
-        "26.1": "23023fb65f793f8d49356e2f12f064b00310a797",
-        "1.21.11": "23023fb65f793f8d49356e2f12f064b00310a797",
-        "1.21.10": "23023fb65f793f8d49356e2f12f064b00310a797",
-        "1.21.1": "23023fb65f793f8d49356e2f12f064b00310a797"
+        "1.21.1": "aaf93b793a3dcc996e64e59eaaf1e7c796390a37",
+        "1.21.10": "aaf93b793a3dcc996e64e59eaaf1e7c796390a37",
+        "1.21.11": "aaf93b793a3dcc996e64e59eaaf1e7c796390a37",
+        "26.1": "aaf93b793a3dcc996e64e59eaaf1e7c796390a37",
+        "26.2": "00200abd704403b54ef093839efb500106487392"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/zh_tw.json",
       "tests": [
@@ -2719,13 +2719,13 @@
     "fabric/src/test/java/dev/vox/lss/config/LSSConfigMenuTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. Compared each line\u2019s changes against its previously reviewed blob; reviewed immutable fixture migration, explicit reload tests, registration and generation/disk-policy assertions. Residual variants are existing annotation/assertion/MC API seams and the 1.21.1 Tier3 absence. Corrected direct ChunkPos accessor errors on 1.21.10/11; TestPositions record access remains correct on 1.21.1 and 26.2. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 cross-line YAML residual review. Compared each line\u2019s changes against its previously reviewed blob; reviewed immutable fixture migration, explicit reload tests, registration and generation/disk-policy assertions. Residual variants are existing annotation/assertion/MC API seams and the 1.21.1 Tier3 absence. Corrected direct ChunkPos accessor errors on 1.21.10/11; TestPositions record access remains correct on 1.21.1 and 26.2. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "1.21.1": "440fd84d38a36ae722e9e6e4e7780989bd456d40",
+        "1.21.1": "7e95c6fb322b3f9dc12822a0ad0af90df12faae1",
         "1.21.10": null,
-        "1.21.11": "f47b0f308b3a6bf32991cfe8817b1e907e7a8b05",
-        "26.1": "f47b0f308b3a6bf32991cfe8817b1e907e7a8b05",
-        "26.2": "f47b0f308b3a6bf32991cfe8817b1e907e7a8b05"
+        "1.21.11": "4c0ae5e675a913b38ac2f1ad9686e21940e487a0",
+        "26.1": "4c0ae5e675a913b38ac2f1ad9686e21940e487a0",
+        "26.2": "4c0ae5e675a913b38ac2f1ad9686e21940e487a0"
       },
       "surface": "line-adaptation:fabric/src/test/java/dev/vox/lss/config/LSSConfigMenuTest.java",
       "tests": [
@@ -2733,6 +2733,9 @@
       ]
     },
     "fabric/src/test/java/dev/vox/lss/config/menu/ClientExportLifecycleWiringTest.java": {
+      "kind": "identical"
+    },
+    "fabric/src/test/java/dev/vox/lss/config/menu/ClientMenuApplyTest.java": {
       "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/config/menu/ClientMenuEntrypointContractTest.java": {
@@ -2762,12 +2765,12 @@
     "fabric/src/test/java/dev/vox/lss/config/menu/StatusScreenDrawOrderTest.java": {
       "axes": "1.x render versus 26.x extractRenderState; opaque ARGB on newer lines; 26.1-only addClientSystemMessage descriptor pin.",
       "kind": "adapted",
-      "review": "Root reviewed full source and all line variants: Foreground/background order, Escape release consumption and line-native text API pins reviewed. Final independent review and required native/UI evidence remain pending.",
+      "review": "Root reviewed full source and all line variants: Foreground/background order, Escape release consumption and line-native text API pins reviewed. Final independent review and required native/UI evidence remain pending. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
         "1.21.1": "a109065de1c43296feefc703f950bba5c938c0f6",
         "1.21.10": "4cbc35f75398e950890c95cf3f00052adc59cd3b",
         "1.21.11": "4cbc35f75398e950890c95cf3f00052adc59cd3b",
-        "26.1": "2f1e4cd5235b762a69ac4129adebbdbb80e0a90e",
+        "26.1": "9fede5cc56febe6b0fb34404eeea7112e31cd561",
         "26.2": "463eb311103a9d122f97412ebd35e6594570935b"
       },
       "surface": "status-screen-draw-order",
@@ -8690,16 +8693,19 @@
     "xplat/src/main/java/dev/vox/lss/config/LSSServerConfig.java": {
       "kind": "identical"
     },
+    "xplat/src/main/java/dev/vox/lss/config/menu/ClientMenuReload.java": {
+      "kind": "identical"
+    },
     "xplat/src/main/java/dev/vox/lss/config/menu/ClientOptionCatalog.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. Compared feature changes against each line\u2019s prior reviewed blob; config reads become immutable snapshot/getter reads, draft bindings replace immediate save/push, connection-scoped preferences retain transport retry, and manual renderer toggle replaces automatic coexistence detection. Residual renderer capability, field/accessor, identifier and packet-distributor differences preserve the existing MC/loader implementations. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 cross-line YAML residual review. Compared feature changes against each line\u2019s prior reviewed blob; config reads become immutable snapshot/getter reads, draft bindings replace immediate save/push, connection-scoped preferences retain transport retry, and manual renderer toggle replaces automatic coexistence detection. Residual renderer capability, field/accessor, identifier and packet-distributor differences preserve the existing MC/loader implementations. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "1.21.1": "3e850c555cc9e062753158e4c0254df74312c6dd",
-        "1.21.10": "8441c56a1c268fb984957145a37003aa990a4c13",
-        "1.21.11": "8441c56a1c268fb984957145a37003aa990a4c13",
-        "26.1": "8441c56a1c268fb984957145a37003aa990a4c13",
-        "26.2": "8441c56a1c268fb984957145a37003aa990a4c13"
+        "1.21.1": "e8a944497d651c51b635087ab5c8186909789787",
+        "1.21.10": "acb3fe73e1c9bf7cea7c1c778710e95975a3c7b9",
+        "1.21.11": "acb3fe73e1c9bf7cea7c1c778710e95975a3c7b9",
+        "26.1": "acb3fe73e1c9bf7cea7c1c778710e95975a3c7b9",
+        "26.2": "acb3fe73e1c9bf7cea7c1c778710e95975a3c7b9"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/config/menu/ClientOptionCatalog.java",
       "tests": [
@@ -8713,13 +8719,13 @@
       "kind": "adapted",
       "surface": "yaml-settings:client-save-recovery-screen",
       "axes": "26.2 uses gui.screen/setScreenAndShow; 26.1 uses screen/setScreen. 1.21.x uses GuiGraphics/render/drawString instead of extractRenderState/text, and 1.21.1 uses integer key event arguments instead of KeyEvent. Save/conflict/discard actions and paired Escape consumption remain shared.",
-      "review": "2026-09-28 read exact final five-line residuals against 03469b99 and compared key ownership with existing ClientStatusScreen. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
+      "review": "2026-09-28 read exact final five-line residuals against 03469b99 and compared key ownership with existing ClientStatusScreen. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "f3a1d8bd5971826431bfacb10d2e257c5b2fada4",
-        "26.1": "251f196572746a847e3dd1e3e313f055744bdbfd",
-        "1.21.11": "edbc0d249bdcb9d5bce2f04aae297c5390b61c2f",
-        "1.21.10": "edbc0d249bdcb9d5bce2f04aae297c5390b61c2f",
-        "1.21.1": "32b0fcdc81643b52c979e23932db86875e5d7886"
+        "1.21.1": "ca32a75a5a970e86b4cf565936417eb9b8771bab",
+        "1.21.10": "e4ec2f9cb665a555abe6015af8ad553a6d6ea3c7",
+        "1.21.11": "e4ec2f9cb665a555abe6015af8ad553a6d6ea3c7",
+        "26.1": "b520ace65d552dfe4787ecab6562dd6b9e722e6a",
+        "26.2": "376fe09a0ddde8bb68432446ae01616a319d92d5"
       },
       "tests": [
         "ClientSettingsEditSessionTest; ScreenEscapeReleaseTest; per-line client compilation; native Sodium recovery smoke remains separate acceptance"
@@ -8995,13 +9001,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/client/ClientStatusScreen.java": {
       "axes": "1.21.1 integer-key/background/RGB APIs; 1.21.10/1.21.11 GuiGraphics and KeyEvent; 26.x extractor APIs; 26.2 chat listener and setScreenAndShow. Snapshot rendering, paging, return order and receive controls are shared.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "e89ab9f56a6c65de2875f46415fb84d88cdb9eee",
-        "26.1": "2aa328bc355bc6b5d9ed45c606ea308b4c7061f9",
-        "1.21.11": "ef2638c65717873b332a6a0eea0f260f0d6efa36",
-        "1.21.10": "ef2638c65717873b332a6a0eea0f260f0d6efa36",
-        "1.21.1": "8fa6daf13f8d6d5c8c9c6402b935392841b41138"
+        "1.21.1": "f4ce3cac3bf7884848a44a2b01ee1d90b98c79ba",
+        "1.21.10": "f6658463037e579cd4701826df4c9e96c566fe69",
+        "1.21.11": "f6658463037e579cd4701826df4c9e96c566fe69",
+        "26.1": "0f88d500117758c9d4a7b9bdef8f95ddabc1bf75",
+        "26.2": "cfac8ef81a7769ee312ea408c78d652a16259845"
       },
       "surface": "vanilla-screen-api",
       "tests": [

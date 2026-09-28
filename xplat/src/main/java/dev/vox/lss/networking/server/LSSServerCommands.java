@@ -64,7 +64,9 @@ public class LSSServerCommands {
         var service = LSSServerNetworking.getRequestService();
         var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
         var snapshot = new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
-                service != null, config.enabled(), config.enableChunkGeneration(), config.generationConfiguredForRestart(), config.lodDistanceChunks(),
+                service != null, config.enabled(), config.enabled() && service != null
+                        && service.getGenerationService() != null && service.getGenerationService().isAdmissionEnabled(),
+                config.generationConfiguredForRestart(), config.lodDistanceChunks(),
                 service == null ? 0 : service.getUptimeSeconds(),
                 service == null ? 0 : service.getTickDiag().getTotalSectionsSent(),
                 service == null ? 0 : service.getTickDiag().getTotalBytesSent(),

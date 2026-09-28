@@ -69,8 +69,8 @@ public class PaperChunkGenerationService {
     // tick() swaps it out on the same thread)
     private List<TickSnapshot.GenerationReadyData> mainReady = new ArrayList<>();
 
-    // Non-final since v0.11.0 stage C (/lsslod set tick-poll): submit/tick run on the
-    // pump, so plain fields suffice (the per-player genSlotCap is the volatile one).
+    // Reload policy updates and submit/tick run on the same service owner pump,
+    // so plain fields suffice (the per-player genSlotCap is the volatile one).
     private int maxConcurrent;
     private int maxPerPlayerActive;
     private int timeoutTicks;
@@ -418,6 +418,9 @@ public class PaperChunkGenerationService {
         this.perPlayerActiveCount.clear();
         this.mainReady.clear();
     }
+
+    /** Capture on the service owner; admitted work may still be draining when false. */
+    public boolean isAdmissionEnabled() { return admissionEnabled; }
 
     public String getDiagnostics() {
         return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d, null_failures=%d, vanished=%d",

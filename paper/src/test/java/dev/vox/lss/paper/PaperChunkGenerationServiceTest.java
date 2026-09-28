@@ -810,9 +810,11 @@ class PaperChunkGenerationServiceTest {
         var player = UUID.randomUUID();
         var other = UUID.randomUUID();
         svc.updatePolicy(false, 8, 8, 1200, 1);
+        assertFalse(svc.isAdmissionEnabled());
         assertFalse(svc.submitGeneration(player, registration(player), level, 0, 0, 1));
         assertTrue(svc.launches.isEmpty(), "disabled at boot must be dormant");
         svc.updatePolicy(true, 8, 8, 1200, 2);
+        assertTrue(svc.isAdmissionEnabled());
         assertTrue(svc.submitGeneration(player, registration(player), level, 0, 0, 2));
         var old = svc.launches.getFirst();
         svc.updatePolicy(false, 1, 1, 20, 3);

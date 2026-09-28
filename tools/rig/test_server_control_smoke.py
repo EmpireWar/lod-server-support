@@ -21,6 +21,9 @@ def snapshot():
 
 class ServerControlTest(unittest.TestCase):
     def test_hot_generation_matches_configured(self):check_snapshot(snapshot(),'Generation: true',True,True)
+    def test_owner_configured_difference_does_not_require_restart(self):
+        row=snapshot();row['generationEnabled']=False
+        check_snapshot(row,'generation admission: false; Generation configured: true',False,True)
     def test_running_change_is_rejected(self):
         row=snapshot();row['generationEnabled']=False
         with self.assertRaisesRegex(ValueError,'distinction'):check_snapshot(row,'(restart pending)',True,True)

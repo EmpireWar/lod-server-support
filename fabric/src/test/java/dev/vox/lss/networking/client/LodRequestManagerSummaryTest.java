@@ -63,7 +63,7 @@ class LodRequestManagerSummaryTest {
 
     @AfterEach
     void restoreConfig() {
-        LSSClientConfig.CONFIG.enableRegionSummarySync = true;
+        dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_summaries", true);
     }
 
     private static ResourceKey<Level> dim(String name) {
@@ -172,7 +172,7 @@ class LodRequestManagerSummaryTest {
 
     @Test
     void allThreeRequestGatesHold() {
-        LSSClientConfig.CONFIG.enableRegionSummarySync = false;
+        dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_summaries", false);
         tick(0, 0, dim("overworld"));
         assertTrue(requests.isEmpty(), "the client kill switch stops the request");
 
@@ -321,7 +321,7 @@ class LodRequestManagerSummaryTest {
     @Test
     void columnStampsRespectTheKillSwitch() {
         seedStamped(dim("overworld"), 5000L);
-        LSSClientConfig.CONFIG.enableRegionSummarySync = false;
+        dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_summaries", false);
         manager.onColumnStamps(stampsFrame("lss_test:overworld", POS,
                 System.currentTimeMillis() / 1000L));
         assertEquals(0, manager.getSummaryStampsApplied());
@@ -545,7 +545,7 @@ class LodRequestManagerSummaryTest {
         assertDoesNotThrow(() -> manager.onRegionSummaryFrame(new byte[]{7, 7, 7}));
         assertEquals(0, manager.getSummaryColumnsValidated());
 
-        LSSClientConfig.CONFIG.enableRegionSummarySync = false;
+        dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_summaries", false);
         manager.onRegionSummaryFrame(frame("lss_test:overworld", 6000L));
         assertEquals(0, manager.getSummaryColumnsValidated(),
                 "never request, never apply — a mid-session flip stops both halves");

@@ -1571,4 +1571,21 @@ class SqliteLodStoreTest {
             }
         }
     }
+    @Test
+    void enablingPeriodicSweepAtRuntimeDropsAnUnfiredEdit() throws Exception {
+        long position = PositionUtil.packPosition(0, 8);
+        writeRegion(OW, 0, 0, Map.of(position, (int) (nowSec() - 1000)));
+        var store = open(defaultEnv());
+        try {
+            store.deposit(OW, position, bytes(23, 400), 100);
+            assertNotNull(awaitHit(store, OW, position));
+            writeRegion(OW, 0, 0, Map.of(position, (int) (nowSec() + 100)));
+            Files.setLastModifiedTime(regionDir(OW).resolve("r.0.0.mca"),
+                    FileTime.fromMillis(System.currentTimeMillis() + 5000));
+            store.updatePolicy(0, 1, 1).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            awaitGone(store, OW, position);
+            assertTrue(store.diagnostics().getSweepDrops() > 0);
+        } finally { store.shutdown(); }
+    }
+
 }

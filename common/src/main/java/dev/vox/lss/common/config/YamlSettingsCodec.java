@@ -1,0 +1,159 @@
+package dev.vox.lss.common.config;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.*;
+import java.security.*;
+import java.util.*;
+import org.snakeyaml.engine.v2.api.*;
+import org.snakeyaml.engine.v2.api.lowlevel.*;
+import org.snakeyaml.engine.v2.common.*;
+import org.snakeyaml.engine.v2.events.*;
+import org.snakeyaml.engine.v2.nodes.*;
+import org.snakeyaml.engine.v2.schema.JsonSchema;
+
+/** Strict, bounded representation-tree codec. No JavaBean or arbitrary tag construction. */
+public final class YamlSettingsCodec<T> {
+    public static final int MAX_BYTES = 1_048_576, MAX_DEPTH = 32, MAX_NODES = 50_000;
+    private static final LoadSettings LOAD = LoadSettings.builder().setParseComments(true)
+            .setSchema(new JsonSchema()).setAllowDuplicateKeys(false).setMaxAliasesForCollections(0)
+            .setCodePointLimit(MAX_BYTES).build();
+    private static final DumpSettings DUMP = DumpSettings.builder().setDumpComments(true)
+            .setSchema(new JsonSchema()).setIndent(2).setDefaultFlowStyle(FlowStyle.BLOCK).build();
+    private final SettingsSchema<T> schema;
+    public YamlSettingsCodec(SettingsSchema<T> schema) { this.schema = Objects.requireNonNull(schema); }
+
+    public record Document<T>(T configured, T normalized, List<SettingsSchema.Normalization> normalizations,
+                              List<String> inactivePaths, String hash, byte[] bytes) {
+        public Document { normalizations = List.copyOf(normalizations); inactivePaths = List.copyOf(inactivePaths); bytes = bytes.clone(); }
+        @Override public byte[] bytes() { return bytes.clone(); }
+    }
+    public Document<T> parse(byte[] bytes) {
+        Map<String,Object> tree = readTree(bytes);
+        SettingsSchema.Decoded<T> result = schema.decode(tree);
+        return new Document<>(result.configured(), result.normalized(), result.normalizations(), result.inactivePaths(), hash(bytes), bytes);
+    }
+    public byte[] defaults() { return schema.template().getBytes(StandardCharsets.UTF_8); }
+
+    /** Only explicit changed paths are replaced; untouched scalar styles and comments survive. */
+    public byte[] edit(Document<T> document, Map<String,Object> changes) {
+        var values = new LinkedHashMap<>(schema.values(document.configured()));
+        for (var entry : changes.entrySet()) {
+            if (!schema.descriptorsByPath().containsKey(entry.getKey())) throw new SettingsException("Unknown settings path: " + entry.getKey());
+            values.put(entry.getKey(), entry.getValue());
+        }
+        schema.fromValues(values); // type/normalization checks, without rewriting requested values
+        MappingNode root = (MappingNode) compose(document.bytes());
+        for (var entry : changes.entrySet()) replace(root, entry.getKey().split("\\."), 0, node(entry.getValue()));
+        byte[] output = new Present(DUMP).emitToString(new Serialize(DUMP).serializeOne(root).iterator()).getBytes(StandardCharsets.UTF_8);
+        parse(output);
+        return output;
+    }
+    public byte[] generate(Map<String,Object> values) { return edit(parse(defaults()), values); }
+
+    public static void validateStructure(byte[] bytes) { compose(bytes); }
+
+    private static Node compose(byte[] bytes) {
+        String input = utf8(bytes);
+        try {
+            int depth=0, count=0, documents=0;
+            for (Event event : new Parse(LOAD).parseString(input)) {
+                if (event instanceof AliasEvent) throw new SettingsException("YAML aliases are not allowed");
+                if (event instanceof NodeEvent n && n.getAnchor().isPresent()) throw new SettingsException("YAML anchors are not allowed");
+                if (event instanceof ScalarEvent s && s.getTag().isPresent()
+                        || event instanceof CollectionStartEvent c && c.getTag().isPresent()) throw new SettingsException("Explicit YAML tags are not allowed");
+                if (event instanceof DocumentStartEvent && ++documents > 1) throw new SettingsException("Only one YAML document is allowed");
+                if (event instanceof CollectionStartEvent) {
+                    if (++depth > MAX_DEPTH) throw new SettingsException("YAML nesting exceeds " + MAX_DEPTH);
+                    if (++count > MAX_NODES) throw new SettingsException("YAML node count exceeds " + MAX_NODES);
+                } else if (event instanceof CollectionEndEvent) depth--;
+                else if (event instanceof ScalarEvent && ++count > MAX_NODES) throw new SettingsException("YAML node count exceeds " + MAX_NODES);
+            }
+            return new Compose(LOAD).composeString(input).orElseThrow(() -> new SettingsException("Settings file is empty"));
+        } catch (SettingsException e) { throw e; }
+        catch (RuntimeException e) { throw new SettingsException("Invalid YAML syntax; check indentation, keys and scalar values", e); }
+    }
+    public static Map<String,Object> readTree(byte[] bytes) {
+        Object value = value(compose(bytes), "");
+        if (!(value instanceof Map<?,?>)) throw new SettingsException("Settings document must be a nonempty mapping");
+        @SuppressWarnings("unchecked") var map = (Map<String,Object>)value;
+        if (map.isEmpty()) throw new SettingsException("Settings document must be a nonempty mapping");
+        return map;
+    }
+    private static Object value(Node node, String path) {
+        if (node instanceof MappingNode map) {
+            if (!Tag.MAP.equals(node.getTag())) throw new SettingsException("Invalid mapping tag at " + path);
+            var result = new LinkedHashMap<String,Object>();
+            for (NodeTuple pair : map.getValue()) {
+                if (!(pair.getKeyNode() instanceof ScalarNode key) || !Tag.STR.equals(key.getTag())) throw new SettingsException("Mapping keys must be strings at " + path);
+                if (key.getValue().equals("<<")) throw new SettingsException("YAML merge keys are not allowed");
+                if (result.containsKey(key.getValue())) throw new SettingsException("Duplicate mapping key at " + path);
+                result.put(key.getValue(), value(pair.getValueNode(), path.isEmpty() ? key.getValue() : path + "." + key.getValue()));
+            }
+            return Collections.unmodifiableMap(result);
+        }
+        if (node instanceof SequenceNode sequence) {
+            if (!Tag.SEQ.equals(node.getTag())) throw new SettingsException("Invalid sequence tag at " + path);
+            var result = new ArrayList<Object>();
+            for (int i=0;i<sequence.getValue().size();i++) result.add(value(sequence.getValue().get(i), path + "[" + i + "]"));
+            return List.copyOf(result);
+        }
+        if (!(node instanceof ScalarNode scalar)) throw new SettingsException("Unsupported YAML node at " + path);
+        if (Tag.STR.equals(scalar.getTag())) return scalar.getValue();
+        if (Tag.BOOL.equals(scalar.getTag()) && (scalar.getValue().equals("true") || scalar.getValue().equals("false"))) return Boolean.valueOf(scalar.getValue());
+        if (Tag.INT.equals(scalar.getTag()) || Tag.FLOAT.equals(scalar.getTag())) {
+            if(scalar.getValue().length()>128)throw new SettingsException("Numeric scalar is too large at " + path);
+            try { return Tag.INT.equals(scalar.getTag()) ? new BigInteger(scalar.getValue()) : new BigDecimal(scalar.getValue()); }
+            catch (NumberFormatException e) { throw new SettingsException("A finite number is required at " + path); }
+        }
+        throw new SettingsException("Null or unsupported scalar at " + path);
+    }
+    private static Node node(Object value) {
+        if (value instanceof Map<?,?> map) {
+            var pairs = new ArrayList<NodeTuple>();
+            map.forEach((k,v) -> pairs.add(new NodeTuple(node(k.toString()), node(v))));
+            return new MappingNode(Tag.MAP,pairs,FlowStyle.BLOCK);
+        }
+        if (value instanceof List<?> list) return new SequenceNode(Tag.SEQ,new ArrayList<>(list.stream().map(YamlSettingsCodec::node).toList()),FlowStyle.BLOCK);
+        if (value instanceof Boolean) return new ScalarNode(Tag.BOOL,value.toString(),ScalarStyle.PLAIN);
+        if (value instanceof Number) return new ScalarNode(value instanceof Float || value instanceof Double || value instanceof BigDecimal ? Tag.FLOAT : Tag.INT,value.toString(),ScalarStyle.PLAIN);
+        if (value instanceof String text) return new ScalarNode(Tag.STR,text,ScalarStyle.DOUBLE_QUOTED);
+        throw new SettingsException("Null or unsupported draft value");
+    }
+    private static void replace(MappingNode mapping, String[] path, int index, Node replacement) {
+        var pairs = mapping.getValue();
+        for (int i=0;i<pairs.size();i++) {
+            NodeTuple pair=pairs.get(i);
+            if (((ScalarNode)pair.getKeyNode()).getValue().equals(path[index])) {
+                if (index+1==path.length) {
+                    Node old=pair.getValueNode(); replacement.setBlockComments(old.getBlockComments());
+                    // A flow collection's trailing inline comment cannot follow a new block
+                    // collection end event (the emitter is already expecting the next key).
+                    // Attach it to the unchanged key, so it remains beside the same path.
+                    if ((replacement instanceof MappingNode || replacement instanceof SequenceNode)
+                            && old.getInLineComments()!=null && !old.getInLineComments().isEmpty()) {
+                        var comments=new ArrayList<org.snakeyaml.engine.v2.comments.CommentLine>();
+                        if(pair.getKeyNode().getInLineComments()!=null)comments.addAll(pair.getKeyNode().getInLineComments());
+                        comments.addAll(old.getInLineComments());pair.getKeyNode().setInLineComments(comments);
+                    } else replacement.setInLineComments(old.getInLineComments());
+                    replacement.setEndComments(old.getEndComments());
+                    pairs.set(i,new NodeTuple(pair.getKeyNode(),replacement));
+                } else replace((MappingNode)pair.getValueNode(),path,index+1,replacement);
+                return;
+            }
+        }
+        Node child=replacement;
+        if (index+1<path.length) { var next=new MappingNode(Tag.MAP,new ArrayList<>(),FlowStyle.BLOCK); replace(next,path,index+1,replacement); child=next; }
+        pairs.add(new NodeTuple(new ScalarNode(Tag.STR,path[index],ScalarStyle.PLAIN),child));
+    }
+    static String utf8(byte[] bytes) {
+        if (bytes.length>MAX_BYTES) throw new SettingsException("Settings file exceeds 1 MiB");
+        try { return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString(); }
+        catch (CharacterCodingException e) { throw new SettingsException("Settings file must be valid UTF-8",e); }
+    }
+    public static String hash(byte[] bytes) {
+        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
+        catch (NoSuchAlgorithmException e) { throw new AssertionError(e); }
+    }
+}

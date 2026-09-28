@@ -2,7 +2,8 @@ package dev.vox.lss.config.menu;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import dev.vox.lss.config.LSSClientConfig;
+import dev.vox.lss.common.config.SettingsStore;
+import dev.vox.lss.common.config.SettingsSchema;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -27,9 +28,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * slider domain); each option's declared default EQUALS a fresh config's field value
  * (the v0.11/v0.12 pages duplicated defaults by hand with no pin); bindings round-trip;
  * {@code enabledBy} names a tick box on the SAME page; the far-player page pushes prefs
- * on save (the E2 review's M2 as data); the SeeU override is the one hidden option.
  */
 class ClientOptionCatalogTest {
+    @org.junit.jupiter.api.io.TempDir Path temp;
+    private ClientSettingsEditSession draft() {
+        try {
+            var store = new SettingsStore<>(temp, "lss", SettingsSchema.client());
+            store.initialize();
+            return new ClientSettingsEditSession(store, SettingsSchema.client()::defaults);
+        } catch (IOException failure) { throw new AssertionError(failure); }
+    }
+
 
     private static JsonObject lang;
 
@@ -93,21 +102,21 @@ class ClientOptionCatalogTest {
 
     @Test
     void declaredDefaultsEqualAFreshConfig() {
-        var fresh = new LSSClientConfig();
+        var fresh = draft();
         for (OptionSpec o : allOptions()) {
             Object expected = switch (o) {
                 case OptionSpec.BoolSpec b -> b.defaultValue();
                 case OptionSpec.IntSpec i -> i.defaultValue();
             };
             assertEquals(expected, o.read(fresh),
-                    o.id() + ": the catalog default must equal LSSClientConfig's field initializer"
+                    o.id() + ": the catalog default must equal schema default"
                             + " (through the option's own getter)");
         }
     }
 
     @Test
     void bindingsRoundTrip() {
-        var cfg = new LSSClientConfig();
+        var cfg = draft();
         for (OptionSpec o : allOptions()) {
             switch (o) {
                 case OptionSpec.BoolSpec b -> {
@@ -147,30 +156,24 @@ class ClientOptionCatalogTest {
     }
 
     @Test
-    void farPlayerPagePushesPrefsAndTheMainPageOnlySaves() {
+    void everyPageSavesOnlyADiskDraft() {
         for (OptionSpec o : ClientOptionCatalog.pages().get(0).options()) {
             assertEquals(SaveHook.SAVE, o.saveHook(), o.id());
         }
         for (OptionSpec o : ClientOptionCatalog.pages().get(1).options()) {
-            assertEquals(SaveHook.SAVE_AND_PUSH_FAR_PLAYER_PREFS, o.saveHook(),
-                    o.id() + ": a mid-session far-player flip must push prefs now (E2 review M2)");
+            assertEquals(SaveHook.SAVE, o.saveHook(),
+                    o.id() + ": every page shares the disk-only transaction");
         }
     }
 
     @Test
-    void exactlyTheSeeuOverrideAndTheRendererOnlyOptionsAreConditional() {
-        var seeuOnly = allOptions().stream().filter(o -> o.visibility() == Visibility.SEEU_ONLY).map(OptionSpec::id).toList();
-        assertEquals(List.of(ClientOptionCatalog.ID_FAR_PLAYERS_WITH_SEEU), seeuOnly);
+    void rendererOnlyOptionsAreConditionalAndSharingAlwaysVisible() {
         var renderOnly = allOptions().stream().filter(o -> o.visibility() == Visibility.RENDER_AVAILABLE).map(OptionSpec::id).toList();
         assertEquals(List.of(ClientOptionCatalog.ID_FAR_PLAYERS_ENABLED, ClientOptionCatalog.ID_FAR_PLAYERS_NAME_TAGS,
-                ClientOptionCatalog.ID_FAR_PLAYERS_FULL_BRIGHT, ClientOptionCatalog.ID_FAR_PLAYERS_RENDER_DISTANCE), renderOnly,
-                "the four renderer-only options hide where nothing renders (NeoForge v1)");
-        assertEquals(Visibility.ALWAYS, ClientOptionCatalog.find(ClientOptionCatalog.ID_FAR_PLAYERS_SHARE_SELF).orElseThrow().visibility(),
-                "Share My Position is the prefs carrier — never hidden");
-        assertTrue(Visibility.SEEU_ONLY.test(new MenuContext(true, false, true, true)));
-        assertFalse(Visibility.SEEU_ONLY.test(new MenuContext(true, true, false, true)));
-        assertTrue(Visibility.RENDER_AVAILABLE.test(new MenuContext(false, false, false, true)));
-        assertFalse(Visibility.RENDER_AVAILABLE.test(new MenuContext(true, true, true, false)));
+                ClientOptionCatalog.ID_FAR_PLAYERS_FULL_BRIGHT, ClientOptionCatalog.ID_FAR_PLAYERS_RENDER_DISTANCE), renderOnly);
+        assertEquals(Visibility.ALWAYS, ClientOptionCatalog.find(ClientOptionCatalog.ID_FAR_PLAYERS_SHARE_SELF).orElseThrow().visibility());
+        assertTrue(Visibility.RENDER_AVAILABLE.test(new MenuContext(false, false, true)));
+        assertFalse(Visibility.RENDER_AVAILABLE.test(new MenuContext(true, true, false)));
     }
 
     @Test
@@ -179,12 +182,11 @@ class ClientOptionCatalogTest {
         assertEquals(List.of("lss:receive_server_lods", "lss:lod_distance", "lss:column_rate_limit",
                         "lss:join_slow_start", "lss:xaero_map_bridge", "lss:far_players_enabled",
                         "lss:far_players_share_self", "lss:far_players_name_tags",
-                        "lss:far_players_full_bright", "lss:far_players_render_distance",
-                        "lss:far_players_with_seeu"),
+                        "lss:far_players_full_bright", "lss:far_players_render_distance"),
                 allOptions().stream().map(OptionSpec::id).toList());
         // group shape + titles
         assertEquals(List.of(1, 1, 2, 1), ClientOptionCatalog.pages().get(0).groups().stream().map(g -> g.options().size()).toList());
-        assertEquals(List.of(6), ClientOptionCatalog.pages().get(1).groups().stream().map(g -> g.options().size()).toList());
+        assertEquals(List.of(5), ClientOptionCatalog.pages().get(1).groups().stream().map(g -> g.options().size()).toList());
         assertEquals("lss.config.page", ClientOptionCatalog.pages().get(0).titleKey());
         assertEquals("lss.config.far_players.page", ClientOptionCatalog.pages().get(1).titleKey());
         // impacts: HIGH on the master toggle, none on the LOD-distance slider, LOW elsewhere
@@ -220,11 +222,10 @@ class ClientOptionCatalogTest {
         for (int i = 1; i < RateSliderStops.STOPS.length; i++) {
             assertTrue(RateSliderStops.STOPS[i] > RateSliderStops.STOPS[i - 1], "stops strictly increase");
         }
-        var cfg = new LSSClientConfig();
+        var cfg = draft();
         for (int i = 0; i < RateSliderStops.STOPS.length; i++) {
             rate.setter().accept(cfg, i);
-            cfg.validate();
-            assertEquals(RateSliderStops.STOPS[i], cfg.lodColumnsPerSecondLimit, "stop " + i + " survives validate()");
+            assertEquals(RateSliderStops.STOPS[i], cfg.integer("lod.download.max_columns_per_second"), "stop " + i + " survives validate()");
             assertEquals(i, rate.getter().apply(cfg), "stop " + i + " reads back as itself");
         }
         assertTrue(rate.label().apply(0).isKey(), "0 displays as the Unlimited key");
@@ -234,14 +235,13 @@ class ClientOptionCatalogTest {
     @Test
     void conditionalTooltipsFlipWithTheContext() {
         var slow = ClientOptionCatalog.find(ClientOptionCatalog.ID_JOIN_SLOW_START).orElseThrow();
-        assertEquals("lss.config.join_slow_start.tooltip", slow.tooltip().resolve(new MenuContext(true, false, false, true)));
-        assertEquals("lss.config.join_slow_start.tooltip.governor_off", slow.tooltip().resolve(new MenuContext(false, false, false, true)));
+        assertEquals("lss.config.join_slow_start.tooltip", slow.tooltip().resolve(new MenuContext(true, false, true)));
+        assertEquals("lss.config.join_slow_start.tooltip.governor_off", slow.tooltip().resolve(new MenuContext(false, false, true)));
         var xaero = ClientOptionCatalog.find(ClientOptionCatalog.ID_XAERO_MAP_BRIDGE).orElseThrow();
-        assertEquals("lss.config.xaero_map_bridge.tooltip", xaero.tooltip().resolve(new MenuContext(true, true, false, true)));
-        assertEquals("lss.config.xaero_map_bridge.tooltip.not_installed", xaero.tooltip().resolve(new MenuContext(true, false, false, true)));
+        assertEquals("lss.config.xaero_map_bridge.tooltip", xaero.tooltip().resolve(new MenuContext(true, true, true)));
+        assertEquals("lss.config.xaero_map_bridge.tooltip.not_installed", xaero.tooltip().resolve(new MenuContext(true, false, true)));
         var fp = ClientOptionCatalog.find(ClientOptionCatalog.ID_FAR_PLAYERS_ENABLED).orElseThrow();
-        assertEquals("lss.config.far_players_enabled.tooltip", fp.tooltip().resolve(new MenuContext(true, false, false, true)));
-        assertEquals("lss.config.far_players_enabled.tooltip.seeu", fp.tooltip().resolve(new MenuContext(true, false, true, true)));
+        assertEquals("lss.config.far_players_enabled.tooltip", fp.tooltip().resolve(new MenuContext(true, false, true)));
         assertEquals(2, slow.tooltip().keys().size());
         assertEquals(1, ClientOptionCatalog.find(ClientOptionCatalog.ID_RECEIVE_SERVER_LODS).orElseThrow().tooltip().keys().size());
     }
@@ -253,7 +253,6 @@ class ClientOptionCatalogTest {
         MenuContext ctx = MenuContext.current();
         assertNotNull(ctx);
         assertFalse(ctx.xaeroPresent());
-        assertFalse(ctx.seeuPresent());
     }
 
     private static List<OptionSpec> allOptions() {

@@ -404,6 +404,7 @@ public class PaperRequestProcessingService {
     PaperRequestProcessingService(MinecraftServer server, PaperConfig config, Wiring wiring) {
         this.server = server;
         this.config = config;
+        this.advertisedGeneration = config.enableChunkGeneration();
         this.players = wiring.players();
         this.diskReader = wiring.diskReader();
         this.generationService = wiring.generationService();
@@ -471,18 +472,17 @@ public class PaperRequestProcessingService {
         // AUTO tier applies whenever background priority is on (unlike Fabric, which must
         // also probe for Moonrise). With the flag off the reads run FOREGROUND, so the pool
         // must be sized by the unprioritized tier — see the Fabric twin. (v0.9.0 review.)
-        int readerThreads = config.effectiveDiskReaderThreads(config.useBackgroundReadPriority);
+        int readerThreads = config.effectiveDiskReaderThreads(config.useBackgroundReadPriority());
         var diskReader = new PaperChunkDiskReader(
                 readerThreads,
-                config.useBackgroundReadPriority,
-                config.useNbtTranscode);
-        PaperChunkGenerationService generationService = config.enableChunkGeneration
-                ? new PaperChunkGenerationService(config, plugin) : null;
+                config.useBackgroundReadPriority(),
+                config.useNbtTranscode());
+        PaperChunkGenerationService generationService = new PaperChunkGenerationService(config, plugin);
 
         var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         var offThreadProcessor = new PaperOffThreadProcessor(
-                players, diskReader, generationService != null, dataDir,
-                config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds,
+                players, diskReader, config.enableChunkGeneration(), dataDir,
+                config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds(),
                 config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                         + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
 
@@ -491,7 +491,7 @@ public class PaperRequestProcessingService {
         // sessions with one warning (zstd-jni publishes no musl natives, and musl
         // servers are common). Independent of the store's own probe below.
         boolean wireCompressionLive = false;
-        if (config.useCompressedColumns) {
+        if (config.useCompressedColumns()) {
             var wireCodec = dev.vox.lss.common.store.StoreCodec.zstdOrNull();
             if (wireCodec == null) {
                 LSSLogger.warn("useCompressedColumns is enabled but the "
@@ -515,14 +515,14 @@ public class PaperRequestProcessingService {
         // enabled=false must not open the store (Fabric twin: the same guard). Paper
         // has no backfill so the cost is a DB file and a sweep thread rather than a
         // full-world walk, but "LSS is off" should still mean nothing is created.
-        var storeMode = config.enabled
-                ? dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore)
+        var storeMode = config.enabled()
+                ? dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
                 : dev.vox.lss.common.store.LodStoreMode.OFF;
         if (storeMode == dev.vox.lss.common.store.LodStoreMode.OFF) {
             // Suppressed on Folia: the store is unvalidated there (validate() WARNS on
             // an explicit full) — recommending what we warn about is incoherent.
             var advice = dev.vox.lss.common.store.LodStores
-                    .offRecommendationOrNull(config.enabled, FoliaSupport.IS_FOLIA);
+                    .offRecommendationOrNull(config.enabled(), FoliaSupport.IS_FOLIA);
             if (advice != null) {
                 LSSLogger.info(advice);
             }
@@ -561,7 +561,7 @@ public class PaperRequestProcessingService {
             var env = new dev.vox.lss.common.store.SqliteLodStore.Environment(
                     dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
                     LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
-                    config.lodStoreResweepSeconds, config.lodStoreMaxBytes(),
+                    config.lodStoreResweepSeconds(), config.lodStoreMaxBytes(),
                     dev.vox.lss.common.store.RegistryFingerprint.of(
                             registryIds.states(), registryIds.biomes()),
                     dev.vox.lss.common.store.RegistryFingerprint.contentOf(
@@ -774,20 +774,13 @@ public class PaperRequestProcessingService {
         this.connectionEpochs.put(uuid, this.connectionEpochCounter.incrementAndGet());
     }
 
-    // Runtime /lsslod set marshaling (v0.11.0 stage C): commands may arrive on a REGION
-    // thread on Folia, and the mutation path (config assign + validate + save + the
-    // re-push) touches pump-owned state — so the command surface enqueues here and the
-    // pump drains after the lifecycle mailbox (ordering: see the tick() comment).
+    // Fire-and-forget lifecycle notices share the pump queue. Settings commits use
+    // submitSettingsControl instead, which owns a terminal receipt through shutdown.
     private final ConcurrentLinkedQueue<Runnable> runtimeTasks = new ConcurrentLinkedQueue<>();
 
-    /** Any thread. Runs on the pump at the top of the next tick(), after the lifecycle
-     *  drain. Replies from inside the task reach the sender cross-thread (Bukkit
-     *  sendMessage is thread-safe for console and Adventure-backed players). A task
-     *  enqueued in the shutdown window (pump cancelled, queue never drained again) is
-     *  silently dropped — acceptable for admin commands: the config file write already
-     *  happened on the command thread, only the live-apply/reply is lost. */
+    /** Any thread; lifecycle notice only. No settings publication or reload reply. */
     public void enqueueRuntimeTask(Runnable task) {
-        this.runtimeTasks.add(task);
+        if (!this.shuttingDown) this.runtimeTasks.add(task);
     }
 
     private void drainRuntimeTasks() {
@@ -854,7 +847,7 @@ public class PaperRequestProcessingService {
     private SessionConfigSender sessionConfigSender = (player, cfg, enabled) ->
             PaperPayloadHandler.sendSessionConfig(player.getBukkitEntity(),
                     LSSConstants.PROTOCOL_VERSION, enabled,
-                    PaperWorldLod.distance(cfg, player), cfg.enableChunkGeneration);
+                    PaperWorldLod.distance(cfg, player), generationEnabledForSession());
 
     void setSessionConfigSender(SessionConfigSender sender) {
         this.sessionConfigSender = sender;
@@ -870,7 +863,7 @@ public class PaperRequestProcessingService {
                 continue;
             }
             try {
-                this.sessionConfigSender.send(state.getPlayer(), this.config, this.config.enabled);
+                this.sessionConfigSender.send(state.getPlayer(), this.config, this.config.enabled());
                 pushed++;
             } catch (Exception e) {
                 LSSLogger.error("Session-config re-push failed for "
@@ -892,7 +885,7 @@ public class PaperRequestProcessingService {
     public void runServiceGateSweeps() {
         var gateState = this.serviceGateState;
         var config = this.config;
-        if (config.requireServicePermission) {
+        if (config.requireServicePermission()) {
             for (var state : this.players.values()) {
                 UUID uuid = state.getPlayerUUID();
                 if (this.dialects.dialectOf(uuid)
@@ -957,7 +950,7 @@ public class PaperRequestProcessingService {
                     continue;
                 }
                 boolean cleared;
-                if (!config.requireServicePermission) {
+                if (!config.requireServicePermission()) {
                     cleared = true; // a disarmed gate trivially clears everyone
                 } else {
                     try {
@@ -976,7 +969,7 @@ public class PaperRequestProcessingService {
                 if (remembered == null) continue;
                 LSSLogger.info("Re-offering " + dev.vox.lss.common.Brand.shortName() + " to "
                         + remembered.playerName() + " (re-offer): "
-                        + (config.requireServicePermission
+                        + (config.requireServicePermission()
                                 ? "the service permission cleared"
                                 : "requireServicePermission was disarmed")
                         + " — replaying the stored handshake");
@@ -1204,10 +1197,10 @@ public class PaperRequestProcessingService {
         // one prompt per REATTACH_PROMPT_INTERVAL, which the guard's INFO line makes
         // visible; a rejoin heals it.
         PaperPayloadHandler.sendSessionConfigV16(player.getBukkitEntity(),
-                this.config.enabled, PaperWorldLod.distance(this.config, player),
+                this.config.enabled(), PaperWorldLod.distance(this.config, player),
                 LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                 this.config.generationLimits().perPlayer(),
-                this.config.enableChunkGeneration);
+                generationEnabledForSession());
     }
     // Per-UUID last-prompt/last-removal stamps (millis). Concurrent: batches arrive on
     // region threads on Folia. removePlayer STAMPS entries (the post-removal grace) and
@@ -1320,6 +1313,114 @@ public class PaperRequestProcessingService {
         state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
+    private volatile boolean advertisedGeneration;
+    public boolean generationEnabledForSession() { return advertisedGeneration; }
+
+    private volatile boolean settingsStopped;
+    private volatile long settingsRevision;
+    private volatile int settingsLegacyReconnects;
+    public record SettingsFeedback(long revision, int legacyReconnects, java.util.List<String> draining) {
+        public SettingsFeedback { draining = java.util.List.copyOf(draining); }
+    }
+    private volatile SettingsFeedback settingsFeedback = new SettingsFeedback(0, 0, java.util.List.of());
+    public SettingsFeedback settingsFeedback() { return settingsFeedback; }
+    public long lastSettingsRevision() { return settingsRevision; }
+    public int lastSettingsLegacyReconnects() { return settingsLegacyReconnects; }
+    public java.util.List<String> settingsDrainingStatus() {
+        var status = new java.util.ArrayList<String>();
+        if (!generationEnabledForSession() && generationService != null && generationService.getActiveCount() > 0)
+            status.add("Generation disabled; " + generationService.getActiveCount() + " admitted job(s) draining");
+
+        return java.util.List.copyOf(status);
+    }
+    private volatile boolean generationRefreshPending;
+    private final java.util.Set<java.util.concurrent.CompletableFuture<?>> settingsReceipts =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Owner dispatch with a terminal shutdown outcome, unlike fire-and-forget tasks. */
+    public <T> java.util.concurrent.CompletableFuture<T> submitSettingsControl(java.util.function.Supplier<T> action) {
+        var receipt = new java.util.concurrent.CompletableFuture<T>();
+        settingsReceipts.add(receipt);
+        receipt.whenComplete((value, failure) -> settingsReceipts.remove(receipt));
+        Runnable task = () -> {
+            if (receipt.isDone()) return;
+            if (settingsStopped) { receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped")); return; }
+            try { receipt.complete(action.get()); }
+            catch (Throwable failure) { receipt.completeExceptionally(failure); }
+        };
+        try {
+            if (settingsStopped) throw new java.util.concurrent.RejectedExecutionException("Server stopped");
+            runtimeTasks.add(task);
+            if (settingsStopped) receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped"));
+        } catch (Throwable failure) { receipt.completeExceptionally(failure); }
+        return receipt;
+    }
+
+    private void cancelSettingsReceipts() {
+        settingsStopped = true;
+        for (var receipt : settingsReceipts)
+            receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped"));
+    }
+
+    /** Called on the service owner after one immutable publication. No cross-owner waits. */
+    public java.util.concurrent.CompletableFuture<Void> reconcileSettings(
+            dev.vox.lss.common.config.ServerSettings previous,
+            dev.vox.lss.common.config.ServerSettings next, long revision) {
+        if (settingsStopped) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Server stopped"));
+        settingsRevision = revision;
+        settingsLegacyReconnects = 0;
+        var view = new dev.vox.lss.common.config.ServerConfigBase(next, true);
+        boolean generationChanged = previous.generation().enabled() != next.generation().enabled();
+        if (generationChanged) generationRefreshPending = true;
+        var generation = next.generation();
+        if (generationService != null) generationService.updatePolicy(generation.enabled(),
+                generation.concurrency().global(), generation.concurrency().perPlayer(), generation.timeoutTicks(), revision);
+        for (var state : players.values()) state.updateGenSlotCap(generation.concurrency().perPlayer());
+        bandwidthLimiter.reconfigure(view.bytesPerSecondGlobal());
+        diskReader.reapplyGateCapacity(view);
+        diskReader.updateSerializationPolicy(next.serialization().nbtTranscode(), next.serialization().selectiveNbtParse());
+        offThreadProcessor.updateSweepRadius(view.maxConfiguredLodDistanceChunks()
+                + LSSConstants.LOD_DISTANCE_BUFFER + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
+        var processor = offThreadProcessor.updateSettingsPolicy(generation.enabled(),
+                view.effectiveTimestampCacheMB() * 1024L * 1024L,
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(next.storage().missMemoTtlSeconds()), revision);
+        java.util.concurrent.CompletableFuture<Void> store = java.util.concurrent.CompletableFuture.completedFuture(null);
+        var oldStore = previous.storage().lodStore();
+        var newStore = next.storage().lodStore();
+        if (lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite
+                && (oldStore.maxSizeMib() != newStore.maxSizeMib()
+                    || oldStore.resweepIntervalSeconds() != newStore.resweepIntervalSeconds()))
+            store = sqlite.updatePolicy(view.lodStoreMaxBytes(), newStore.resweepIntervalSeconds(), revision);
+
+        // Generation/session ordering waits for its processing owner, never an unrelated
+        // long store sweep or backfill read. Overall reporting still awaits every owner.
+        var session = processor.thenCompose(ignored -> submitSettingsControl(() -> {
+            if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
+            advertisedGeneration = next.generation().enabled();
+            if (generationChanged || !previous.lod().equals(next.lod()))
+                settingsLegacyReconnects = repushSessionConfig()[1];
+            generationRefreshPending = false;
+            if (!previous.service().equals(next.service())) runServiceGateSweeps();
+            if (!previous.farPlayers().equals(next.farPlayers())) {
+                farPlayerTickCounter = Integer.MAX_VALUE - 1;
+                tickFarPlayers();
+            }
+            return (Void) null;
+        }));
+        var result = java.util.concurrent.CompletableFuture.allOf(session, store)
+                .thenCompose(ignored -> submitSettingsControl(() -> {
+                    if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
+                    settingsFeedback = new SettingsFeedback(revision, settingsLegacyReconnects, settingsDrainingStatus());
+                    return (Void) null;
+                }));
+        settingsReceipts.add(result);
+        result.whenComplete((value, failure) -> {
+            settingsReceipts.remove(result);
+            if (revision == settingsRevision && failure != null) generationRefreshPending = false;
+        });
+        return result;
+    }
+
     public void tick() {
         // shuttingDown FIRST: an overlapped tick during a runtime plugin-manager disable must
         // not apply lifecycle events into mid-teardown collaborators (registerPlayer racing
@@ -1332,14 +1433,14 @@ public class PaperRequestProcessingService {
         // disabled is safe by construction: HandshakeGate never invokes the registrar when
         // disabled, and removePlayer of an unregistered UUID is a no-op.
         drainLifecycleMailbox();
-        // Runtime /lsslod set tasks (v0.11.0 stage C): drained AFTER the lifecycle
+        // Settings control tasks are drained AFTER the lifecycle
         // mailbox, deliberately — the SessionConfig re-push enumerates dialects, and a
         // registered-but-flip-pending player must have its dialect flip APPLIED before
         // enumeration (the SET review's ordering MAJOR: an off-pump enumeration could
         // read the untracked-defaults-to-CURRENT dialect and push a protocol-20 config
         // at a legacy client, killing its session until rejoin).
         drainRuntimeTasks();
-        if (!this.config.enabled)
+        if (!this.config.enabled())
             return;
 
         this.diag.reset(this.offThreadProcessor.getDiagnostics());
@@ -1463,7 +1564,7 @@ public class PaperRequestProcessingService {
      *  pure data, no entity access). The HANDLER-checked kill switch (plan §5). */
     public void handleRegionSummaryRequest(UUID player, byte[] body) throws Exception {
         if (this.regionSummaries == null) return;
-        if (!this.config.enabled || !this.config.enableRegionSummaries) return;
+        if (!this.config.enabled() || !this.config.enableRegionSummaries()) return;
         // A malformed frame throws out into dispatchPluginMessage's hostile-frame
         // containment (throttled) — the Fabric twin contains at its own receiver.
         var request = dev.vox.lss.common.region.RegionSummaryWire.decodeRequest(body);
@@ -1576,7 +1677,7 @@ public class PaperRequestProcessingService {
                 int prevDist = PaperWorldLod.distanceForDimKey(this.config, this.server, prevDim);
                 if (newDist != prevDist && this.dialects.isCurrent(changed.getUUID())) {
                     try {
-                        this.sessionConfigSender.send(changed, this.config, this.config.enabled);
+                        this.sessionConfigSender.send(changed, this.config, this.config.enabled());
                     } catch (Exception e) {
                         LSSLogger.error("Session-config dimension-change push failed for "
                                 + changed.getName().getString(), e);
@@ -1623,7 +1724,7 @@ public class PaperRequestProcessingService {
             List<TickSnapshot.GenerationReadyData> generationReady) {
         var snapshot = new TickSnapshot(
                 lifecycle.playerDimensions, lifecycle.loadedChunkProbes,
-                this.config.sendQueueLimitPerPlayer, false);
+                this.config.sendQueueLimitPerPlayer(), false);
         this.offThreadProcessor.postSnapshot(snapshot, generationReady);
     }
 
@@ -1634,7 +1735,7 @@ public class PaperRequestProcessingService {
         // The ping backstop's observe pass (Mechanism B) — the Fabric twin's comment:
         // observed on the pump, applied to the flush allocation (m12), reset when the
         // kill switch is off so a live flip cannot leave a stale cut.
-        if (this.config.enablePingBackstop) {
+        if (this.config.enablePingBackstop()) {
             long now = System.currentTimeMillis();
             for (var state : this.players.values()) {
                 int ping = -1;
@@ -1657,14 +1758,14 @@ public class PaperRequestProcessingService {
             long[] dropped = state.flushSendQueue(
                     state.getPingBackstop().apply(perPlayerCap), this.bandwidthLimiter, this.diag,
                     data -> this.columnPayloadSender.send(state, data),
-                    this.config.lodYieldsToVanillaTransport,
+                    this.config.lodYieldsToVanillaTransport(),
                     // Prune gated on the yield (review B-2) — the Fabric twin's comment.
-                    this.config.lodYieldsToVanillaTransport
+                    this.config.lodYieldsToVanillaTransport()
                             ? this.config.maxConfiguredLodDistanceChunks()
                                     + LSSConstants.LOD_DISTANCE_BUFFER
                                     + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS
                             : 0,
-                    this.config.enableSendPacing);
+                    this.config.enableSendPacing());
             if (dropped.length > 0) {
                 // A send failure or the relevance prune discarded resolved-but-undelivered
                 // columns: clear their done-bits so the client's re-requests re-resolve
@@ -1921,6 +2022,7 @@ public class PaperRequestProcessingService {
     }
 
     private void drainSendActions() {
+        if (generationRefreshPending) return;
         this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
             // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
             // prune them from the synthetic want-set. The frame itself is wire-identical.
@@ -1981,7 +2083,8 @@ public class PaperRequestProcessingService {
             // outcome this tick and the slot is held until the NEXT tick's dimension-change
             // cycle sweeps the whole state. Bounded to one tick, no leak.
             if (!dimension.equals(req.dimension())) continue;
-            boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
+            boolean accepted = req.policyRevision() == this.settingsRevision
+                    && !player.isRemoved() && this.generationService.submitGeneration(
                     req.playerUuid(), req.registration(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
@@ -2012,17 +2115,17 @@ public class PaperRequestProcessingService {
     private void tickFarPlayers() {
         if (this.farPlayerService.subscriberCount() == 0) return;
         try {
-            if (!this.farPlayerService.applyMode(this.config.farPlayers, this::sendFarPlayerFrame)) return;
-            if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks) return;
+            if (!this.farPlayerService.applyMode(this.config.farPlayers(), this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks()) return;
             this.farPlayerTickCounter = 0;
             var online = buildFarPlayerSnapshots(this.server.getPlayerList().getPlayers());
             this.farPlayerService.tick(System.currentTimeMillis(), online,
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
-                            this.config.farPlayers, this.config.farPlayersMaxDistanceBlocks,
-                            this.config.farPlayersMinDistanceBlocks,
-                            this.config.farPlayersSendSpectators,
-                            this.config.farPlayersExclude,
-                            this.config.farPlayersUpdateIntervalTicks),
+                            this.config.farPlayers(), this.config.farPlayersMaxDistanceBlocks(),
+                            this.config.farPlayersMinDistanceBlocks(),
+                            this.config.farPlayersSendSpectators(),
+                            this.config.farPlayersExclude(),
+                            this.config.farPlayersUpdateIntervalTicks()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): a snapshot/encode bug must degrade far players,
@@ -2108,7 +2211,7 @@ public class PaperRequestProcessingService {
     }
 
     public String getTickDiagnostics() {
-        return this.diag.format(this.config.sendQueueLimitPerPlayer);
+        return this.diag.format(this.config.sendQueueLimitPerPlayer());
     }
 
     public TickDiagnostics getTickDiag() {
@@ -2132,11 +2235,13 @@ public class PaperRequestProcessingService {
     }
 
     public void shutdown() {
+        cancelSettingsReceipts();
         // Normal stop and /reload are serialized with the pump (region shutdown thread /
         // global tick thread), but a runtime plugin manager can disable us from a player
         // region thread — this flag shrinks the tick-vs-shutdown overlap to at most the one
         // in-flight tick (runtime disables are documented best-effort on Folia).
         this.shuttingDown = true;
+        this.runtimeTasks.clear();
         this.serviceGateState.clear();
         try {
             // Own containment, FIRST (P2 review I-m2): no ordering dependency on the

@@ -209,8 +209,9 @@ public class SerializerParityGameTests {
         var chunkPos = new ChunkPos(cx, cz);
         var chunkSource = level.getChunkSource();
 
-        var maskedConfig = new LSSServerConfig();
-        maskedConfig.xrayObfuscation = "on";
+        var maskedValues = new java.util.LinkedHashMap<>(new LSSServerConfig().snapshot().values());
+        maskedValues.put("privacy.xray.mode", "on");
+        var maskedConfig = new LSSServerConfig(dev.vox.lss.common.config.ServerSettings.fromValues(maskedValues));
 
         // Ore cluster below the default cutoff (superflat surface sits at -60): diamond +
         // a lit redstone state, so the all-states rule is on the wire too.
@@ -793,7 +794,7 @@ public class SerializerParityGameTests {
                     Long2ObjectMap<LoadedColumnData> probes = new Long2ObjectOpenHashMap<>();
                     probes.put(packed, built);
                     proc.postSnapshot(new TickSnapshot(Map.of(uuid, dim), Map.of(uuid, probes),
-                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer, false), List.of());
+                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer(), false), List.of());
                     step.set(1);
                     helper.assertTrue(false, "first serve posted, awaiting flush");
                 }
@@ -824,7 +825,7 @@ public class SerializerParityGameTests {
                     Long2ObjectMap<LoadedColumnData> probes = new Long2ObjectOpenHashMap<>();
                     probes.put(packed, emptied);
                     proc.postSnapshot(new TickSnapshot(Map.of(uuid, dim), Map.of(uuid, probes),
-                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer, false), List.of());
+                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer(), false), List.of());
                     step.set(2);
                     helper.assertTrue(false, "all-air re-serve posted, awaiting the answer");
                 }

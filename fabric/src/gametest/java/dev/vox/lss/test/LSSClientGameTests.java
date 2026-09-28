@@ -5,7 +5,6 @@ import dev.vox.lss.api.VoxelColumnConsumer;
 import dev.vox.lss.api.VoxelColumnData;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.config.LSSClientConfig;
-import dev.vox.lss.config.menu.SaveHook;
 import dev.vox.lss.networking.client.LSSClientNetworking;
 import dev.vox.lss.networking.server.LSSServerNetworking;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -96,9 +95,9 @@ public class LSSClientGameTests implements FabricClientGameTest {
             }
 
             // C1: Session config LOD distance propagation
-            if (LSSClientNetworking.getServerLodDistance() != LSSServerConfig.CONFIG.lodDistanceChunks) {
+            if (LSSClientNetworking.getServerLodDistance() != LSSServerConfig.CONFIG.lodDistanceChunks()) {
                 throw new AssertionError("Server LOD distance should match config: expected "
-                        + LSSServerConfig.CONFIG.lodDistanceChunks + ", got " + LSSClientNetworking.getServerLodDistance());
+                        + LSSServerConfig.CONFIG.lodDistanceChunks() + ", got " + LSSClientNetworking.getServerLodDistance());
             }
 
             // C2: Effective LOD distance calculation
@@ -426,12 +425,12 @@ public class LSSClientGameTests implements FabricClientGameTest {
     /**
      * LAN-publish activation path. The gametest JVM forces {@code lss.test.integratedServer};
      * clear it so this world exercises the real singleplayer gating, and restore it afterwards
-     * for anything else that runs in this JVM. Also exercises actual SaveHook Apply:
+     * for anything else that runs in this JVM. Also exercises explicit YAML reload:
      * publish while OFF, ON cold activation, then OFF/ON with one uncommitted receipt.
      */
     private static void runLanPublishActivationTest(ClientGameTestContext context, RecordingColumnConsumer recorder) {
         String override = System.clearProperty("lss.test.integratedServer");
-        boolean previousReceive = context.computeOnClient(client -> LSSClientConfig.CONFIG.receiveServerLods);
+        boolean previousReceive = context.computeOnClient(client -> LSSClientConfig.CONFIG.receiveServerLods());
         // C10 deliberately future-stamps this coordinate; both integrated worlds can
         // share the local cache bucket, so it cannot establish an unheld replay premise.
         var fallbackTarget = recorder.snapshot().stream()
@@ -454,7 +453,7 @@ public class LSSClientGameTests implements FabricClientGameTest {
             }
 
             // Retain the private-singleplayer ON controls above, then exercise the host
-            // service starting while reception is OFF. Apply uses the same hook as Sodium.
+            // service starting while reception is OFF. Activation uses the client reload publisher.
             context.runOnClient(client -> deferred.setViewBoundary(client.player.getBlockX() >> 4,
                     client.player.getBlockZ() >> 4, client.options.renderDistance().get() + 2));
             applyReception(context, false);
@@ -488,9 +487,9 @@ public class LSSClientGameTests implements FabricClientGameTest {
             if (LSSClientNetworking.getRequestManager() == null) {
                 throw new AssertionError("Host handshake must create the LodRequestManager");
             }
-            if (LSSClientNetworking.getServerLodDistance() != LSSServerConfig.CONFIG.lodDistanceChunks) {
+            if (LSSClientNetworking.getServerLodDistance() != LSSServerConfig.CONFIG.lodDistanceChunks()) {
                 throw new AssertionError("LAN session config must carry the configured LOD distance: expected "
-                        + LSSServerConfig.CONFIG.lodDistanceChunks + ", got "
+                        + LSSServerConfig.CONFIG.lodDistanceChunks() + ", got "
                         + LSSClientNetworking.getServerLodDistance());
             }
             // Registration happens server-side before the SessionConfig the client just applied.
@@ -513,7 +512,7 @@ public class LSSClientGameTests implements FabricClientGameTest {
             }
             applyReception(context, false);
             if (context.computeOnClient(client -> LSSClientNetworking.getRequestManager()) != null) {
-                throw new AssertionError("SaveHook OFF must retire the acquisition manager immediately");
+                throw new AssertionError("Reload OFF must retire the acquisition manager immediately");
             }
             if (!LSSClientNetworking.isServerEnabled()) {
                 throw new AssertionError("local OFF must preserve the negotiated server session");
@@ -559,10 +558,27 @@ public class LSSClientGameTests implements FabricClientGameTest {
     }
 
     private static void applyReception(ClientGameTestContext context, boolean enabled) {
+        var completed = new java.util.concurrent.atomic.AtomicBoolean();
+        var failure = new java.util.concurrent.atomic.AtomicReference<String>();
         context.runOnClient(client -> {
-            LSSClientConfig.CONFIG.receiveServerLods = enabled;
-            SaveHook.SAVE.run(LSSClientConfig.CONFIG);
+            var config = LSSClientConfig.CONFIG;
+            try {
+                var document = config.store().read();
+                config.store().saveDraft(document.hash(), java.util.Map.of("lod.receive", enabled));
+            } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+            config.reload(message -> {
+                if (message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents text) {
+                    if (text.getKey().equals("lss.settings.reload_failed") || text.getKey().equals("lss.settings.reload_busy")) {
+                        failure.set(message.getString());
+                        completed.set(true);
+                    }
+                    if (text.getKey().equals("lss.settings.reloaded") || text.getKey().equals("lss.settings.reload_unchanged"))
+                        completed.set(true);
+                }
+            });
         });
+        waitForOrFail(context, completed::get, 600, "waiting for explicit client settings reload");
+        if (failure.get() != null) throw new AssertionError(failure.get());
     }
 
     private static void waitForToggleDelivery(ClientGameTestContext context,

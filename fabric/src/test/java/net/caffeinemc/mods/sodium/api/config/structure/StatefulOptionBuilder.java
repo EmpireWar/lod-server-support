@@ -14,6 +14,8 @@ public interface StatefulOptionBuilder<V> extends OptionBuilder {
     @Override
     StatefulOptionBuilder<V> setTooltip(Component tooltip);
 
+    StatefulOptionBuilder<V> setTooltip(java.util.function.Function<V, Component> tooltip);
+
     StatefulOptionBuilder<V> setStorageHandler(StorageEventHandler handler);
 
     StatefulOptionBuilder<V> setImpact(OptionImpact impact);

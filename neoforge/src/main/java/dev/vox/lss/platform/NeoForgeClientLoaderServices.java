@@ -43,4 +43,17 @@ public final class NeoForgeClientLoaderServices extends NeoForgeLoaderServices {
             // no-op (the pre-check makes this rare).
         }
     }
+    @Override
+    public EnqueueOutcome enqueueToServer(CustomPacketPayload payload) {
+        var connection = Minecraft.getInstance().getConnection();
+        if (connection == null || !connection.hasChannel(payload.type())) return EnqueueOutcome.NO_CHANNEL;
+        try {
+            ClientPacketDistributor.sendToServer(payload);
+            return EnqueueOutcome.SENT;
+        } catch (UnsupportedOperationException failure) {
+            return EnqueueOutcome.NO_CHANNEL;
+        } catch (RuntimeException failure) {
+            return EnqueueOutcome.FAILED;
+        }
+    }
 }

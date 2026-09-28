@@ -1,7 +1,8 @@
 package dev.vox.lss.config.menu;
 
 import dev.vox.lss.common.LSSConstants;
-import dev.vox.lss.config.LSSClientConfig;
+import dev.vox.lss.common.config.SettingsStore;
+import dev.vox.lss.common.config.SettingsSchema;
 import net.caffeinemc.mods.sodium.client.gui.options.Option;
 import net.caffeinemc.mods.sodium.client.gui.options.OptionImpact;
 import net.caffeinemc.mods.sodium.client.gui.options.OptionImpl;
@@ -40,8 +41,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * empty page list.
  */
 class LegacySodiumPageTest {
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp;
+    private ClientSettingsEditSession draft() {
+        try {
+            var store = new SettingsStore<>(temp, "lss", SettingsSchema.client());
+            store.initialize();
+            return new ClientSettingsEditSession(store, SettingsSchema.client()::defaults);
+        } catch (java.io.IOException failure) { throw new AssertionError(failure); }
+    }
 
-    private static final MenuContext PLAIN = new MenuContext(true, false, false, true);
+
+    private static final MenuContext PLAIN = new MenuContext(true, false, true);
 
     private LegacySodiumPage.Handles handles;
 
@@ -76,7 +86,7 @@ class LegacySodiumPageTest {
                 LegacySodiumPage.method(OptionImpl.Builder.class, "setTooltip", 1, false,
                         net.minecraft.network.chat.Component.class).getParameterTypes()[0]);
         // and the whole build survives the decoy (a bound Function overload would throw)
-        assertEquals(2, LegacySodiumPage.buildWith(handles, new LSSClientConfig(), PLAIN, "LSS", h -> { }).size());
+        assertEquals(2, LegacySodiumPage.buildWith(handles, draft(), PLAIN, "LSS", h -> { }).size());
     }
 
     static class StaticEnabledBuilder {
@@ -94,8 +104,8 @@ class LegacySodiumPageTest {
 
     @Test
     void hiddenRendererHidesTheRendererOnlyFarPlayerOptions() throws Throwable {
-        List<Object> pages = LegacySodiumPage.buildWith(handles, new LSSClientConfig(),
-                new MenuContext(true, false, false, false), "LSS", h -> { });
+        List<Object> pages = LegacySodiumPage.buildWith(handles, draft(),
+                new MenuContext(true, false, false), "LSS", h -> { });
         OptionPage far = (OptionPage) pages.get(1);
         assertEquals(List.of("lss.config.far_players_share_self"),
                 far.getOptions().stream().map(o -> o.getName().getString()).toList(),
@@ -110,7 +120,7 @@ class LegacySodiumPageTest {
 
     @Test
     void pagesMirrorTheCatalogWithBrandedTitles() throws Throwable {
-        List<Object> pages = LegacySodiumPage.buildWith(handles, new LSSClientConfig(), PLAIN, "LSS", h -> { });
+        List<Object> pages = LegacySodiumPage.buildWith(handles, draft(), PLAIN, "LSS", h -> { });
         assertEquals(ClientOptionCatalog.pages().size(), pages.size());
         OptionPage general = (OptionPage) pages.get(0);
         OptionPage far = (OptionPage) pages.get(1);
@@ -119,26 +129,15 @@ class LegacySodiumPageTest {
         assertEquals(4, general.getGroups().size());
         assertEquals(List.of(1, 1, 2, 1), general.getGroups().stream().map(g -> g.getOptions().size()).toList());
         assertEquals(1, far.getGroups().size());
-        assertEquals(5, far.getGroups().get(0).getOptions().size(), "the SeeU override is hidden without SeeU");
+        assertEquals(5, far.getGroups().get(0).getOptions().size(), "five explicit far-player controls");
         // Names in catalog order.
         var expected = ClientOptionCatalog.pages().get(0).options().stream().map(OptionSpec::nameKey).toList();
         assertEquals(expected, general.getOptions().stream().map(o -> o.getName().getString()).toList());
     }
 
     @Test
-    void seeuRevealsTheOverrideAndFlipsTheTooltip() throws Throwable {
-        List<Object> pages = LegacySodiumPage.buildWith(handles, new LSSClientConfig(),
-                new MenuContext(true, false, true, true), "VSS", h -> { });
-        OptionPage far = (OptionPage) pages.get(1);
-        assertEquals(6, far.getGroups().get(0).getOptions().size());
-        assertEquals("lss.config.far_players_enabled.tooltip.seeu",
-                far.getOptions().get(0).getTooltip().getString());
-        assertEquals("VSS", ((OptionPage) pages.get(0)).getName().getString());
-    }
-
-    @Test
     void controlsMatchTheCatalogKinds() throws Throwable {
-        List<Object> pages = LegacySodiumPage.buildWith(handles, new LSSClientConfig(), PLAIN, "LSS", h -> { });
+        List<Object> pages = LegacySodiumPage.buildWith(handles, draft(), PLAIN, "LSS", h -> { });
         OptionPage general = (OptionPage) pages.get(0);
         Option<?> receive = general.getOptions().get(0);
         assertInstanceOf(TickBoxControl.class, receive.getControl());
@@ -164,7 +163,7 @@ class LegacySodiumPageTest {
 
     @Test
     void theDependencySupplierFollowsTheStagedValue() throws Throwable {
-        List<Object> pages = LegacySodiumPage.buildWith(handles, new LSSClientConfig(), PLAIN, "LSS", h -> { });
+        List<Object> pages = LegacySodiumPage.buildWith(handles, draft(), PLAIN, "LSS", h -> { });
         OptionPage general = (OptionPage) pages.get(0);
         @SuppressWarnings("unchecked") Option<Boolean> receive = (Option<Boolean>) general.getOptions().get(0);
         Option<?> distance = general.getOptions().get(1);
@@ -177,7 +176,7 @@ class LegacySodiumPageTest {
 
     @Test
     void theScreensApplyContractSavesEachStorageOnce() throws Throwable {
-        var cfg = new LSSClientConfig();
+        var cfg = draft();
         List<SaveHook> saves = new ArrayList<>();
         List<Object> pages = LegacySodiumPage.buildWith(handles, cfg, PLAIN, "LSS", saves::add);
         OptionPage general = (OptionPage) pages.get(0);
@@ -203,19 +202,46 @@ class LegacySodiumPageTest {
                 }
             }
         }
-        assertEquals(2, dirty.size(), "one plain storage + one push storage — the proxies must hash by identity");
+        assertEquals(1, dirty.size(), "one storage transaction across both pages");
         dirty.forEach(OptionStorage::save);
 
-        assertFalse(cfg.receiveServerLods);
-        assertEquals(10, cfg.lodColumnsPerSecondLimit, "slider index 1 → 10 col/s");
-        assertFalse(cfg.farPlayersShareSelf);
-        assertFalse(cfg.farPlayersNameTags);
-        assertEquals(2, saves.size());
+        assertFalse(cfg.bool("lod.receive"));
+        assertEquals(10, cfg.integer("lod.download.max_columns_per_second"), "slider index 1 → 10 col/s");
+        assertFalse(cfg.bool("far_players.sharing.enabled"));
+        assertFalse(cfg.bool("far_players.name_tags"));
+        assertEquals(1, saves.size());
         assertTrue(saves.contains(SaveHook.SAVE));
-        assertTrue(saves.contains(SaveHook.SAVE_AND_PUSH_FAR_PLAYER_PREFS));
         assertFalse(receive.hasChanged());
         assertEquals(cfg, dirty.iterator().next().getData());
         assertTrue(dirty.iterator().next().toString().startsWith("LssOptionStorage["));
+    }
+
+    @Test
+    void cleanedLegacyOptionsRetainFailedDraftAndRetryWithoutReentry() throws Throwable {
+        var fail = new java.util.concurrent.atomic.AtomicBoolean();
+        var schema = SettingsSchema.client();
+        var store = new SettingsStore<>(temp, "lss", schema, line -> {},
+                (temporary, destination) -> { if (fail.get()) throw new java.io.IOException("disk full"); });
+        var live = new dev.vox.lss.common.config.SettingsHandle<>(store);
+        var cfg = new ClientSettingsEditSession(store, () -> live.state().effective());
+        var pages = LegacySodiumPage.buildWith(handles, cfg, PLAIN, "LSS", hook -> hook.run(cfg));
+        @SuppressWarnings("unchecked") var share = (Option<Boolean>) ((OptionPage) pages.get(1)).getOptions().get(1);
+        share.setValue(false);
+        share.applyChanges();
+        assertFalse(share.hasChanged(), "Sodium marks clean before saving");
+        fail.set(true);
+        share.getStorage().save();
+        assertEquals(ClientSettingsEditSession.Outcome.FAILED, cfg.outcome());
+        assertTrue(cfg.hasRetainedEdits());
+        cfg.open(new Object());
+        var reopened = LegacySodiumPage.buildWith(handles, cfg, PLAIN, "LSS", hook -> hook.run(cfg));
+        assertEquals(false, ((OptionPage) reopened.get(1)).getOptions().get(1).getValue());
+        fail.set(false);
+        assertTrue(cfg.save());
+        assertFalse(store.read().configured().farPlayers().sharing().enabled());
+        assertTrue(live.state().effective().farPlayers().sharing().enabled());
+        live.commit(live.prepareReload());
+        assertFalse(live.state().effective().farPlayers().sharing().enabled());
     }
 
     @Test

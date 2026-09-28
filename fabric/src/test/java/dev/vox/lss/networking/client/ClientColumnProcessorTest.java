@@ -662,12 +662,12 @@ class ClientColumnProcessorTest {
     void receiveServerLodsDisableFlipReportsClearedBacklog() {
         processor.offer(new VoxelColumnS2CPayload(1, 2, dim, 1L, sectionWire(1, 1)), false);
         processor.offer(new VoxelColumnS2CPayload(3, 4, dim, 1L, sectionWire(1, 1)), false);
-        boolean prior = LSSClientConfig.CONFIG.receiveServerLods;
-        LSSClientConfig.CONFIG.receiveServerLods = false;
+        boolean prior = LSSClientConfig.CONFIG.receiveServerLods();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.receive", false);
         try {
             processor.scheduleProcessing(true); // serverEnabled stays true — the config flip clears
         } finally {
-            LSSClientConfig.CONFIG.receiveServerLods = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.receive", prior);
         }
 
         assertEquals(0, processor.getQueuedCount());
@@ -681,12 +681,12 @@ class ClientColumnProcessorTest {
         assertFalse(LSSApi.hasVoxelConsumers(),
                 "precondition: consumer-registering tests must deregister in finally");
         processor.offer(new VoxelColumnS2CPayload(8, 9, dim, 1L, sectionWire(1, 1)), false);
-        boolean prior = LSSClientConfig.CONFIG.receiveServerLods;
-        LSSClientConfig.CONFIG.receiveServerLods = true;
+        boolean prior = LSSClientConfig.CONFIG.receiveServerLods();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.receive", true);
         try {
             processor.scheduleProcessing(true); // no consumer registered — the dereg clear path
         } finally {
-            LSSClientConfig.CONFIG.receiveServerLods = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.receive", prior);
         }
 
         assertEquals(0, processor.getQueuedCount());
@@ -697,15 +697,15 @@ class ClientColumnProcessorTest {
     @Test
     void levelNullRaceReportsClearedBacklog() {
         VoxelColumnConsumer consumer = (level, d, cx, cz, data) -> {};
-        boolean prior = LSSClientConfig.CONFIG.receiveServerLods;
-        LSSClientConfig.CONFIG.receiveServerLods = true;
+        boolean prior = LSSClientConfig.CONFIG.receiveServerLods();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.receive", true);
         LSSApi.registerColumnConsumer(consumer);
         try {
             processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 1L, sectionWire(1, 1)), false);
             processor.scheduleProcessing(true); // levelSupplier yields null: the disconnect race window
         } finally {
             LSSApi.removeColumnConsumer(consumer);
-            LSSClientConfig.CONFIG.receiveServerLods = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.receive", prior);
         }
 
         assertEquals(0, processor.getQueuedCount());

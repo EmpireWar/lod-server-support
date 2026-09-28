@@ -6,11 +6,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Read-only observation; production reload remains the only lifecycle publisher. */
-@Mixin(targets = "dev.vox.lss.networking.client.ClientNetGlue", remap = false)
+/** Observe reload adoption only; ordinary tick reconciliation can precede async publication. */
+@Mixin(targets = "dev.vox.lss.config.LSSClientConfig", remap = false)
 public abstract class SettingsReloadMixin {
-    @Inject(method = "reconcileClientConfig()V", at = @At("HEAD"), require = 1, remap = false)
-    private static void before(CallbackInfo ci) { Probe.beforeSettingsReconcile(); }
-    @Inject(method = "reconcileClientConfig()V", at = @At("RETURN"), require = 1, remap = false)
-    private static void after(CallbackInfo ci) { Probe.afterSettingsReconcile(); }
+    @Inject(method = "reconcile()V", at = @At("HEAD"), require = 1, remap = false)
+    private void before(CallbackInfo ci) { Probe.beforeSettingsReconcile(); }
+    @Inject(method = "reconcile()V", at = @At("RETURN"), require = 1, remap = false)
+    private void after(CallbackInfo ci) { Probe.afterSettingsReconcile(); }
 }

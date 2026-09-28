@@ -44,6 +44,14 @@ class ReloadWitness(unittest.TestCase):
         for phase,key,value in [('backfill_low_end','backfill_status','running: 1 deposited'),('backfill_low_end','backfill_status','running: 15 deposited'),('backfill_high','backfill_worker',9),('backfill_high_end','backfill_status','running: 4 deposited'),('backfill_stopped','backfill_running',True),('backfill_quiet','backfill_status','running: 21 deposited'),('backfill_resumed','backfill_worker',8)]:
             with self.subTest(phase=phase,key=key):
                 rows,phases=self.evidence();rows[phases[phase]][key]=value;self.assertTrue(check(rows,phases,'fabric'))
+    def test_admission_during_disable_drain_is_rejected(self):
+        rows,phases=self.evidence()
+        for phase in ('drained','quiet'):
+            rows[phases[phase]].update(submitted=3,completed=3)
+        rows[phases['resumed']].update(submitted=4,completed=4)
+        self.assertTrue(check(rows,phases,'fabric'))
+        rows,phases=self.evidence();rows[phases['quiet']]['revision']+=1
+        self.assertTrue(check(rows,phases,'fabric'))
     def test_reused_phases_and_unchanged_pacing(self):
         rows,phases=self.evidence();phases['restart_retained']=phases['restart_pending'];self.assertTrue(check(rows,phases,'fabric'))
         rows,phases=self.evidence();rows[phases['backfill_high_end']]['backfill_status']='running: 7 deposited';self.assertTrue(check(rows,phases,'fabric'))

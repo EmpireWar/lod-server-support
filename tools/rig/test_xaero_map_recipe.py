@@ -2,6 +2,7 @@
 import tempfile,unittest,json
 from pathlib import Path
 from prepare_xaero_map import build,PROFILES
+from rig_settings import values
 
 class XaeroMapRecipeTest(unittest.TestCase):
  def test_all_four_profiles_pin_real_config_keys_and_owned_routes(self):
@@ -18,9 +19,9 @@ class XaeroMapRecipeTest(unittest.TestCase):
     wrong=dict(profile,route='native' if profile['route']=='connector' else 'connector')
     with self.assertRaises(ValueError):build(runtime,wrong,jar,jar)
     with self.assertRaises(ValueError):build(runtime,dict(profile,artifacts=[dict(sha256='0'*64)]),jar,jar)
-    config=json.loads(result['generated_files']['server/config/lss-server-config.json'])
-    self.assertIs(False,config['enableChunkGeneration']);self.assertNotIn('generationEnabled',config)
-    self.assertEqual(32,config['lodDistanceChunks']);self.assertEqual({'server','client','map-controller'},{x['id']for x in result['launches']})
+    config=values(result['generated_files']['server/config/lss-server-config.yaml'])
+    self.assertIs(False,config['generation.enabled']);self.assertNotIn('generationEnabled',config)
+    self.assertEqual(32,config['lod.distance.default_chunks']);self.assertEqual({'server','client','map-controller'},{x['id']for x in result['launches']})
     self.assertIn('-Dlss.xaeromap.stop={run}/evidence/xaero-map-stop-client',result['generated_files']['instances/lss-rig-client/instance.cfg'])
     self.assertIn('tutorialStep:none',result['generated_files']['instances/lss-rig-client/minecraft/options.txt'])
     self.assertIn('simulationDistance:5',result['generated_files']['instances/lss-rig-client/minecraft/options.txt'])

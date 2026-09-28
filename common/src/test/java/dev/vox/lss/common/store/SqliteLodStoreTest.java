@@ -130,8 +130,7 @@ class SqliteLodStoreTest {
     }
 
     private long sqlRowCount(String dim) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             int dimId;
@@ -307,8 +306,7 @@ class SqliteLodStoreTest {
 
     /** Raw statements against the closed store's DB (meta/row surgery between opens). */
     private void rawSql(String... statements) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             for (String s : statements) st.executeUpdate(s);
@@ -316,8 +314,7 @@ class SqliteLodStoreTest {
     }
 
     private String readMetaValue(String key) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             try (ResultSet rs = st.executeQuery(
@@ -328,8 +325,7 @@ class SqliteLodStoreTest {
     }
 
     private int dimId(String dim) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             try (ResultSet rs = st.executeQuery(
@@ -523,8 +519,7 @@ class SqliteLodStoreTest {
         assertNotNull(awaitHit(store, OW, p));
         store.shutdown();
 
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             st.execute("UPDATE meta SET v='" + (SqliteLodStore.SCHEMA_VERSION - 1)
@@ -606,8 +601,7 @@ class SqliteLodStoreTest {
         store.deposit(OW, p, bytes(11, 4000), 100);
         assertNotNull(awaitHit(store, OW, p));
         // Corrupt the row's chash out-of-band (a bit-rot / partial-write stand-in).
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             st.execute("UPDATE lods_1 SET chash = chash + 1 WHERE pos=" + p);
@@ -1554,8 +1548,7 @@ class SqliteLodStoreTest {
     }
 
     private long regionsRowCount(String dim, long rpos) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             int dimId;

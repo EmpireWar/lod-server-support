@@ -16,3 +16,37 @@ Start with `/lss status` and `/lss diag`. They work without an active request ma
 Use `/lss diagnostics export` for a client report or `/lsslod diagnostics export` as an operator. The command displays the local JSON path; the adjacent text file is its summary. Reports exclude addresses, player identities, world keys, seeds, aliases, personal paths and raw exception messages. No upload occurs. The full local `/lss diag` and ordinary logs can contain identifying context, so they are not equivalent to the allowlisted export. See [export behavior](status-and-presets.md).
 
 For a setting change, inspect its [apply timing](../reference/settings.md). Sodium Apply saves and automatically reloads client settings; wait for completion and reconnect if requested. Direct YAML edits require `/lss reload` for client settings or `/lsslod reload` for server settings. If saving fails, recover the retained draft and repair the target file's permissions or disk space before retrying. Server reports distinguish the owner's generation admission gate from the accepted configured value; generation changes apply through reload. Restart is required only for paths explicitly reported as pending. The schema-1 JSON field `generationConfiguredForRestart` retains its historical name for compatibility and now means the accepted configured generation flag. Do not use cache resets, store invalidation, privacy changes or anti-xray changes as an automatic response to a slow download. See [performance diagnosis](performance.md).
+
+## Private SQLite store runtime
+
+`/lsslod store status` reports `driver=private/3.49.1.0` when the disk store is
+active. SQLite is bundled privately; LSS does not require a separate SQLite mod.
+Other mods can still conflict with each other independently of LSS.
+
+The driver archive and native libraries are extracted under
+`<working directory>/.lss/sqlite-runtime/`, shared across worlds for that install.
+This cache is outside the LOD-store size cap. Driver archives are named by version
+and SHA-256 and are never overwritten while running; Windows may keep them locked
+until JVM exit. Reopening a world reuses the same engine. Clean obsolete cache
+files only with the game/server JVM stopped. Do not remove `.lss-store.lock` while
+a process may still own that store.
+
+If initialization fails, terrain serving continues without disk-store acceleration.
+The warning includes the underlying failure; preserve the database and inspect
+permissions, available space, extraction paths and filesystem WAL support. A
+file-backed WAL probe runs before the real database is opened. I/O, busy/locked,
+permission and native-load failures do not authorize rebuilding an existing store.
+Only confirmed SQLite corruption or the existing incompatible-store metadata
+policy can recreate it.
+
+An uncertain native close retains exclusive ownership until JVM exit, including
+if the plugin is disabled. Restart the JVM before reopening that store; this rare
+failure deliberately retains its loader to protect data. A normally completed
+shutdown releases ownership immediately.
+
+Existing `org.sqlite.tmpdir`, `org.sqlite.lib.path` and `org.sqlite.lib.name`
+overrides are respected. A foreign native version is warned about; overrides
+must match the bundled JDBC version. Java 25 may emit a restricted native-access
+warning; `--enable-native-access=ALL-UNNAMED` grants the access used by the private
+loader. Linux and Windows native execution are validated; bundled macOS/ARM
+resources are checked for identity but do not imply live coverage on those systems.

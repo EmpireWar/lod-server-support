@@ -30,7 +30,7 @@ public final class SettingsStore<T> {
     public SettingsStore(Path directory,String prefix,SettingsSchema<T> schema,Consumer<String> report) { this(directory,prefix,schema,report,(t,d)->{}); }
     public SettingsStore(Path directory,String prefix,SettingsSchema<T> schema,Consumer<String> report,Boundary boundary) {
         if(!Set.of("lss","vss").contains(prefix))throw new IllegalArgumentException("Brand prefix must be lss or vss");
-        this.directory=directory.toAbsolutePath().normalize();this.prefix=prefix;this.schema=schema;this.codec=new YamlSettingsCodec<>(schema);
+        this.directory=directory.toAbsolutePath().normalize();this.prefix=prefix;this.schema=schema;this.codec=new YamlSettingsCodec<>(schema,prefix);
         this.report=report;this.boundary=boundary;this.lock=DIRECTORY_LOCKS.computeIfAbsent(this.directory,p->new Object());
     }
     /** Explicit file helper for staging/fixtures; never searches unrelated config directories. */
@@ -45,13 +45,19 @@ public final class SettingsStore<T> {
     public Path path(){synchronized(lock){return selected==null?candidate(prefix,"yaml"):selected;}}
     public YamlSettingsCodec.Document<T> initialize()throws IOException {
         synchronized(lock) {
-            if(selected!=null&&Files.exists(selected))return read();
+            if(selected!=null&&Files.exists(selected))return reportInitial(read());
             if(selected==null)select();
-            if(Files.exists(selected))return read();
+            if(Files.exists(selected))return reportInitial(read());
             Files.createDirectories(directory);
             if(legacySource!=null) migrate();else createFresh();
-            return read();
+            return reportInitial(read());
         }
+    }
+    private YamlSettingsCodec.Document<T> reportInitial(YamlSettingsCodec.Document<T> document) {
+        ReloadFeedback.normalizationLines(document.normalizations()).forEach(report);
+        if(!document.normalizations().isEmpty())report.accept("YAML was left unchanged.");
+        if(!document.inactivePaths().isEmpty())report.accept("Inactive on this platform: "+String.join(", ",document.inactivePaths()));
+        return document;
     }
     public YamlSettingsCodec.Document<T> read()throws IOException {
         synchronized(lock) {
@@ -137,6 +143,7 @@ public final class SettingsStore<T> {
             if(!Arrays.equals(original,readBounded(legacySource)))throw new SettingsException("Legacy JSON changed during migration; retry at next startup");
             checkNoYaml();installNew(temp,selected);forceDirectory();
             report.accept("Migrated "+legacySource+" to "+selected+"; backup "+backup+"; ignored keys="+result.ignoredKeys()+"; normalized paths="+result.normalizations().stream().map(SettingsSchema.Normalization::path).toList());
+            ReloadFeedback.normalizationLines(result.normalizations()).forEach(report);
             result.warnings().forEach(report);
         }finally{Files.deleteIfExists(temp);}
     }

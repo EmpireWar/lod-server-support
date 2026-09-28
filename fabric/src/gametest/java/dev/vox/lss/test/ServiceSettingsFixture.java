@@ -10,6 +10,9 @@ final class ServiceSettingsFixture extends LSSServerConfig {
     ServiceSettingsFixture() {
         super(LSSServerConfig.CONFIG.snapshot());
         value = super.snapshot();
+        // Consumer tests vary the fallback radius explicitly; fresh dimension defaults
+        // are covered separately by schema and real reload tests.
+        set("lod.distance.by_dimension", java.util.Map.of());
     }
     @Override public ServerSettings snapshot() { return value == null ? super.snapshot() : value; }
     void set(String path, Object next) {

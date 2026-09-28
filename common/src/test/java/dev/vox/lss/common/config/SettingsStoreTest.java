@@ -10,6 +10,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SettingsStoreTest {
+    @Test void freshAndMigratedVssCommentsNameItsOwnCommands() throws Exception {
+        for (boolean client : List.of(false, true)) {
+            var target = dir.resolve(client ? "client-brand" : "server-brand");
+            Files.createDirectories(target);
+            if (client) Files.writeString(target.resolve("lss-client-config.json"), "{}");
+            var store = client ? new SettingsStore<>(target, "vss", SettingsSchema.client())
+                    : new SettingsStore<>(target, "vss", SettingsSchema.server(false));
+            String text = new String(store.initialize().bytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(text.contains(client ? "/vss reload" : "/vsslod reload"));
+            assertFalse(text.contains("/lss"));
+            assertEquals(client ? "lss-client-config.yaml" : "vss-server-config.yaml", store.path().getFileName().toString());
+        }
+    }
     @TempDir Path dir;
     private SettingsStore<ServerSettings> server(String prefix){return new SettingsStore<>(dir,prefix,SettingsSchema.server(false));}
     private Path file(String name){return dir.resolve(name);}
@@ -34,7 +47,7 @@ class SettingsStoreTest {
         var s=server("lss");var document=s.initialize();assertEquals(file("vss-server-config.yaml"),s.path());
         assertArrayEquals(original,Files.readAllBytes(file("vss-server-config.json")));assertArrayEquals(original,Files.readAllBytes(file("vss-server-config.json.migrated.bak.1")));
         assertEquals("older backup",Files.readString(file("vss-server-config.json.migrated.bak")));assertEquals(700,document.normalized().lod().distance().defaultChunks());
-        assertTrue(document.normalized().lod().distance().byDimension().isEmpty());assertFalse(document.normalized().storage().lodStore().enabled());
+        assertEquals(Map.of("minecraft:overworld",700,"minecraft:the_nether",700,"minecraft:the_end",700),document.normalized().lod().distance().byDimension());assertFalse(document.normalized().storage().lodStore().enabled());
         byte[] before=document.bytes();Files.writeString(file("vss-server-config.json"),"{}");assertArrayEquals(before,server("lss").initialize().bytes());
     }
     @Test void corruptJsonNeverCreatesAuthoritativeYamlOrRewritesSource()throws Exception {

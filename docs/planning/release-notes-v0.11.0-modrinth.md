@@ -5,7 +5,7 @@ your LOD terrain — poses, equipment, name tags, smooth motion, and mounts (hor
 boats, minecarts; unknown modded mounts degrade safely). On by default with full
 privacy controls: server modes (`on`/`opt-in`/`off`), exclude list, a Paper
 permission + vanish-plugin awareness, and a client "Share My Position" opt-out.
-Credit: SeeU (MIT) as prior art. Folia remains experimental.
+Inspiration acknowledgement is retained in the README. Folia remains experimental.
 
 **Also new**: `/lss reset` (client — wipe and re-stream this server's LODs),
 `/lsslod set` runtime settings + `/lsslod help`, backfill remaining estimate,

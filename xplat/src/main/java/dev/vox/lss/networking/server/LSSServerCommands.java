@@ -195,7 +195,7 @@ public class LSSServerCommands {
         var backfill = service.getStoreBackfill();
         if (backfill == null) {
             source.sendFailure(Component.literal(
-                    "Store backfill unavailable — requires lodStore=full with a running SQLite store"));
+                    "Store backfill unavailable — requires storage.lod_store.enabled with a running SQLite store"));
             return 0;
         }
         switch (verb) {

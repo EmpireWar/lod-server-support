@@ -1697,13 +1697,13 @@
     "fabric/src/gametest/java/dev/vox/lss/test/RegionFaultGameTests.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. Independent Astra review 2026-09-28: only own-environment/batch annotation and explanatory comment changed; complete test bodies and 1200-tick deadlines are unchanged on every line. Fresh-world and reused-world isolated controls preserve assertions. Modern environment API and 1.21.1 batch flavor reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "4cf969fd7452246cbbc501d4939f7adc3313c2b0",
-        "1.21.10": "f6a90753869bc66eb29398f8cedfb801db72aea3",
-        "1.21.11": "8ff1dfe4eadbcbac2f28b21379a52fe4fc181bfe",
-        "26.1": "c84d0aeca257c846d9b10db83708740af40cf236",
-        "26.2": "e5031a00b179be71e8cba52bd3cc5126df348690"
+        "1.21.1": "97962c894bc5741e38eba5e49e8aff0bbf90874b",
+        "1.21.10": "eb9f9861ccac91ea7549263ba784961b4246b68e",
+        "1.21.11": "877fb6ade3b06c8029cb83ba9aa93bac287d7b02",
+        "26.1": "b86449c43e2362e06e9e3d45f0515fadddf0fe02",
+        "26.2": "1539976364289133ac5ca108f19e1ceaebf18885"
       },
       "surface": "line-adaptation:fabric/src/gametest/java/dev/vox/lss/test/RegionFaultGameTests.java",
       "tests": [
@@ -1810,6 +1810,22 @@
       "surface": "line-adaptation:fabric/src/gametest/java/dev/vox/lss/test/TwoPlayerGameTests.java",
       "tests": [
         "Full platform build and existing version-surface/behavior contracts"
+      ]
+    },
+    "fabric/src/gametest/resources/data/lss/test_environment/region_fault.json": {
+      "kind": "adapted",
+      "surface": "gametest-region-fault-isolation",
+      "axes": "Four modern lines declare lss:region_fault as all_of minecraft:default; 1.21.1 has no environment-resource API and selects lss_region_fault in its vanilla batch annotation.",
+      "review": "Independent Astra review: exact resource shape matches established settings_reload environment; entrypoints and all assertion bodies retained.",
+      "reviewed_blobs": {
+        "26.2": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "26.1": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "1.21.11": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "1.21.10": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "1.21.1": null
+      },
+      "tests": [
+        "RegionFaultGameTests isolated existing-world and fresh-world controls; full per-line Fabric Tier2 gates"
       ]
     },
     "fabric/src/gametest/resources/data/lss/test_environment/settings_reload.json": {

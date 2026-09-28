@@ -1,4 +1,9 @@
-# Native client UI acceptance
+# Historical native client UI acceptance
+
+This recipe and its evidence describe the pre-YAML UI. Its Sodium status entry and
+status-screen setting controls have been removed. For current candidates, use the
+[YAML settings live checklist](../operations/status-settings-live-acceptance.md);
+keep this recipe only for interpreting historical runs.
 
 The two maintained seven-assertion routes cover negotiated `ui-apply` clients and intentionally consumer-free native NeoForge `client-ui-no-consumer` clients. Both run the same raw settings/export/capture checker. The latter alone exempts negotiation and requires connected/no-consumer/protocol0/unavailable-renderer/zero-reception facts. Neither route proves map rendering, far-player drawing, lifecycle transport or performance.
 

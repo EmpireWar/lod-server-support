@@ -125,30 +125,17 @@ class SodiumLegacySurfaceResolvesTest {
     }
 
     @Test
-    void legacyStatusReturnMembersExistInActualSodium() throws IOException {
+    void legacyDraftRefreshMembersExistInActualSodium() throws IOException {
         Path jar = goldenJar("lss.sodiumLegacyGoldenJar", true);
         try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class")) {
             statusMethods(zip, "client/gui/SodiumOptionsGUI", "getAllOptions");
-            ClassNode screen = read(zip, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class", ClassReader.SKIP_DEBUG);
-            var select = screen.methods.stream().filter(method -> method.name.equals("setPage")).findFirst().orElseThrow();
-            assertTrue(select.instructions.size() > 0, "selection ordering requires method code, not a signature-only reader");
-            boolean selected = false, rebuilt = false;
-            for (var instruction : select.instructions) {
-                if (instruction instanceof org.objectweb.asm.tree.FieldInsnNode field
-                        && field.name.equals("currentPage") && field.getOpcode() == org.objectweb.asm.Opcodes.PUTFIELD) selected = true;
-                if (instruction instanceof org.objectweb.asm.tree.MethodInsnNode call && call.name.equals("rebuildGUI")) {
-                    assertTrue(selected, "clearWidgets footer decision must see the selected page");
-                    rebuilt = true;
-                }
-            }
-            assertTrue(rebuilt, "legacy selection must rebuild its widgets");
             statusMethods(zip, "client/gui/options/OptionImpl", "getValue", "hasChanged", "reset", "setValue", "getStorage", "getName");
             statusMethods(zip, "client/gui/options/storage/OptionStorage", "getData");
         }
     }
 
     @Test
-    void modernStatusReturnMembersExistInActualSodium() throws IOException {
+    void modernDraftRefreshMembersExistInActualSodium() throws IOException {
         Path jar = goldenJar("lss.sodiumModernGoldenJar",
                 "true".equals(System.getProperty("lss.sodiumModernGoldenExpected", "false")));
         try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/api/config/ConfigEntryPoint.class")) {

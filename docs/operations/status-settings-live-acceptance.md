@@ -8,10 +8,10 @@ Use the profile in the named line's worktree. Resolve blocked dependencies expli
 
 | Line / loader / UI | Profile ID | Required observation |
 | --- | --- | --- |
-| 1.21.1 Fabric modern | `mc1211-fabric-modern` | Modern Sodium status entry and existing page controls |
-| 1.21.1 Fabric legacy | `mc1211-fabric-legacy` | Legacy Sodium status entry and existing page controls |
-| 1.21.1 NeoForge modern | `mc1211-neo-modern` | Native modern page, status entry and effective settings |
-| 1.21.1 NeoForge legacy | `mc1211-neo-legacy-xaero` | Legacy page, status entry and explicit Xaero preference |
+| 1.21.1 Fabric modern | `mc1211-fabric-modern` | Modern Sodium LSS page controls |
+| 1.21.1 Fabric legacy | `mc1211-fabric-legacy` | Legacy Sodium LSS page controls |
+| 1.21.1 NeoForge modern | `mc1211-neo-modern` | Native modern page controls and effective settings |
+| 1.21.1 NeoForge legacy | `mc1211-neo-legacy-xaero` | Legacy page controls and explicit Xaero preference |
 | 1.21.10 Fabric legacy | `mc12110-fabric-legacy` | Legacy UI with this line's actual dependencies |
 | 1.21.11 Fabric modern | `mc12111-fabric-modern` | Modern UI and current line's actual dependencies |
 | 26.1 Fabric modern | `mc261-fabric-modern` | MC 26.1.2 render API and status screen |
@@ -20,6 +20,8 @@ Use the profile in the named line's worktree. Resolve blocked dependencies expli
 | 1.21.11 NeoForge modern | `mc12111-neoforge-modern` | Modern UI; renderer capability remains unavailable |
 | 26.1 NeoForge modern | `mc261-neoforge-modern` | MC 26.1.2 UI; renderer capability remains unavailable |
 | 26.2 NeoForge modern | `mc262-neoforge-modern` | Current UI; renderer capability remains unavailable |
+
+Confirm Sodium retains its normal layout with no LSS banner, status button or reserved footer space. Open the standalone status screen through `/lss status`.
 
 Also create an explicitly reviewed no-Sodium variant to exercise the standalone command. Check maintained NeoForge renderer-stub lines against their actual applicable profiles: status must say renderer unavailable, not failed. Dependency/shipping/renderer applicability comes from the [catalog](../compatibility.md), independently of the table's UI requirement. A resolved profile remains unverified for a feature until the exact candidate run proves it.
 

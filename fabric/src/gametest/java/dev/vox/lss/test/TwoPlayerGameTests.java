@@ -347,7 +347,7 @@ public class TwoPlayerGameTests {
         var mockB = placeMockServerPlayer(helper);
         int pcx = mockA.getBlockX() >> 4;
         int pcz = mockA.getBlockZ() >> 4;
-        var chunkPos = chunkAt(pcx - FANOUT_CHUNK_OFFSET, pcz + 4);
+        var chunkPos = new ChunkPos(pcx - FANOUT_CHUNK_OFFSET, pcz + 4);
         Gt.assertTrue(helper, FANOUT_CHUNK_OFFSET <= LSSServerConfig.CONFIG.lodDistanceChunks(),
                 "premise: the column must be inside the broadcaster's RAW lodDistance range");
         long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);

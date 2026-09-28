@@ -11,6 +11,18 @@ class YamlSettingsCodecTest {
     private final SettingsSchema<ServerSettings> schema=SettingsSchema.server(false);
     private final YamlSettingsCodec<ServerSettings> codec=new YamlSettingsCodec<>(schema);
     private static byte[] bytes(String s){return s.getBytes(StandardCharsets.UTF_8);}
+    @Test void numericDraftsEmitImplicitSchemaTypesAndKeepUnclampedRequestedValues() {
+        var codec=new YamlSettingsCodec<>(SettingsSchema.server(false));
+        var original=codec.parse(codec.defaults());
+        for(var value:List.of(new java.math.BigDecimal("25"),new java.math.BigDecimal("0"),new java.math.BigDecimal("1E+2"),new java.math.BigDecimal("0.001"))) {
+            byte[] edited=codec.edit(original,Map.of("network.bandwidth.global_mib_per_second",value));
+            assertFalse(new String(edited,StandardCharsets.UTF_8).contains("!!"));
+            assertEquals(value.doubleValue(),codec.parse(edited).configured().network().bandwidth().globalMibPerSecond());
+        }
+        var outside=codec.parse(codec.edit(original,Map.of("generation.concurrency.global",999)));
+        assertEquals(999,outside.configured().generation().concurrency().global());
+        assertEquals(512,outside.normalized().generation().concurrency().global());
+    }
     @Test void integerMapValuesRejectFloatingPointTokensLikeScalarIntegers() {
         var codec=new YamlSettingsCodec<>(SettingsSchema.server(true));
         for(String group:List.of("by_dimension","by_world"))for(String value:List.of("12.0","1.2e1",".inf"))

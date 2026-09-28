@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `c82ea6ac0d180402b9ce15fd7d9051361fdcebe1`
-- MC 26.1: `6e1a5755a3e79409708409bdbb7d85b831b2ec77`
-- MC 1.21.11: `e2257c4e7136baa5524fafedbdc66516786e9606`
-- MC 1.21.10: `5ab9ba7afc3e93f3b442b9e1db1a055c4d98d010`
-- MC 1.21.1: `f36cc4279142317281812fced1ceced6e71fa30d`
+- MC 26.2: `d96be18d6e41f01a9e7fe0a22bc89480396472bb`
+- MC 26.1: `efa21b40bf4dfcfabbf18f9d458675ba60c9419c`
+- MC 1.21.11: `fc9e2cee41126e3a7eb32bbfd4f4e30b9bc09e67`
+- MC 1.21.10: `37381bacbd7dce9138d814328835e8e0b5ecc91d`
+- MC 1.21.1: `3e8c5b1ee8c894ab483de6ffaca2620f93105d1e`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -40,12 +40,14 @@ Final server diagnostics followup `4b3d62fa` captures the actual generation owne
 
 Final native checker registration `c82ea6ac` declares both the YAML reload checker and driver as scenario identity roots. Its regression changes each root and a transitive evidence helper to prove identity invalidation, and excludes unselected known branches from unrelated routes. Both files remain byte-identical across all five reviewed commits; their existing identical classifications are unchanged. Fourteen focused closure tests passed.
 
+Final observer packaging followup `d96be18d` omits embedded ASM from the Fabric agent because the frozen Knot server startup classpath already supplies ASM 9.10.1. Paper/Folia retain bundled ASM for Paperclip premain. Build-time checks inspect actual ZIP entries for duplicate classes and recorder-only bootstrap contents. The standalone premain probes exercised both layouts, required exactly one ClassReader resource, parsed real bytecode and closed the evidence writer without overflow. This validates fixture packaging; native scenario acceptance remains in the progress ledger. The build script remains identical across all five lines.
+
 ## Classification and verification
 
 Added 103 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Earlier focused checks passed eight rig receive tests and seven native YAML checker tests. The final diagnostic and numeric-preflight unit evidence is recorded in the progress ledger; this refresh performs only classification/catalog and whitespace checks. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final5-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final5-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final6-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final6-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

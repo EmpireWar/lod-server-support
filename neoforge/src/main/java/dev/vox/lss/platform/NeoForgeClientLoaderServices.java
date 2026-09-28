@@ -50,7 +50,7 @@ public final class NeoForgeClientLoaderServices extends NeoForgeLoaderServices {
         var connection = Minecraft.getInstance().getConnection();
         if (connection == null || !connection.hasChannel(payload.type())) return EnqueueOutcome.NO_CHANNEL;
         try {
-            ClientPacketDistributor.sendToServer(payload);
+            PacketDistributor.sendToServer(payload);
             return EnqueueOutcome.SENT;
         } catch (UnsupportedOperationException failure) {
             return EnqueueOutcome.NO_CHANNEL;

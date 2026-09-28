@@ -117,7 +117,13 @@ public final class StoreBackfill {
     private boolean closed;
 
     /** Control intent is serialized without joining or interrupting an active read. */
-    public synchronized java.util.concurrent.CompletableFuture<Void> updatePolicy(boolean enabled, int rate, long revision) {
+    public java.util.concurrent.CompletableFuture<Void> updatePolicy(boolean enabled, int rate, long revision) {
+        return updatePolicy(enabled, rate, revision, false);
+    }
+
+    /** capIncreased is set only after the SQLite owner adopts the raised/removed cap. */
+    public synchronized java.util.concurrent.CompletableFuture<Void> updatePolicy(
+            boolean enabled, int rate, long revision, boolean capIncreased) {
         if (closed) return java.util.concurrent.CompletableFuture.failedFuture(
                 new IllegalStateException("Backfill owner stopped"));
         if (revision < desiredPolicy.revision()) return java.util.concurrent.CompletableFuture.failedFuture(
@@ -129,30 +135,36 @@ public final class StoreBackfill {
         var receipt = policyReceipt = new java.util.concurrent.CompletableFuture<Void>();
         if (!enabled) { successorRequested = false; stopRequested.set(true); }
         if (enabling) { manualPause = false; successorRequested = true; }
+        if (capIncreased && enabled && !manualPause && statusLine.startsWith("capped:"))
+            successorRequested = true;
         if (!running.get()) {
-            if (successorRequested) {
-                successorRequested = false;
-                try {
-                    if (!start()) receipt.completeExceptionally(new IllegalStateException("Backfill store is not healthy"));
-                } catch (RuntimeException | Error failure) {
-                    receipt.completeExceptionally(failure);
-                }
-            }
+            startRequestedSuccessor();
             adoptPolicyAtBoundary();
         }
         return receipt;
     }
 
-    private synchronized void adoptPolicyAtBoundary() {
-        policy = desiredPolicy;
-        if (policyReceipt != null) { policyReceipt.complete(null); policyReceipt = null; }
+    /** Keep failed start intent for an explicit retry, without an automatic restart loop. */
+    private void startRequestedSuccessor() {
+        if (!successorRequested || closed || manualPause || !desiredPolicy.enabled()) return;
+        try {
+            if (!start()) throw new IllegalStateException("Backfill store is not healthy");
+        } catch (RuntimeException | Error failure) {
+            if (policyReceipt != null) {
+                policyReceipt.completeExceptionally(failure);
+                policyReceipt = null;
+            }
+        }
     }
 
-    /** Called only after the store batcher acknowledges a raised/removed cap. */
-    public synchronized void resumeAfterCapIncrease() {
-        if (!closed && desiredPolicy.enabled() && !manualPause && statusLine.startsWith("capped:")) {
-            if (running.get()) successorRequested = true;
-            else start();
+    private synchronized void adoptPolicyAtBoundary() {
+        policy = desiredPolicy;
+        // An enabled successor is not adopted until the previous run exits and
+        // that successor actually starts. In particular, startup failure cannot
+        // turn an already acknowledged off/on transition into silent inactivity.
+        if (policyReceipt != null && !successorRequested) {
+            policyReceipt.complete(null);
+            policyReceipt = null;
         }
     }
 
@@ -222,7 +234,11 @@ public final class StoreBackfill {
         t.setDaemon(true);
         t.setPriority(Thread.MIN_PRIORITY);
         this.worker = t;
-        try { t.start(); }
+        try {
+            t.start();
+            // An explicit operator start also fulfills a retained failed-start intent.
+            successorRequested = false;
+        }
         catch (RuntimeException | Error failure) {
             running.set(false);
             statusLine = "failed: worker could not start";
@@ -507,11 +523,8 @@ public final class StoreBackfill {
             LSSLogger.info("Store backfill " + this.statusLine);
             synchronized (this) {
                 this.running.set(false);
+                startRequestedSuccessor();
                 adoptPolicyAtBoundary();
-                if (successorRequested && !closed && !manualPause && desiredPolicy.enabled()) {
-                    successorRequested = false;
-                    start();
-                }
             }
         }
     }

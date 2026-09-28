@@ -168,6 +168,10 @@ public class RequestProcessingService {
         this.server = server;
         this.serviceConfig = java.util.Objects.requireNonNull(config);
         this.advertisedGeneration = config.enableChunkGeneration();
+        this.refreshedGeneration = this.advertisedGeneration;
+        this.advertisedLod = config.snapshot().lod();
+        this.adoptedServicePolicy = config.snapshot().service();
+        this.adoptedFarPlayerPolicy = config.snapshot().farPlayers();
         // The Melius Vanish bridge (WI-7b), per (viewer, target): resolved through the
         // constructor's own `server` (non-null by construction). A departed viewer answers
         // hidden — nothing is sendable to it anyway; absent mod = visible.
@@ -603,6 +607,12 @@ public class RequestProcessingService {
         state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
+    // Per-owner progress survives failure in another owner. Publication's previous
+    // snapshot cannot describe partial adoption, especially when the next edit reverts.
+    private dev.vox.lss.common.config.ServerSettings.Lod advertisedLod;
+    private dev.vox.lss.common.config.ServerSettings.Service adoptedServicePolicy;
+    private dev.vox.lss.common.config.ServerSettings.FarPlayers adoptedFarPlayerPolicy;
+    private boolean refreshedGeneration;
     private volatile boolean advertisedGeneration;
     public boolean generationEnabledForSession() { return advertisedGeneration; }
 
@@ -657,10 +667,14 @@ public class RequestProcessingService {
             dev.vox.lss.common.config.ServerSettings previous,
             dev.vox.lss.common.config.ServerSettings next, long revision) {
         if (settingsStopped) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Server stopped"));
+        if (revision < settingsRevision) return java.util.concurrent.CompletableFuture.failedFuture(
+                new java.util.concurrent.CancellationException("Superseded settings revision"));
+        // Keep the session owner's reconnect count while retrying an operation
+        // that another owner failed; a successful prior report starts fresh.
+        if (settingsFeedback.revision() == settingsRevision) settingsLegacyReconnects = 0;
         settingsRevision = revision;
-        settingsLegacyReconnects = 0;
         var view = new dev.vox.lss.common.config.ServerConfigBase(next, false);
-        boolean generationChanged = previous.generation().enabled() != next.generation().enabled();
+        boolean generationChanged = refreshedGeneration != next.generation().enabled();
         if (generationChanged) generationRefreshPending = true;
         var generation = next.generation();
         if (generationService != null) generationService.updatePolicy(generation.enabled(),
@@ -675,21 +689,24 @@ public class RequestProcessingService {
                 view.effectiveTimestampCacheMB() * 1024L * 1024L,
                 java.util.concurrent.TimeUnit.SECONDS.toNanos(next.storage().missMemoTtlSeconds()), revision);
         java.util.concurrent.CompletableFuture<Void> store = java.util.concurrent.CompletableFuture.completedFuture(null);
-        var oldStore = previous.storage().lodStore();
         var newStore = next.storage().lodStore();
-        if (lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite
-                && (oldStore.maxSizeMib() != newStore.maxSizeMib()
-                    || oldStore.resweepIntervalSeconds() != newStore.resweepIntervalSeconds()))
-            store = sqlite.updatePolicy(view.lodStoreMaxBytes(), newStore.resweepIntervalSeconds(), revision);
+        long desiredCap = view.lodStoreMaxBytes() <= 0 ? Long.MAX_VALUE : view.lodStoreMaxBytes();
+        boolean capIncreased = false;
+        if (lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite) {
+            var adopted = sqlite.adoptedPolicy();
+            capIncreased = desiredCap > adopted.maxDbBytes();
+            if (desiredCap != adopted.maxDbBytes()
+                    || newStore.resweepIntervalSeconds() != adopted.resweepSeconds())
+                store = sqlite.updatePolicy(view.lodStoreMaxBytes(), newStore.resweepIntervalSeconds(), revision);
+        }
         if (storeBackfill != null) {
+            boolean resumeCappedBackfill = capIncreased;
             store = store.thenCompose(ignored -> {
                 if (revision != settingsRevision || settingsStopped)
                     return java.util.concurrent.CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("Superseded settings revision"));
                 var backfill = newStore.backfill();
-                var receipt = storeBackfill.updatePolicy(backfill.enabled(), backfill.columnsPerSecond(), revision);
-                if (newStore.maxSizeMib() == 0 || (oldStore.maxSizeMib() != 0 && newStore.maxSizeMib() > oldStore.maxSizeMib()))
-                    storeBackfill.resumeAfterCapIncrease();
-                return receipt;
+                return storeBackfill.updatePolicy(backfill.enabled(), backfill.columnsPerSecond(),
+                        revision, resumeCappedBackfill);
             });
         }
         // Generation/session ordering waits for its processing owner, never an unrelated
@@ -697,13 +714,19 @@ public class RequestProcessingService {
         var session = processor.thenCompose(ignored -> submitSettingsControl(() -> {
             if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
             advertisedGeneration = next.generation().enabled();
-            if (generationChanged || !previous.lod().equals(next.lod()))
+            if (generationChanged || !advertisedLod.equals(next.lod()))
                 settingsLegacyReconnects = repushSessionConfig()[1];
+            refreshedGeneration = next.generation().enabled();
+            advertisedLod = next.lod();
             generationRefreshPending = false;
-            if (!previous.service().equals(next.service())) runServiceGateSweeps(serviceConfig);
-            if (!previous.farPlayers().equals(next.farPlayers())) {
+            if (!adoptedServicePolicy.equals(next.service())) {
+                runServiceGateSweeps(serviceConfig);
+                adoptedServicePolicy = next.service();
+            }
+            if (!adoptedFarPlayerPolicy.equals(next.farPlayers())) {
                 farPlayerTickCounter = Integer.MAX_VALUE - 1;
                 tickFarPlayers(serviceConfig);
+                adoptedFarPlayerPolicy = next.farPlayers();
             }
             return (Void) null;
         }));

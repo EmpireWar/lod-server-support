@@ -129,8 +129,9 @@ class SodiumLegacySurfaceResolvesTest {
         Path jar = goldenJar("lss.sodiumLegacyGoldenJar", true);
         try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class")) {
             statusMethods(zip, "client/gui/SodiumOptionsGUI", "getAllOptions");
-            ClassNode screen = read(zip, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class");
+            ClassNode screen = read(zip, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class", ClassReader.SKIP_DEBUG);
             var select = screen.methods.stream().filter(method -> method.name.equals("setPage")).findFirst().orElseThrow();
+            assertTrue(select.instructions.size() > 0, "selection ordering requires method code, not a signature-only reader");
             boolean selected = false, rebuilt = false;
             for (var instruction : select.instructions) {
                 if (instruction instanceof org.objectweb.asm.tree.FieldInsnNode field
@@ -203,13 +204,17 @@ class SodiumLegacySurfaceResolvesTest {
     }
 
     private static ClassNode read(ZipFile zip, String entryName) {
+        return read(zip, entryName, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+    }
+
+    private static ClassNode read(ZipFile zip, String entryName, int flags) {
         ZipEntry e = zip.getEntry(entryName);
         if (e == null) {
             return null;
         }
         try (InputStream in = zip.getInputStream(e)) {
             ClassNode n = new ClassNode();
-            new ClassReader(in.readAllBytes()).accept(n, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+            new ClassReader(in.readAllBytes()).accept(n, flags);
             return n;
         } catch (IOException ex) {
             throw new java.io.UncheckedIOException(ex);

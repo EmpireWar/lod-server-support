@@ -33,7 +33,7 @@
   "lss.status.done": "Done",
   "lss.status.page": "Page %s/%s",
   "lss.settings.reload_busy": "Settings reload is already running.",
-  "lss.settings.reload_failed": "Settings unchanged: %s",
+  "lss.settings.reload_failed": "Settings unchanged. Reload could not complete; check the game log and try again.",
   "lss.settings.reload_unchanged": "No active client settings changed.",
   "lss.settings.reloaded": "Client settings reloaded.",
   "lss.settings.pending_reconnect": "Accepted; reconnect required: %s",
@@ -55,7 +55,7 @@
   "lss.settings.recovery": "Recover draft",
   "lss.settings.conflict_detail": "The YAML file changed or could not be read. Your edits are retained. Rebase and save rereads the file and applies only your selected edits to it. Discard keeps the disk file. Nothing has been activated.",
   "lss.settings.failure_detail": "The save failed. Your edits are retained even if Sodium shows no changes. Retry without re-entering values, keep the draft for later, or discard it. Live settings are unchanged.",
-  "lss.settings.inactive": "Settings inactive: %s. Repair the settings file and restart the client.",
+  "lss.settings.inactive": "Settings are inactive. Repair the settings file and restart the client; details are in the game log.",
   "lss.status.waiting": "Waiting for a current-session snapshot…",
   "lss.status.on": "ON",
   "lss.status.off": "OFF",
@@ -111,5 +111,10 @@
   "lss.settings.adoption_pending": "Settings accepted; subsystem activation is still pending. Run the client reload command again to retry.",
   "lss.settings.adoption_failed": "Settings accepted, but subsystem activation failed. Check the log and run the client reload command again to retry.",
   "lss.settings.normalized": "Normalized %s: requested %s; effective %s. YAML was left unchanged.",
-  "lss.status.settings.adoption": "Subsystem revision: %s/%s; awaiting activation: %s"
+  "lss.status.settings.adoption": "Subsystem revision: %s/%s; awaiting activation: %s",
+  "lss.status.export_waiting": "Waiting for a current-session snapshot; retry after the next tick.",
+  "lss.status.export_busy": "Diagnostics exporter busy; retry after the current export.",
+  "lss.status.export_success": "Diagnostics exported: %s",
+  "lss.status.export_failed": "Diagnostics export failed; check directory permissions and free space.",
+  "lss.settings.error_logged": "Technical details are recorded in the game log."
 }

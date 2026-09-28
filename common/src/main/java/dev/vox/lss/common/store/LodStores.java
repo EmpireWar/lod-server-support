@@ -58,7 +58,7 @@ public final class LodStores {
     public static LodStoreService createOrNull(SqliteLodStore.Environment env) {
         StoreCodec codec = StoreCodec.zstdOrNull();
         if (codec == null) {
-            LSSLogger.warn("lodStore requested but the " + StoreCodec.NAME + " codec native"
+            LSSLogger.warn("LOD store requested but the " + StoreCodec.NAME + " codec native"
                     + " cannot load on this platform — running WITHOUT the LOD store");
             return null;
         }
@@ -69,7 +69,7 @@ public final class LodStores {
             // box whose SQLite just failed is the honest state (the diag token reads
             // store=unavailable — what is actually running), and disk reads serve
             // everything.
-            LSSLogger.warn("lodStore=on requested but the SQLite store is unavailable —"
+            LSSLogger.warn("LOD store enabled but the SQLite store is unavailable —"
                     + " running WITHOUT a store (disk reads serve everything; warm-join"
                     + " acceleration is off until the store can open)");
             return null;
@@ -79,11 +79,11 @@ public final class LodStores {
         // leaving admins to discover a doubled world folder — a changelog line does not
         // reach someone who upgraded through a host panel.
         String storeDirName = Brand.lowerShortName() + "-lod";
-        LSSLogger.info("LOD store active (lodStore=on). It stores served LOD bytes under"
+        LSSLogger.info("LOD store active. It stores served LOD bytes under"
                 + " <world>/" + storeDirName + "/ and, once fully warmed, occupies roughly"
                 + " as much space as the region files themselves. It is DERIVED data —"
-                + " deleting " + storeDirName + "/ is always safe. Set lodStore=off to"
-                + " disable, lodStoreMaxMB to bound it.");
+                + " deleting " + storeDirName + "/ is always safe. Set storage.lod_store.enabled"
+                + " to false and restart to disable; storage.lod_store.max_size_mib bounds its size after reload.");
         return sqlite;
     }
 

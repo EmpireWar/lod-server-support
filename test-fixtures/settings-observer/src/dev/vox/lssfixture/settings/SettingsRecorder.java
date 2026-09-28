@@ -51,6 +51,13 @@ public final class SettingsRecorder {
         if(!QUEUE.offer(row.append('}').toString()))overflow=true;
     }
     public static void applied(String kind,String sha){emit("applied",Map.of("kind",kind,"sha256",sha));}
+    public static void applied(String kind,String sourceSha,String transformedSha,String validation) {
+        emit("applied",Map.of("kind",kind,"sha256",sourceSha,"transformed_sha256",transformedSha,"validation",validation));
+    }
+    public static void transformFailure(String kind,String expected,String actual,String reason) {
+        emit("failure",Map.of("code","transform_"+kind,"expected_sha256",String.valueOf(expected),"actual_sha256",actual,
+                "reason",reason.substring(0,Math.min(reason.length(),256))));
+    }
     public static void failure(String code){emit("failure",Map.of("code",code));}
     static Map<String,Object> generation(Object gen) throws Exception {
         Map<String,Object> row=new LinkedHashMap<>();

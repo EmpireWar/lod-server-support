@@ -1,6 +1,6 @@
 # LOD Server Support — client defaults (Fabric/NeoForge).
-# Edit this file or save through Sodium, then run /lss reload to activate changes.
-# Sodium Apply only saves. [reconnect] settings wait for the next connection.
+# After editing this file, run /lss reload to activate changes.
+# Sodium Apply saves and reloads automatically. [reconnect] settings wait for the next connection.
 config_version: 1 # Local settings schema version, independent of the network protocol.
 
 # Downloads distant terrain for installed consumers such as Voxy or Xaero's map.
@@ -78,7 +78,7 @@ far_players:
   animation_distance_blocks: 512 # Animate nearby proxies; 0 = no walk animation.
   # Controls whether others may see your position through the far-player feature.
   # This does not hide you from normal Minecraft tracking or unrelated systems.
-  # Saving a change does not activate it: run /lss reload and check its feedback.
+  # Sodium Apply activates this choice; after a disk edit, run /lss reload.
   sharing:
-    enabled: true # Let other players see you at a distance; changes need /lss reload.
+    enabled: true # Let other players see you at a distance; use Sodium Apply or /lss reload.
     max_distance_blocks: 0 # 0 = no extra sharing cap; otherwise up to 16384 blocks.

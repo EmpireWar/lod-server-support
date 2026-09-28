@@ -10,13 +10,15 @@ import java.util.function.Supplier;
 /**
  * Disk draft shared by both Sodium generations. Sodium cleans its controls before
  * calling storage.save(), so this object, not Sodium's dirty flag, owns failed edits.
- * No operation here publishes settings or sends a preference packet.
+ * Saving only writes disk; Apply then asks the settings owner to reload that file.
+ * Setters never publish settings or send a preference packet.
  */
 public final class ClientSettingsEditSession {
     public enum Outcome { CLEAN, UNSAVED, SAVED, FAILED, CONFLICT }
     private final SettingsStore<ClientSettings> store;
     private final Supplier<ClientSettings> active;
     private final Supplier<ClientSettings> accepted;
+    private final Runnable requestReload;
     private Map<String, Object> persisted;
     private final Map<String, Object> changes = new LinkedHashMap<>();
     private String baseHash;
@@ -29,9 +31,14 @@ public final class ClientSettingsEditSession {
     }
     public ClientSettingsEditSession(SettingsStore<ClientSettings> store, Supplier<ClientSettings> active,
                                      Supplier<ClientSettings> accepted) {
+        this(store, active, accepted, () -> {});
+    }
+    public ClientSettingsEditSession(SettingsStore<ClientSettings> store, Supplier<ClientSettings> active,
+                                     Supplier<ClientSettings> accepted, Runnable requestReload) {
         this.store = store;
         this.active = active;
         this.accepted = accepted;
+        this.requestReload = java.util.Objects.requireNonNull(requestReload);
         persisted = SettingsSchema.client().defaults().values();
         readDisk();
     }
@@ -83,6 +90,19 @@ public final class ClientSettingsEditSession {
     public boolean draftSharing() { return bool("far_players.sharing.enabled"); }
     public boolean pendingReload() {
         return !persisted.equals(accepted.get().values());
+    }
+
+    /** Sodium Apply and save recovery share the command's validated reload path. */
+    public boolean apply() {
+        if (!save()) return false;
+        if (pendingReload()) requestReload.run();
+        return true;
+    }
+
+    public boolean rebaseAndApply() {
+        if (!rebaseAndSave()) return false;
+        if (pendingReload()) requestReload.run();
+        return true;
     }
 
     /** One changed-path transaction. Errors remain visible and never escape Sodium Apply. */

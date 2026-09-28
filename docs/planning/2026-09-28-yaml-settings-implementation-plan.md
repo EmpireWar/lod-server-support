@@ -1,5 +1,13 @@
 # Structured YAML settings and explicit reload
 
+**User amendment, 2026-09-28:** Sodium Apply now saves the client draft and requests
+an automatic reload through the same validated owner used by `/lss reload`.
+Successful Retry/Rebase does the same; failed saves never request activation.
+Session-scoped changes still wait for reconnect. This supersedes this plan's
+original save-only Sodium behavior and command-only client activation requirement.
+The earlier user amendment also removes all persistent Sodium banners, status
+buttons and reserved footer space. Direct YAML edits still require a reload command.
+
 Status: approved for implementation on 2026-09-28; implementation and validation in progress.
 Date: 2026-09-28. Base: `origin/main` at `d4b415d5` (released v0.15.1 behavior).
 Worktree: `/home/vox/projects/lss-settings-plan`, branch `feat/yaml-settings-mc26.2`.

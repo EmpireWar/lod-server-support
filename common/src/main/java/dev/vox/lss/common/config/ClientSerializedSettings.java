@@ -15,8 +15,8 @@ public final class ClientSerializedSettings {
                 d.minimum() == null ? d.kind().name() : d.minimum() + ".." + d.maximum(),
                 "SettingsSchema.client", java.util.Set.of(SettingDescriptor.Scope.CLIENT),
                 "client-global", "all client platforms", d.timing() == SettingsSchema.Timing.S
-                        ? "reload accepted; reconnect required" : "explicit client reload",
-                false, "save draft; explicit client reload", SettingDescriptor.Exposure.ADVANCED)).toList();
+                        ? "Sodium Apply or client reload accepted; reconnect required" : "Sodium Apply or client reload",
+                false, "Sodium Apply saves and reloads; file edits require client reload", SettingDescriptor.Exposure.ADVANCED)).toList();
     }
     private ClientSerializedSettings() {}
 }

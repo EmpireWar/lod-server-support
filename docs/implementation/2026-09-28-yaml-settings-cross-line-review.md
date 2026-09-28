@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `b46fa99259ee0be9e304f6ff0db84d7cff699d47`
-- MC 26.1: `fd038692da1def0d7790229519ff6879e06f56be`
-- MC 1.21.11: `d58fdc56bd92f102a7e369dc1040cd2e62d3c10f`
-- MC 1.21.10: `aba73a3c1bbd68e36906f74ac9887eb3e63df7d1`
-- MC 1.21.1: `f66f067c8f611633cf44a25cfd2dee136d3cefcd`
+- MC 26.2: `8374591ebf61361a8bd3e138851c9737477ff05b`
+- MC 26.1: `436c797b11a07b334c0ac97fadb2da3b1178b8c2`
+- MC 1.21.11: `a7e0404d768eddbd74c0bee59cc2a2c3f65477bc`
+- MC 1.21.10: `9b2d5dcab718fd553609a34f7b182e822c44ae3a`
+- MC 1.21.1: `69f5ad889fa910df090e442be8fce21220931145`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -56,12 +56,14 @@ Final Folia fixture correction `b46fa992` allows four pending login reservations
 
 Recorded native evidence was independently read and rechecked without launching a process: Fabric `20260928T205549Z-1f31c617e04d` and Paper `20260928T210854Z-f7bba9dfbd7d` each pass three assertion groups; Folia `20260928T211608Z-dfd94d889df1` passes four. All strict generation phase checks pass with positive work at disable, drain conservation, no new disabled admissions and resumed progress. Fabric backfill records positive deposits, rate-change progress, stop quiescence and a new worker. Folia's separate region checker passes and 205 owning-region samples inside the disable-to-serving window include distinct-region overlap. Every recorded cleanup is complete with zero remaining children. These bounded scenario results do not broaden the supported or experimental platform claims; exact artifacts, earlier failed premises and other acceptance gates remain in the progress ledger.
 
+Containment-test isolation `8374591e` was independently reviewed by a second Astra reviewer. Full 1.21.10/1.21.11 runs hit two ten-second background-read timeouts in the concurrent 50-test batch; archived valid/corrupt bytes and exact test class/YAML were retained. The unchanged 1.21.10 test passed alone in the existing world (1.260 s) and a new private universe (5.006 s). The test now uses its own default-equivalent environment on four modern lines and a supported vanilla batch on 1.21.1. Every method body, assertion and 1200-tick deadline is unchanged, and all 30 built product artifact hashes were unchanged by this source-only patch. The controls justify test-load isolation without claiming a unique scheduler cause or weakening the containment requirement; the progress ledger records subsequent complete-suite validation.
+
 ## Classification and verification
 
-Added 104 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
+Added 104 explicit identical entries and four precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), ClientSettingsSaveScreen, and the RegionFault isolation environment resource (also absent on 1.21.1). Updated 78 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Earlier focused checks passed eight rig receive tests and seven native YAML checker tests. The final diagnostic and numeric-preflight unit evidence is recorded in the progress ledger; this refresh performs only classification/catalog and whitespace checks. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final11-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final11-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final12-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final12-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

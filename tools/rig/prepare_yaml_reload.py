@@ -61,7 +61,9 @@ def prepare(source,output,client,server,observer,platform,port):
     generated[config]=render(changes,platform='mod' if platform=='fabric' else 'paper')
     for subject in 'AB':generated['client-'+subject+'/config/lss-client-config.yaml']=render({'lod.receive':True,'lod.distance_chunks':16,'integrations.xaero_map.enabled':True,'lod.download.max_columns_per_second':40},side='client')
     props=generated['server/server.properties']
-    generated['server/server.properties']='\n'.join(line for line in props.splitlines() if not line.startswith(('server-ip=','server-port=','level-seed=','max-players=','level-type=','view-distance=','simulation-distance=','generator-settings=','gamemode=','force-gamemode=')))+f'\nserver-ip=127.0.0.1\nserver-port={port}\nlevel-seed=yaml-settings-bounded-1\nmax-players=2\ngamemode=creative\nforce-gamemode=true\nlevel-type=minecraft:normal\nview-distance=3\nsimulation-distance=3\n'
+    # Folia rechecks pending login reservations; two clients need admission headroom.
+    login_capacity=4 if platform=='folia' else 2
+    generated['server/server.properties']='\n'.join(line for line in props.splitlines() if not line.startswith(('server-ip=','server-port=','level-seed=','max-players=','level-type=','view-distance=','simulation-distance=','generator-settings=','gamemode=','force-gamemode=')))+f'\nserver-ip=127.0.0.1\nserver-port={port}\nlevel-seed=yaml-settings-bounded-1\nmax-players={login_capacity}\ngamemode=creative\nforce-gamemode=true\nlevel-type=minecraft:normal\nview-distance=3\nsimulation-distance=3\n'
     runtime['generated_files']=generated;runtime['bind_endpoint']=runtime['client_endpoint']='127.0.0.1:'+str(port)
     identity=json.loads((observer/'identity.json').read_text())
     if identity['candidate_sha256']!=sha(server):raise ValueError('observer was built for different candidate bytes')

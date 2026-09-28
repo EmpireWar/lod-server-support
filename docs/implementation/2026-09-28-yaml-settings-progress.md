@@ -436,3 +436,33 @@ and manifest diff review preserved existing version-specific content.
 Evidence: `/tmp/lss-sodium-menu-cleanup-20260928/results.json`, per-line build logs
 and `source-review.json`. These are focused non-live checks; this change does not
 claim a new native UI run. The user will inspect the updated Windows Prism client.
+
+## 2026-09-28 Sodium Apply activates client settings
+
+Following the user's Xaero test, Sodium Apply now saves the draft and automatically
+requests the same validated reload used by the client command. Successful Retry
+and Rebase also reload. Staging, failed saves and conflicts never publish settings.
+Hot values activate after reload completes; Xaero enabling and other session values
+still wait for a new physical connection. Menu requests arriving during a command
+or menu reload coalesce into one follow-up that reads the latest saved file.
+Existing failure/reconnect feedback goes to chat/logs without adding Sodium widgets.
+Direct YAML editing continues to require the reload command. The plan, reference,
+generated comments and English/Simplified Chinese/Traditional Chinese tooltips now
+reflect this explicitly authorized exception to the original save-only menu policy.
+
+Focused common settings/diagnostics, client config/menu and NeoForge contract suites
+reported 1,361 cases: 1,359 passed, two expected modern-Sodium skips on 1.21.10,
+zero failures/errors. New disk-backed tests cover automatic hot activation,
+Apply/reconnect Xaero adoption, title-screen Apply, failed-save retry, conflict
+rebase and queued rapid Apply. Both real-menu adapters' recording tests verify
+failed saves stay inactive and successful recovery requests exactly one reload.
+All five lines built all platform/brand jars; release and artifact checks passed
+for all 30 artifacts. Generated settings inventory/reference checks passed.
+
+The initial 26.2 compile identified its moved chat API; feedback now reuses the
+existing per-line status-screen chat adapter. The 26.1 helper-location assertion
+was updated to check both delegation and the original exact native descriptor;
+its first failed report is retained, and the corrected run passes. Neither was
+classified as a flake or waived. Evidence is in `/tmp/lss-sodium-apply-20260928/`,
+including per-line logs, `results.json` and `source-review.json`. No new live game
+run or native visual assessment is claimed by these focused checks.

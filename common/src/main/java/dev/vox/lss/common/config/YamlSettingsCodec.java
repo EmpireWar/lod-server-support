@@ -55,9 +55,11 @@ public final class YamlSettingsCodec<T> {
             if (!schema.descriptorsByPath().containsKey(entry.getKey())) throw new SettingsException("Unknown settings path: " + entry.getKey());
             values.put(entry.getKey(), entry.getValue());
         }
-        schema.fromValues(values); // type/normalization checks, without rewriting requested values
+        // Emit the validated requested values, whose numeric classes match the schema.
+        // Normalized/clamped values remain separate and must never overwrite the draft.
+        var configured = schema.values(schema.fromValues(values).configured());
         MappingNode root = (MappingNode) compose(document.bytes());
-        for (var entry : changes.entrySet()) replace(root, entry.getKey().split("\\."), 0, node(entry.getValue()));
+        for (var entry : changes.entrySet()) replace(root, entry.getKey().split("\\."), 0, node(configured.get(entry.getKey())));
         byte[] output = new Present(DUMP).emitToString(new Serialize(DUMP).serializeOne(root).iterator()).getBytes(StandardCharsets.UTF_8);
         parse(output);
         return output;

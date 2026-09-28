@@ -63,7 +63,7 @@ public final class SettingsCli {
         result.put("message",operation.equals("edit")?"Saved to disk; run the appropriate reload command to activate":"Settings document is valid");return result;
     }
     private static Object argumentNumbers(Object value) {
-        if(value instanceof BigDecimal n){try{return n.intValueExact();}catch(ArithmeticException ignored){return n;}}
+        if(value instanceof Number number){var n=new BigDecimal(number.toString());try{return n.intValueExact();}catch(ArithmeticException ignored){return n;}}
         if(value instanceof Map<?,?> map){var out=new LinkedHashMap<String,Object>();map.forEach((k,v)->out.put((String)k,argumentNumbers(v)));return out;}
         if(value instanceof List<?> list)return list.stream().map(SettingsCli::argumentNumbers).toList();
         return value;

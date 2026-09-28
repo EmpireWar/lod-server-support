@@ -16,8 +16,17 @@ def check_report(proof,manifest,scenario,root):
         if value.get('target')!=scenario.get('target'):errors.append('native smoke target differs from immutable scenario')
         errors.extend(result['errors'])
         server=(evidence/'smoke-server.log').read_text(errors='replace')
-        if 'Done (' not in server or server.count('handshake received from RigSubjectA (protocol v20,')!=2:errors.append('actual server startup/two v20 handshake observations absent')
         events={row['event']:row for row in value['events']}
+        handshake='handshake received from RigSubjectA (protocol v20,'
+        if scenario.get('restart_between_sessions'):
+            reopened=(evidence/'smoke-server-reopened.log').read_text(errors='replace')
+            event=events.get('server_reopened',{})
+            driver=scenario['expected_store_driver']
+            if any('Done (' not in log or log.count(handshake)!=1 for log in (server,reopened)):errors.append('each server boot must observe one v20 handshake')
+            if event.get('state')!='ok' or event.get('driver')!=driver or event.get('previous_exit_code')!=0:errors.append('healthy restart event absent')
+            if not events['disconnect_first']['time_ns']<event.get('time_ns',0)<events['handshake_second']['time_ns']:errors.append('restart outside disconnected session boundary')
+            if not any('state=ok' in line and 'driver='+driver in line for line in reopened.splitlines()):errors.append('actual private store status after restart absent')
+        elif 'Done (' not in server or server.count(handshake)!=2:errors.append('actual server startup/two v20 handshake observations absent')
         for phase in ('first','second'):
             raw=(evidence/('client-'+phase+'.jsonl')).read_bytes()
             if not raw.endswith(b'\n'):errors.append('truncated native client evidence');continue

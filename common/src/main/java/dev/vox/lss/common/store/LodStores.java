@@ -79,7 +79,8 @@ public final class LodStores {
         // leaving admins to discover a doubled world folder — a changelog line does not
         // reach someone who upgraded through a host panel.
         String storeDirName = Brand.lowerShortName() + "-lod";
-        LSSLogger.info("LOD store active. It stores served LOD bytes under"
+        LSSLogger.info("LOD store active (driver=private/" + SqliteDriverRuntime.VERSION
+                + "). It stores served LOD bytes under"
                 + " <world>/" + storeDirName + "/ and, once fully warmed, occupies roughly"
                 + " as much space as the region files themselves. It is DERIVED data —"
                 + " deleting " + storeDirName + "/ is always safe. Set storage.lod_store.enabled"

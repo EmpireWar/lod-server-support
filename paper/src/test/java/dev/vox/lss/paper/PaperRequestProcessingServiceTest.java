@@ -220,7 +220,9 @@ class PaperRequestProcessingServiceTest {
     @BeforeEach
     void buildRig() { buildRig(true); }
 
-    private void buildRig(boolean generationEnabled) {
+    private void buildRig(boolean generationEnabled) { buildRig(generationEnabled, null); }
+
+    private void buildRig(boolean generationEnabled, dev.vox.lss.common.store.LodStoreService store) {
         config = new MutablePaperSettings();
         MutablePaperSettings.set(config, "generation.enabled", generationEnabled);
         MutablePaperSettings.normalize(config);
@@ -235,7 +237,7 @@ class PaperRequestProcessingServiceTest {
         broadcaster = new RecordingBroadcaster(server, players, tracker, processor);
         service = new PaperRequestProcessingService(server, config,
                 new PaperRequestProcessingService.Wiring(
-                        players, diskReader, genService, processor, tracker, broadcaster));
+                        players, diskReader, genService, processor, tracker, broadcaster, store, null));
         // Default probe: "nothing is loaded". The production default would dereference the
         // mocked level's chunk source; probe-specific tests inject their own recorder.
         service.setLoadedColumnProbe((level, cx, cz) -> null);
@@ -1620,6 +1622,117 @@ class PaperRequestProcessingServiceTest {
         assertEquals(List.of(current), sent);
         assertEquals(1, service.lastSettingsLegacyReconnects());
         assertEquals(1, processor.sendActionDrains.get(), "normal terminal delivery resumes after refresh");
+    }
+
+    private dev.vox.lss.common.store.SqliteLodStore storeFailingFirstPolicy(AtomicInteger attempts) {
+        var store = mock(dev.vox.lss.common.store.SqliteLodStore.class);
+        var adopted = new java.util.concurrent.atomic.AtomicReference<>(
+                new dev.vox.lss.common.store.SqliteLodStore.StorePolicy(
+                        config.lodStoreMaxBytes(), config.lodStoreResweepSeconds(), 0));
+        when(store.adoptedPolicy()).thenAnswer(call -> adopted.get());
+        when(store.updatePolicy(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyLong())).thenAnswer(call -> {
+            if (attempts.incrementAndGet() == 1)
+                return CompletableFuture.failedFuture(new IllegalStateException("one recoverable writer failure"));
+            adopted.set(new dev.vox.lss.common.store.SqliteLodStore.StorePolicy(
+                    call.getArgument(0), call.getArgument(1), call.getArgument(2)));
+            return CompletableFuture.completedFuture(null);
+        });
+        return store;
+    }
+
+    @Test
+    void changedCandidateRetriesUnadoptedStoreWithoutRepeatingSuccessfulSessionRefresh() throws Exception {
+        var attempts = new AtomicInteger();
+        var store = storeFailingFirstPolicy(attempts);
+        service.shutdown();
+        buildRig(true, store);
+        var player = playerIn(UUID.randomUUID(), level(Level.OVERWORLD));
+        service.registerPlayer(player, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var legacy = UUID.randomUUID();
+        service.getDialectTracker().onHandshake(legacy, dev.vox.lss.common.HandshakeGate.WireDialect.V18);
+        service.registerPlayer(playerIn(legacy, level(Level.OVERWORLD)), LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var distances = new ArrayList<Integer>();
+        service.setSessionConfigSender((p, cfg, enabled) -> distances.add(cfg.lodDistanceChunks()));
+        var original = config.snapshot();
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 77);
+        MutablePaperSettings.set(config, "storage.lod_store.max_size_mib", 128);
+        var firstTarget = config.snapshot();
+        var failed = service.reconcileSettings(original, firstTarget, 1);
+        service.tick();
+        assertTrue(failed.isCompletedExceptionally());
+        assertEquals(List.of(77), distances, "session owner adopted despite the store failure");
+        MutablePaperSettings.set(config, "storage.miss_memo_ttl_seconds", 13);
+        var repaired = service.reconcileSettings(firstTarget, config.snapshot(), 2);
+        service.tick();
+        repaired.get(1, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(2, attempts.get(), "publication equality must not skip the failed store target");
+        assertEquals(1, service.settingsFeedback().legacyReconnects(),
+                "successful retry must report the session owner's previously unreported legacy reconnects");
+        assertEquals(128 * 1024L * 1024L, store.adoptedPolicy().maxDbBytes());
+        assertEquals(List.of(77), distances, "retry must not refresh an already adopted session target");
+        // A retained whole-operation baseline can still be original on a retry.
+        var repeated = service.reconcileSettings(original, config.snapshot(), 2);
+        service.tick();
+        repeated.get(1, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(2, attempts.get());
+        assertEquals(List.of(77), distances);
+    }
+
+    @Test
+    void revertAfterPartialAdoptionRestoresSessionEvenWhenItMatchesLastSuccessfulPublication() throws Exception {
+        var attempts = new AtomicInteger();
+        var store = storeFailingFirstPolicy(attempts);
+        service.shutdown();
+        buildRig(true, store);
+        service.registerPlayer(playerIn(UUID.randomUUID(), level(Level.OVERWORLD)), LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var distances = new ArrayList<Integer>();
+        var generation = new ArrayList<Boolean>();
+        service.setSessionConfigSender((p, cfg, enabled) -> {
+            distances.add(cfg.lodDistanceChunks());
+            generation.add(service.generationEnabledForSession());
+        });
+        var original = config.snapshot();
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 77);
+        MutablePaperSettings.set(config, "generation.enabled", false);
+        MutablePaperSettings.set(config, "storage.lod_store.max_size_mib", 128);
+        var failed = service.reconcileSettings(original, config.snapshot(), 1);
+        service.tick();
+        assertTrue(failed.isCompletedExceptionally());
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", original.lod().distance().defaultChunks());
+        MutablePaperSettings.set(config, "generation.enabled", original.generation().enabled());
+        MutablePaperSettings.set(config, "storage.lod_store.max_size_mib", original.storage().lodStore().maxSizeMib());
+        var reverted = service.reconcileSettings(original, config.snapshot(), 2);
+        service.tick();
+        reverted.get(1, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(List.of(77, original.lod().distance().defaultChunks()), distances);
+        assertEquals(List.of(false, true), generation);
+        assertEquals(1, attempts.get(), "store never adopted the failed cap; reverting needs no store update");
+    }
+
+    @Test
+    void sameRevisionRetriesFailedProcessingFenceBeforeAdvertisingGeneration() throws Exception {
+        service.shutdown();
+        buildRig(false);
+        service.registerPlayer(playerIn(UUID.randomUUID(), level(Level.OVERWORLD)), LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var sends = new AtomicInteger();
+        service.setSessionConfigSender((p, cfg, enabled) -> sends.incrementAndGet());
+        var original = config.snapshot();
+        MutablePaperSettings.set(config, "generation.enabled", true);
+        processor.policyAdoption = CompletableFuture.failedFuture(new IllegalStateException("temporary owner failure"));
+        var failed = service.reconcileSettings(original, config.snapshot(), 1);
+        assertTrue(failed.isCompletedExceptionally());
+        assertFalse(service.generationEnabledForSession());
+        processor.policyAdoption = new CompletableFuture<>();
+        var retry = service.reconcileSettings(config.snapshot(), config.snapshot(), 1);
+        service.tick();
+        assertEquals(0, sends.get());
+        assertEquals(0, processor.sendActionDrains.get());
+        processor.policyAdoption.complete(null);
+        service.tick();
+        retry.get(1, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(1, sends.get());
+        assertTrue(service.generationEnabledForSession());
     }
 
 }

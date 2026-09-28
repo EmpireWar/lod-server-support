@@ -20,6 +20,35 @@ class SettingsCliTest {
         assertFalse(settings.generation().enabled());assertEquals(6,settings.generation().concurrency().global());assertEquals(3,settings.generation().concurrency().perPlayer());assertEquals(Map.of("custom:planet",888),settings.lod().distance().byDimension());
         assertTrue(Files.readString(file).contains("world-generation CPU"));assertDoesNotThrow(()->SettingsCli.run(new String[]{"validate","--path",file.toString()}));
     }
+    @Test void completeReadJsonEditRoundtripRetainsConfiguredValuesForEverySchema() throws Exception {
+        var json=new com.google.gson.Gson();
+        for(String platform:List.of("mod","paper","client")) {
+            String side=platform.equals("client")?"client":"server";
+            String loader=platform.equals("paper")?"paper":"mod";
+            Path file=dir.resolve(platform+"-roundtrip.yaml");
+            SettingsCli.run(new String[]{"create","--path",file.toString(),"--side",side,"--platform",loader});
+            @SuppressWarnings("unchecked") var before=(Map<String,Object>)SettingsCli.run(new String[]{"read","--path",file.toString(),"--side",side,"--platform",loader});
+            @SuppressWarnings("unchecked") var configured=(Map<String,Object>)before.get("configured");
+            var args=new ArrayList<>(List.of("edit","--path",file.toString(),"--side",side,"--platform",loader));
+            configured.forEach((path,value)->{args.add("--set");args.add(path+"="+json.toJson(value));});
+            SettingsCli.run(args.toArray(String[]::new));
+            @SuppressWarnings("unchecked") var after=(Map<String,Object>)SettingsCli.run(new String[]{"read","--path",file.toString(),"--side",side,"--platform",loader});
+            assertEquals(configured,after.get("configured"),platform);
+            assertFalse(Files.readString(file).contains("!!"),platform);
+        }
+    }
+    @Test void jsonNumbersAreTransportedAsTypedYamlScalarsWithoutExplicitTags() throws Exception {
+        Path file=dir.resolve("numbers.yaml");
+        SettingsCli.run(new String[]{"create","--path",file.toString()});
+        for(String value:List.of("25.0","0.0","1e-3","1E2")) {
+            SettingsCli.run(new String[]{"edit","--path",file.toString(),"--set","network.bandwidth.global_mib_per_second="+value});
+            var parsed=new YamlSettingsCodec<>(SettingsSchema.server(false)).parse(Files.readAllBytes(file));
+            assertEquals(Double.parseDouble(value),parsed.configured().network().bandwidth().globalMibPerSecond());
+            assertFalse(Files.readString(file).contains("!!"));
+        }
+        SettingsCli.run(new String[]{"edit","--path",file.toString(),"--set","lod.distance.by_dimension={\"minecraft:overworld\":12.0}"});
+        assertEquals(12,new YamlSettingsCodec<>(SettingsSchema.server(false)).parse(Files.readAllBytes(file)).configured().lod().distance().byDimension().get("minecraft:overworld"));
+    }
     @Test void cliRejectsPartialInvalidEditsWithoutWriting()throws Exception {
         Path file=dir.resolve("client.yaml");SettingsCli.run(new String[]{"create","--side","client","--path",file.toString()});byte[] original=Files.readAllBytes(file);
         assertThrows(SettingsException.class,()->SettingsCli.run(new String[]{"edit","--side","client","--path",file.toString(),"--set","lod.receive=false","--set","bad.path=3"}));assertArrayEquals(original,Files.readAllBytes(file));

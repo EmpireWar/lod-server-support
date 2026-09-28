@@ -1,6 +1,5 @@
 package dev.vox.lss.common.config;
 
-import com.google.gson.Strictness;
 import com.google.gson.stream.*;
 import java.io.*;
 import java.math.BigDecimal;
@@ -40,7 +39,7 @@ public final class LegacySettingsMigration {
             } else if(d.kind()==SettingsSchema.Kind.STRING_LIST) {
                 if(value==null) {
                     value=path.equals("privacy.xray.hidden_blocks")?d.defaultValue():List.of();
-                } else if(value instanceof List<?> list) value=list.stream().filter(Objects::nonNull).toList();
+                } else if(value instanceof List<?> list) value=legacyStrings(list,path);
             } else if(d.kind()==SettingsSchema.Kind.STRING_MAP) {
                 var clean=new LinkedHashMap<String,Object>();
                 if(value!=null) {
@@ -63,7 +62,7 @@ public final class LegacySettingsMigration {
                     if(!(value instanceof List<?> list))throw new SettingsException("Legacy list required for "+path);
                     int dropped=0;
                     for(Object group:list) {
-                        if(group instanceof List<?> g&&g.stream().allMatch(String.class::isInstance))groups.add(g);
+                        if(group instanceof List<?> g&&g.stream().allMatch(LegacySettingsMigration::stringPrimitive))groups.add(legacyStrings(g,path));
                         else dropped++;
                     }
                     if(dropped>0)warnings.add(path+": removed "+dropped+" structurally invalid groups");
@@ -73,8 +72,11 @@ public final class LegacySettingsMigration {
             values.put(path,primitive(value,d.kind(),path));
         }
         if(!schema.isClient()) {
-            // Every old installation used the scalar fallback, with no fresh Nether override.
-            values.put("lod.distance.by_dimension",Map.of()); values.put("lod.distance.by_world",Map.of());
+            // Freeze the three old vanilla radii before overlaying exact legacy overrides.
+            int radius=(Integer)values.get("lod.distance.default_chunks");
+            var dimensions=new LinkedHashMap<String,Integer>();
+            for(String dimension:List.of("minecraft:overworld","minecraft:the_nether","minecraft:the_end"))dimensions.put(dimension,radius);
+            values.put("lod.distance.by_dimension",dimensions); values.put("lod.distance.by_world",Map.of());
             Object store=old.get("lodStore");
             values.put("storage.lod_store.enabled",store instanceof String s&&Set.of("on","full").contains(s.trim().toLowerCase(Locale.ROOT)));
             bandwidth(old,values,"PerPlayer",25,recognized);
@@ -82,18 +84,18 @@ public final class LegacySettingsMigration {
             Object worldMap=old.get("lodDistanceChunksByWorld");
             if(worldMap!=null) {
                 if(!(worldMap instanceof Map<?,?> map))throw new SettingsException("Legacy world distances must be a mapping");
-                var dimensions=new LinkedHashMap<String,Integer>();var worlds=new LinkedHashMap<String,Integer>();int dropped=0;
+                var worlds=new LinkedHashMap<String,Integer>();int dropped=0;boolean duplicated=false;
                 for(var entry:map.entrySet()) {
                     if(!(entry.getKey() instanceof String key)||entry.getValue()==null) { dropped++;continue; }
                     key=key.trim();if(key.isEmpty()||key.length()>256){dropped++;continue;}
                     int v=SettingsSchema.integer(primitive(entry.getValue(),SettingsSchema.Kind.INTEGER,"lod.distance[entry]"),"lod.distance[entry]");
                     v=Math.max(1,Math.min(2048,v));
                     if(schema.isPaper())worlds.put(key,v);
-                    if(SettingsSchema.canonicalIdentifier(key))dimensions.put(key,v);else if(!schema.isPaper())dropped++;
+                    if(SettingsSchema.canonicalIdentifier(key)){dimensions.put(key,v);duplicated=true;}else if(!schema.isPaper())dropped++;
                 }
                 values.put("lod.distance.by_dimension",dimensions); values.put("lod.distance.by_world",worlds);
                 if(dropped>0)warnings.add("lod.distance: omitted "+dropped+" inert/invalid entries");
-                if(schema.isPaper()&&!dimensions.isEmpty())warnings.add("lod.distance: preserved exact world and dimension interpretations");
+                if(schema.isPaper()&&duplicated)warnings.add("lod.distance: preserved exact world and dimension interpretations");
             }
         }
         var decoded=schema.fromValues(values);
@@ -109,6 +111,26 @@ public final class LegacySettingsMigration {
         }
         for(var n:decoded.normalizations())normalizations.putIfAbsent(n.path(),n);
         return new Result<>(decoded.normalized(),normalized,ignored,List.copyOf(normalizations.values()),List.copyOf(warnings));
+    }
+    private static boolean stringPrimitive(Object value) { return value instanceof String||value instanceof Number||value instanceof Boolean; }
+    private static List<String> legacyStrings(List<?> values,String path) {
+        var strings=new ArrayList<String>();
+        for(Object value:values) {
+            if(value==null)continue;
+            if(!stringPrimitive(value))throw new SettingsException("Legacy string list entries must be primitive at "+path);
+            strings.add(value.toString());
+        }
+        return List.copyOf(strings);
+    }
+    /** Retain the lexical token for Gson-compatible number-to-string migration. */
+    private static final class JsonNumber extends Number {
+        private final String token;
+        JsonNumber(String token){this.token=token;}
+        @Override public int intValue(){return new BigDecimal(token).intValue();}
+        @Override public long longValue(){return new BigDecimal(token).longValue();}
+        @Override public float floatValue(){return Float.parseFloat(token);}
+        @Override public double doubleValue(){return Double.parseDouble(token);}
+        @Override public String toString(){return token;}
     }
     private static boolean equivalent(Object a,Object b) {
         if(a instanceof Number x&&b instanceof Number y)return new BigDecimal(x.toString()).compareTo(new BigDecimal(y.toString()))==0;
@@ -129,6 +151,7 @@ public final class LegacySettingsMigration {
         values.put("network.bandwidth."+(suffix.equals("PerPlayer")?"per_player":"global")+"_mib_per_second",result);
     }
     private static Object primitive(Object value,SettingsSchema.Kind kind,String path) {
+        if(kind==SettingsSchema.Kind.STRING&&stringPrimitive(value))return value.toString();
         if(value instanceof String s) {
             if(kind==SettingsSchema.Kind.BOOLEAN) {
                 if(s.equalsIgnoreCase("true")||s.equalsIgnoreCase("false"))return Boolean.valueOf(s);
@@ -148,6 +171,7 @@ public final class LegacySettingsMigration {
     /** Streaming preflight rejects depth/node/duplicate violations before allocating the tree. */
     public static Map<String,Object> readJson(byte[] bytes) {
         String text=YamlSettingsCodec.utf8(bytes);
+        strictLexemes(text);
         try {
             try(var reader=reader(text)) {
                 int depth=0,count=0;var keys=new ArrayDeque<Set<String>>();var objects=new ArrayDeque<Boolean>();
@@ -176,12 +200,44 @@ public final class LegacySettingsMigration {
             }
         }catch(SettingsException e){throw e;}catch(IOException|IllegalStateException|NumberFormatException e){throw new SettingsException("Invalid legacy JSON; repair it before migration",e);}
     }
-    private static JsonReader reader(String text) { var r=new JsonReader(new StringReader(text));r.setStrictness(Strictness.STRICT);return r; }
+    /** Gson 2.10 is bundled on older supported lines; close its legacy-strict lexical gaps. */
+    private static void strictLexemes(String text) {
+        for(int i=0;i<text.length();) {
+            char c=text.charAt(i++);
+            if(c==' '||c=='\t'||c=='\r'||c=='\n'||"{}[]:,".indexOf(c)>=0)continue;
+            if(c=='"') {
+                boolean closed=false;
+                while(i<text.length()) {
+                    c=text.charAt(i++);
+                    if(c=='"'){closed=true;break;}
+                    if(c<0x20)throw new SettingsException("Invalid control character in legacy JSON string");
+                    if(c=='\\') {
+                        if(i==text.length())throw new SettingsException("Unterminated legacy JSON escape");
+                        char escaped=text.charAt(i++);
+                        if(escaped=='u') {
+                            if(i+4>text.length())throw new SettingsException("Invalid legacy JSON Unicode escape");
+                            for(int end=i+4;i<end;i++)if(Character.digit(text.charAt(i),16)<0||text.charAt(i)>127)throw new SettingsException("Invalid legacy JSON Unicode escape");
+                        } else if("\"\\/bfnrt".indexOf(escaped)<0)throw new SettingsException("Invalid legacy JSON escape");
+                    }
+                }
+                if(!closed)throw new SettingsException("Unterminated legacy JSON string");
+            } else {
+                int start=i-1;
+                while(i<text.length()&&"{}[]:, \t\r\n".indexOf(text.charAt(i))<0)i++;
+                if(i-start>128)throw new SettingsException("Invalid or oversized legacy JSON scalar");
+                String token=text.substring(start,i);
+                if(!Set.of("true","false","null").contains(token)
+                        && !token.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?"))
+                    throw new SettingsException("Invalid legacy JSON scalar");
+            }
+        }
+    }
+    private static JsonReader reader(String text) { var r=new JsonReader(new StringReader(text));r.setLenient(false);return r; }
     private static Object jsonValue(JsonReader r)throws IOException {
         return switch(r.peek()) {
             case BEGIN_OBJECT -> {var m=new LinkedHashMap<String,Object>();r.beginObject();while(r.hasNext())m.put(r.nextName(),jsonValue(r));r.endObject();yield m;}
             case BEGIN_ARRAY -> {var l=new ArrayList<Object>();r.beginArray();while(r.hasNext())l.add(jsonValue(r));r.endArray();yield l;}
-            case STRING -> r.nextString();case NUMBER -> new BigDecimal(r.nextString());case BOOLEAN -> r.nextBoolean();case NULL -> {r.nextNull();yield null;}
+            case STRING -> r.nextString();case NUMBER -> new JsonNumber(r.nextString());case BOOLEAN -> r.nextBoolean();case NULL -> {r.nextNull();yield null;}
             default -> throw new SettingsException("Empty/invalid legacy JSON");
         };
     }

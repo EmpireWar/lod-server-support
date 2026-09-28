@@ -11,6 +11,23 @@ class YamlSettingsCodecTest {
     private final SettingsSchema<ServerSettings> schema=SettingsSchema.server(false);
     private final YamlSettingsCodec<ServerSettings> codec=new YamlSettingsCodec<>(schema);
     private static byte[] bytes(String s){return s.getBytes(StandardCharsets.UTF_8);}
+    @Test void integerMapValuesRejectFloatingPointTokensLikeScalarIntegers() {
+        var codec=new YamlSettingsCodec<>(SettingsSchema.server(true));
+        for(String group:List.of("by_dimension","by_world"))for(String value:List.of("12.0","1.2e1",".inf"))
+            assertThrows(SettingsException.class,()->codec.parse(("config_version: 1\nlod:\n  distance:\n    "+group+": {minecraft:overworld: "+value+"}\n").getBytes(StandardCharsets.UTF_8)));
+        assertEquals(12,codec.parse("config_version: 1\nlod:\n  distance:\n    by_dimension: {minecraft:overworld: 12}\n".getBytes(StandardCharsets.UTF_8)).normalized().lod().distance().byDimension().get("minecraft:overworld"));
+    }
+    @Test void dottedYamlKeysCannotShadowNestedSettingsOrLoseDraftEdits() {
+        var client = new YamlSettingsCodec<>(SettingsSchema.client());
+        for (String body : List.of("lod:\n  receive: true\nlod.receive: false\n",
+                "lod.receive: false\nlod:\n  receive: true\n", "lod:\n  download.max_columns_per_second: 100\n"))
+            assertThrows(SettingsException.class, () -> client.parse(bytes("config_version: 1\n" + body)));
+        var map = client.parse(bytes("config_version: 1\ncache:\n  address_aliases: [[play.example.org, backup.example.org]]\n"));
+        assertEquals("play.example.org", map.configured().cache().addressAliases().getFirst().getFirst());
+        var paper = new YamlSettingsCodec<>(SettingsSchema.server(true));
+        assertEquals(42, paper.parse(bytes("config_version: 1\nlod:\n  distance:\n    by_world: {world.with.dots: 42}\n"))
+                .configured().lod().distance().byWorld().get("world.with.dots"));
+    }
     @Test void approvedDefaultsMatchEveryDescriptorAndPlatform(){
         for(var s:List.of(schema,SettingsSchema.server(true))) {
             var c=new YamlSettingsCodec<>(s);var d=c.parse(c.defaults());

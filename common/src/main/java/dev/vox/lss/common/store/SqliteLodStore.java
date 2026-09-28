@@ -261,6 +261,7 @@ public final class SqliteLodStore implements LodStoreService {
         return receipt;
     }
 
+    public StorePolicy adoptedPolicy() { return policy; }
     public long adoptedPolicyRevision() { return policy.revision(); }
     long nextResweepNanosForTest() { return nextResweepNanos; }
     private void cancelPolicyReceipts() {
@@ -2106,7 +2107,7 @@ public final class SqliteLodStore implements LodStoreService {
                                 + (this.policy.maxDbBytes() >> 20) + " MB) — the store is at "
                                 + "its size cap and will keep evicting silently; running "
                                 + "totals in '/" + Brand.serverCommand() + " store status' (evicted=), raise or "
-                                + "zero lodStoreMaxMB (0 = uncapped) for full retention");
+                                + "zero storage.lod_store.max_size_mib (0 = uncapped) for full retention");
                     }
                     liveBytes = logicalDbBytes();
                 }

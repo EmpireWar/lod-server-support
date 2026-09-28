@@ -51,7 +51,7 @@ public final class ClientSettingsSaveScreen extends Screen {
             graphics.drawString(font, line, 20, y, 0xffffffff);
             y += 12;
         }
-        if (draft.error() != null) for (var line : font.split(Component.literal(draft.error()), Math.max(80, width - 40))) {
+        if (draft.error() != null) for (var line : font.split(Component.translatable("lss.settings.error_logged"), Math.max(80, width - 40))) {
             graphics.drawString(font, line, 20, y, 0xffffaaaa);
             y += 12;
         }

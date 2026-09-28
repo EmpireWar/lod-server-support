@@ -1,13 +1,12 @@
 # Structured YAML settings and explicit reload
 
-Status: proposal; implementation is held for the user's approval of the YAML examples.
+Status: approved for implementation on 2026-09-28; implementation and validation in progress.
 Date: 2026-09-28. Base: `origin/main` at `d4b415d5` (released v0.15.1 behavior).
-Worktree: `/home/vox/projects/lss-settings-plan`, branch `docs/yaml-settings-plan-20260928`.
+Worktree: `/home/vox/projects/lss-settings-plan`, branch `feat/yaml-settings-mc26.2`.
 
 The request covers client and server configuration on all five maintained support
-lines, Fabric/Paper/NeoForge and both branding variants. This document and its examples
-are planning artifacts only. No runtime files, instances, releases or production code
-are changed by this planning task.
+lines, Fabric/Paper/NeoForge and both branding variants. The user approved implementation after reviewing the examples and expanded hot-reload
+policies. Work proceeds on isolated branches; publishing a release is outside this task.
 
 ## 1. Intended behavior and approval choices
 
@@ -896,7 +895,7 @@ Required tests:
 Completion means all approved files/schema/commands are shipped consistently in
 local candidates, all alternate settings publishers removed, migration proven,
 locale coverage complete, line capability gates green and review findings resolved.
-The user approves this proposal before step 1 begins.
+The user approved implementation before step 1 began (2026-09-28).
 
 ## 12. Plan review record
 
@@ -939,7 +938,7 @@ remaining restart boundaries. Both server examples now show that timing; generat
 timeout and dirty-broadcast cadence use ticks to match their existing clocks, with
 explicit legacy conversions. This follow-up is the primary agent's source review;
 the two linked Astra reports predate this expansion and are not represented as
-having reviewed these added contracts. Product implementation remains unstarted.
+having reviewed these added contracts. That review preceded product implementation.
 
-The implementation remains held for the user's approval of these examples and
-of the save-to-disk / explicit-reload behavior.
+Approval received on 2026-09-28. Implementation progress and final validation are
+recorded in `docs/implementation/2026-09-28-yaml-settings-progress.md`.

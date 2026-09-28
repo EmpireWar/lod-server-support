@@ -34,6 +34,7 @@ DURATION="${2:-60}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
 harness_acquire
+source "$HARNESS_LIB_DIR/settings.sh"
 SERVER_RUN_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-server"
 CLIENT_RUN_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-client"
 RESULTS_DIR="$PROJECT_ROOT/benchmark-results"
@@ -85,16 +86,10 @@ if [[ -z "${BENCHMARK_CONFIG_STAGED:-}" ]]; then
     # and broke cross-era comparability. 512 is the value the v0.10.0-era baselines ran
     # at (the 2026-08-08 rework default) — keep it pinned even as the shipped default
     # moves (300 since v0.11.0).
-    cat > "$SERVER_RUN_DIR/config/lss-server-config.json" <<'EOF'
-{
-  "enabled": true,
-  "enableChunkGeneration": true,
-  "lodDistanceChunks": 512,
-  "lodStore": "off",
-  "lodStoreBackfill": false,
-  "maxConcurrentDiskReads": 64
-}
-EOF
+    harness_stage_yaml "$SERVER_RUN_DIR/config/lss-server-config.yaml" server \
+        'service.enabled=true' 'generation.enabled=true' 'lod.distance.default_chunks=512' \
+        'lod.distance.by_dimension={}' 'storage.lod_store.enabled=false' \
+        'storage.lod_store.backfill.enabled=false' 'storage.disk.max_concurrent_reads=64'
     echo "[benchmark] Staged neutral config (lodStore=off, lodDistance=512 pinned) — export BENCHMARK_CONFIG_STAGED=1 to keep your own"
 fi
 

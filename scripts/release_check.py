@@ -141,6 +141,76 @@ def _looks_unexpanded(text):
     return "${version}" in text or "${ version }" in text
 
 
+YAML_PREFIX = "dev/vox/lss/internal/yaml/"
+YAML_CODEC = "dev/vox/lss/common/config/YamlSettingsCodec.class"
+YAML_REQUIRED_CLASSES = tuple(YAML_PREFIX + name for name in (
+    "v2/api/LoadSettings.class", "v2/api/lowlevel/Parse.class",
+    "v2/api/lowlevel/Compose.class", "v2/api/lowlevel/Serialize.class",
+    "v2/api/lowlevel/Present.class", "v2/parser/ParserImpl.class",
+    "v2/emitter/Emitter.class", "v2/schema/JsonSchema.class"))
+YAML_LICENSE = "META-INF/licenses/snakeyaml-engine-LICENSE.txt"
+YAML_NOTICE = "META-INF/licenses/snakeyaml-engine-NOTICE.txt"
+YAML_VERSION = "META-INF/maven/org.snakeyaml/snakeyaml-engine/pom.properties"
+YAML_TEMPLATES = tuple("dev/vox/lss/settings/" + side + ".yaml" for side in ("server", "paper", "client"))
+
+
+def _yaml_archives(source, label=None):
+    """Open archives only while inspected; do not inflate unrelated native entries."""
+    with zipfile.ZipFile(source) as archive:
+        yield label, archive
+        for entry in archive.namelist():
+            if entry.startswith(("META-INF/jars/", "META-INF/jarjar/")) and entry.endswith(".jar"):
+                nested_label = entry if label is None else label + "!" + entry
+                yield from _yaml_archives(io.BytesIO(archive.read(entry)), nested_label)
+
+
+def check_yaml_parser(jar, loader, problems):
+    """One common-owned relocated 3.1.1 parser, complete schema resources and notices."""
+    base = os.path.basename(jar)
+    owners = []
+    try:
+        for label, archive in _yaml_archives(jar):
+            names = archive.namelist()
+            stock = [name for name in names if name.startswith("org/snakeyaml/engine/")]
+            where = base if label is None else base + "!" + label
+            if stock:
+                problems.append(f"{where}: unrelocated SnakeYAML Engine namespace ships")
+            parser = [name for name in names if name.startswith(YAML_PREFIX) and name.endswith(".class")]
+            if not parser:
+                continue
+            owners.append(label)
+            if len(parser) != len(set(parser)):
+                problems.append(f"{where}: duplicate relocated parser class entries")
+            missing = set(YAML_REQUIRED_CLASSES + YAML_TEMPLATES + (YAML_CODEC, YAML_LICENSE, YAML_NOTICE, YAML_VERSION)) - set(names)
+            if missing:
+                problems.append(f"{where}: YAML runtime missing required entries: {sorted(missing)}")
+            if YAML_CODEC in names:
+                code = archive.read(YAML_CODEC)
+                if b"org/snakeyaml/engine/" in code or b"org.snakeyaml.engine." in code:
+                    problems.append(f"{where}: YAML codec still links the unrelocated parser")
+            for name in parser:
+                bytecode = archive.read(name)
+                if len(bytecode) < 8 or bytecode[:4] != b"\xca\xfe\xba\xbe" or int.from_bytes(bytecode[6:8], "big") != 55:
+                    problems.append(f"{where}: parser must retain the verified Java 11 bytecode: {name}")
+                    break
+            if YAML_LICENSE in names:
+                license_text = archive.read(YAML_LICENSE)
+                if len(license_text) < 10000 or b"Apache License" not in license_text or b"Version 2.0" not in license_text:
+                    problems.append(f"{where}: incomplete SnakeYAML Apache license")
+            if YAML_NOTICE in names and b"SnakeYAML Engine 3.1.1" not in archive.read(YAML_NOTICE):
+                problems.append(f"{where}: missing SnakeYAML version/copyright notice")
+            if YAML_VERSION in names and b"version=3.1.1\n" not in archive.read(YAML_VERSION):
+                problems.append(f"{where}: parser version is not pinned to 3.1.1")
+    except zipfile.BadZipFile as error:
+        problems.append(f"{base}: unreadable YAML parser archive ({error})")
+    if len(owners) != 1:
+        problems.append(f"{base}: expected exactly one relocated YAML parser copy, found {len(owners)}")
+    elif loader == "fabric" and (owners[0] is None or not owners[0].startswith("META-INF/jars/common-")):
+        problems.append(f"{base}: Fabric YAML parser must live only in its nested common jar")
+    elif loader != "fabric" and owners[0] is not None:
+        problems.append(f"{base}: {loader} YAML parser must be flattened with common")
+
+
 def check_fabric_jar(jar, problems):
     names = _names(jar)
     base = os.path.basename(jar)
@@ -1124,14 +1194,17 @@ def discover(problems, expected_version=None, root=ROOT):
             _flag_ambiguous(vneo, "voxy-server-side-neoforge", problems)
     for jar in fab:
         check_fabric_jar(jar, problems)
+        check_yaml_parser(jar, "fabric", problems)
         check_store_natives_fabric(jar, problems)
         check_third_party_notices(jar, True, problems)
     for jar in pap:
         check_paper_jar(jar, problems)
+        check_yaml_parser(jar, "paper", problems)
         check_store_natives_paper(jar, problems)
         check_third_party_notices(jar, False, problems)
     for jar in neo:
         check_neoforge_jar(jar, problems)
+        check_yaml_parser(jar, "neoforge", problems)
         # sqlite AND zstd-jni ride NESTED via jarjar (neoforge-jarjar-sqlite-plan.md
         # + issue #275) — the flat jar carries neither, nor any native.
         check_store_natives_neoforge(jar, problems)
@@ -1140,6 +1213,7 @@ def discover(problems, expected_version=None, root=ROOT):
             check_cross_loader_classes(fab[0], jar, problems)
     for jar in vneo:
         check_neoforge_jar(jar, problems)
+        check_yaml_parser(jar, "neoforge", problems)
         check_store_natives_neoforge(jar, problems)
         check_third_party_notices(jar, False, problems)
         check_vss_neoforge_identity(jar, problems)
@@ -1162,6 +1236,7 @@ def discover(problems, expected_version=None, root=ROOT):
         check_brand_properties(jar, _BRAND_LSS, problems)
     for jar in vfab:
         check_fabric_jar(jar, problems)
+        check_yaml_parser(jar, "fabric", problems)
         check_store_natives_fabric(jar, problems)
         check_third_party_notices(jar, True, problems)
         check_vss_fabric_identity(jar, problems)
@@ -1175,6 +1250,7 @@ def discover(problems, expected_version=None, root=ROOT):
             check_wire_identity_fabric(src, jar, problems)
     for jar in vpap:
         check_paper_jar(jar, problems)
+        check_yaml_parser(jar, "paper", problems)
         check_store_natives_paper(jar, problems)
         check_third_party_notices(jar, False, problems)
         check_vss_paper_identity(jar, problems)
@@ -1265,10 +1341,21 @@ def _selftest():
         assert cond, "selftest FAIL: " + msg
         n += 1
 
+    def _yaml_entries():
+        entries = {name: b"\xca\xfe\xba\xbe\x00\x00\x00\x37" for name in YAML_REQUIRED_CLASSES}
+        entries[YAML_CODEC] = b"\xca\xfe\xba\xbe\x00\x00\x00\x41"
+        entries[YAML_LICENSE] = "Apache License Version 2.0 " + "x" * 11000
+        entries[YAML_NOTICE] = "SnakeYAML Engine 3.1.1 Copyright (c) 2018, SnakeYAML"
+        entries[YAML_VERSION] = "version=3.1.1\n"
+        entries.update({name: "config_version: 1\n" for name in YAML_TEMPLATES})
+        return entries
+
     def _nested_common(version="0.4.0"):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as z:
             z.writestr("dev/vox/lss/common/PositionUtil.class", "x")
+            for name, value in _yaml_entries().items():
+                z.writestr(name, value)
         return buf.getvalue()
 
     def _nested_sqlite(with_license=True):
@@ -2059,6 +2146,43 @@ def _selftest():
         check(any("lost its in-jar LICENSE" in m for m in p),
               f"stripped nested sqlite license not caught: {p}")
 
+        # Relocated YAML parser: all six brands/loaders must enforce the same shape.
+        yaml_flat = os.path.join(td, "yaml-flat.jar")
+        _make_jar(yaml_flat, _yaml_entries())
+        for loader in ("paper", "neoforge", "common"):
+            p = []
+            check_yaml_parser(yaml_flat, loader, p)
+            check(not p, f"valid flat YAML runtime rejected on {loader}: {p}")
+        yaml_fabric = os.path.join(td, "yaml-fabric.jar")
+        _make_jar(yaml_fabric, {"META-INF/jars/common-test.jar": _nested_common()})
+        p = []
+        check_yaml_parser(yaml_fabric, "fabric", p)
+        check(not p, f"valid nested YAML runtime rejected: {p}")
+        p = []
+        check_yaml_parser(yaml_flat, "fabric", p)
+        check(any("nested common" in issue for issue in p), f"outer Fabric parser accepted: {p}")
+        for label, change, expected in (
+                ("stock", {"org/snakeyaml/engine/v2/api/LoadSettings.class": "stock"}, "unrelocated"),
+                ("link", {YAML_CODEC: "org/snakeyaml/engine/v2/api/LoadSettings"}, "still links"),
+                ("license", {YAML_LICENSE: "Apache"}, "incomplete"),
+                ("version", {YAML_VERSION: "version=3.2.0\n"}, "not pinned"),
+                ("class-version", {YAML_REQUIRED_CLASSES[0]: b"\xca\xfe\xba\xbe\x00\x00\x00\x45"}, "Java 11")):
+            bad = os.path.join(td, "yaml-" + label + ".jar")
+            _make_jar(bad, dict(_yaml_entries(), **change))
+            p = []
+            check_yaml_parser(bad, "paper", p)
+            check(any(expected in issue for issue in p), f"YAML {label} regression accepted: {p}")
+        yaml_duplicate = os.path.join(td, "yaml-duplicate.jar")
+        _make_jar(yaml_duplicate, dict(_yaml_entries(), **{"META-INF/jars/common-test.jar": _nested_common()}))
+        p = []
+        check_yaml_parser(yaml_duplicate, "fabric", p)
+        check(any("found 2" in issue for issue in p), f"duplicated parser accepted: {p}")
+        yaml_missing = os.path.join(td, "yaml-missing.jar")
+        _make_jar(yaml_missing, {"dev/vox/lss/common/PositionUtil.class": "x"})
+        p = []
+        check_yaml_parser(yaml_missing, "paper", p)
+        check(any("found 0" in issue for issue in p), f"missing parser accepted: {p}")
+
         # ---- discover(): end-to-end wiring over a synthetic build tree ----
         # The leaf checks above prove each check works; these prove discover() actually
         # CALLS them (presence, pair wiring, identity) — a refactor that drops a call
@@ -2109,8 +2233,8 @@ def _selftest():
                 "fabric.mod.json": json.dumps(meta),
                 "assets/lss/lang/en_us.json": json.dumps(
                     {"lss.config.page": "General",
-                     "lss.config.far_players_with_seeu": ("Prefer VSS Far Players" if brand == BRAND_VSS
-                                                          else "Prefer LSS Far Players")}),
+                     "lss.status.title": ("VSS Status" if brand == BRAND_VSS
+                                                          else "LSS Status")}),
                 "dev/vox/lss/LSSMod.class": "x",
                 # A SHARED class (xplat) — the cross-loader presence check's subject.
                 "dev/vox/lss/networking/server/RequestProcessingService.class": "x",
@@ -2134,6 +2258,7 @@ def _selftest():
                 "THIRD-PARTY-NOTICES": "sqlite-jdbc / zstd-jni notices " + "x" * 100,
             }
             entries.update(_store_paper_entries())
+            entries.update(_yaml_entries())
             _make_jar(os.path.join(dpap, name), entries, manifest=pap_manifest)
 
         _write_tree_fabric("lod-server-support-fabric.jar",
@@ -2166,8 +2291,8 @@ def _selftest():
                 "lss-sodium-legacy.mixins.json": "{}",
                 "assets/lss/lang/en_us.json": json.dumps(
                     {"lss.config.page": "General",
-                     "lss.config.far_players_with_seeu": ("Prefer VSS Far Players" if brand == BRAND_VSS
-                                                          else "Prefer LSS Far Players")}),
+                     "lss.status.title": ("VSS Status" if brand == BRAND_VSS
+                                                          else "LSS Status")}),
                 "META-INF/accesstransformer.cfg": "public net.minecraft.world.level.chunk.PalettedContainer data",
                 "META-INF/services/dev.vox.lss.platform.LoaderServices":
                     "dev.vox.lss.platform.NeoForgeLoaderServices",
@@ -2185,6 +2310,7 @@ def _selftest():
                 "assets/lss/icon.png": "PNG",
                 "THIRD-PARTY-NOTICES": "sqlite-jdbc / zstd-jni notices " + "x" * 100,
             }
+            entries.update(_yaml_entries())
             entries.update(_store_neoforge_entries() if store_entries is None
                            else store_entries)
             if brand == BRAND_VSS:
@@ -2201,6 +2327,19 @@ def _selftest():
         check(p == [] and len(fab_d) == len(pap_d) == len(vfab_d) == len(vpap_d)
               == len(neo_d) == len(vneo_d) == 1,
               f"clean synthetic tree flagged by discover: {p}")
+
+        # Prove parser checks are wired into discovery for every branded loader family.
+        for yaml_jar in fab_d + pap_d + vfab_d + vpap_d + neo_d + vneo_d:
+            with zipfile.ZipFile(yaml_jar) as archive:
+                original_entries = {name: archive.read(name) for name in archive.namelist()}
+            leaked_entries = dict(original_entries)
+            leaked_entries["org/snakeyaml/engine/v2/api/LoadSettings.class"] = "stock"
+            _make_jar(yaml_jar, leaked_entries)
+            p = []
+            discover(p, root=droot)
+            check(any(os.path.basename(yaml_jar) in issue and "unrelocated SnakeYAML" in issue for issue in p),
+                  f"discovery missed parser leakage in {yaml_jar}: {p}")
+            _make_jar(yaml_jar, original_entries)
 
         # a neoforge jar whose entrypoint/seam classes were shaded OUT must fail
         # (round-3 review NIT-3: the gametest smoke runs off classes dirs, never the
@@ -2260,7 +2399,7 @@ def _selftest():
         # the VSS neoforge lang rewrite must actually rebrand (the fabric pair's V-M2 pin)
         _write_tree_neoforge("voxy-server-side-neoforge.jar", TOML_VSS, BRAND_VSS,
                              extra={"assets/lss/lang/en_us.json": json.dumps(
-                                 {"lss.config.far_players_with_seeu": "Prefer LSS Far Players"})})
+                                 {"lss.status.title": "LSS Status"})})
         p = []
         check_vss_pair_neoforge(os.path.join(dneo, "lod-server-support-neoforge.jar"),
                                 os.path.join(dneo, "voxy-server-side-neoforge.jar"), p)

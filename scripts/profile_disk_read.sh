@@ -30,6 +30,7 @@ set -euo pipefail
 MAIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$MAIN_ROOT/scripts/lib/harness-lock.sh"
 harness_acquire
+source "$HARNESS_LIB_DIR/settings.sh"
 OUT_ROOT="${OUT_ROOT:-$MAIN_ROOT/profile-results}"
 
 # Ref-vs-ref arm mode (PERF Phase 0 item 2). PROFILE_BASE_WT default deliberately
@@ -51,6 +52,24 @@ die() { echo "[profile] ERROR: $*" >&2; exit 1; }
 # PROFILE_SELECTIVE_PARSE: useSelectiveNbtParse override (default true) — the Phase 4
 # kill-switch A/B arm variable (same jar, config-flipped).
 stage_server_config() { # <path>
+    if [[ "$1" == *.yaml ]]; then
+        local bandwidth_mib
+        bandwidth_mib="$(python3 -c 'import sys; print(int(sys.argv[1])/1048576)' "${PROFILE_BW_PER_PLAYER:-20971520}")"
+        harness_stage_yaml "$1" server 'service.enabled=true' "lod.distance.default_chunks=$LOD_R" \
+            'lod.distance.by_dimension={}' "network.bandwidth.per_player_mib_per_second=$bandwidth_mib" \
+            'network.bandwidth.global_mib_per_second=100' 'storage.disk.reader_threads=5' \
+            'storage.disk.max_concurrent_reads=5' "network.send_queue_limit_per_player=${PROFILE_SEND_QUEUE:-1024}" \
+            'generation.enabled=false' 'generation.concurrency.global=32' 'generation.concurrency.per_player=16' \
+            'generation.timeout_ticks=1200' 'updates.dirty_broadcast_interval_ticks=200' \
+            'storage.timestamp_cache_mib_per_dimension=32' 'storage.miss_memo_ttl_seconds=30' \
+            'storage.disk.background_priority=true' 'compatibility.protocols.v16=true' \
+            "serialization.nbt_transcode=${PROFILE_NBT_TRANSCODE:-true}" \
+            "serialization.selective_nbt_parse=${PROFILE_SELECTIVE_PARSE:-true}" \
+            'storage.lod_store.enabled=false'
+        return
+    fi
+    # Historical comparison checkout predates YAML; preserve its release-era input.
+
     cat > "$1" <<EOF
 {
   "enabled": true,
@@ -76,6 +95,13 @@ EOF
 }
 
 stage_client_config() { # <path>
+    if [[ "$1" == *.yaml ]]; then
+        harness_stage_yaml "$1" client 'lod.receive=true' "lod.distance_chunks=$LOD_R" \
+            'compatibility.protocols.v16=true' 'compatibility.v16_generation=true'
+        return
+    fi
+    # Historical comparison checkout predates YAML.
+
     cat > "$1" <<EOF
 {
   "receiveServerLods": true,
@@ -166,8 +192,8 @@ cmd_run() {
     local cli_cfg_dir="$root/fabric/build/run/benchmark-client/config"
     mkdir -p "$srv_cfg_dir" "$cli_cfg_dir"
     rm -rf "$cli_cfg_dir/lss/cache" "$root/fabric/build/run/benchmark-client/.lss/cache"  # both roots (stage D)
-    stage_server_config "$srv_cfg_dir/lss-server-config.json"
-    stage_client_config "$cli_cfg_dir/lss-client-config.json"
+    stage_server_config "$srv_cfg_dir/lss-server-config.$(harness_settings_extension "$root")"
+    stage_client_config "$cli_cfg_dir/lss-client-config.$(harness_settings_extension "$root")"
 
     # Stale-artifact guard: a crashed run must yield MISSING files, not the previous run's.
     rm -f "$root/benchmark-results/current.json" "$root/benchmark-results/server.json" "$root/benchmark-results/client.json" \

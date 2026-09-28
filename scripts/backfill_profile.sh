@@ -46,6 +46,7 @@ set -euo pipefail
 MAIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$MAIN_ROOT/scripts/lib/harness-lock.sh"
 harness_acquire
+source "$HARNESS_LIB_DIR/settings.sh"
 OUT_ROOT="${OUT_ROOT:-$MAIN_ROOT/profile-results}"
 PROJECT_ROOT="$MAIN_ROOT"   # for mc-run.sh (re-pointed per arm in cmd_run)
 LOG_PREFIX="backfill-profile"
@@ -60,6 +61,18 @@ log() { echo "[backfill-profile] $*"; }
 die() { echo "[backfill-profile] ERROR: $*" >&2; exit 1; }
 
 stage_server_config() { # <path>
+    if [[ "$1" == *.yaml ]]; then
+        harness_stage_yaml "$1" server 'service.enabled=true' "lod.distance.default_chunks=${PROFILE_LOD_R:-256}" \
+            'lod.distance.by_dimension={}' 'storage.disk.reader_threads=5' 'storage.disk.max_concurrent_reads=5' \
+            'generation.enabled=false' 'storage.miss_memo_ttl_seconds=30' 'storage.disk.background_priority=true' \
+            "serialization.nbt_transcode=${PROFILE_NBT_TRANSCODE:-true}" \
+            "serialization.selective_nbt_parse=${PROFILE_SELECTIVE_PARSE:-true}" \
+            'storage.lod_store.enabled=true' 'storage.lod_store.backfill.enabled=true' \
+            "storage.lod_store.backfill.columns_per_second=${PROFILE_BACKFILL_CPS:-1000}"
+        return
+    fi
+    # Historical comparison checkout predates YAML; preserve its release-era input.
+
     cat > "$1" <<EOF
 {
   "enabled": true,
@@ -149,7 +162,7 @@ cmd_run() {
     rm -rf "$server_run_dir/world/lss-lod"
 
     mkdir -p "$server_run_dir/config"
-    stage_server_config "$server_run_dir/config/lss-server-config.json"
+    stage_server_config "$server_run_dir/config/lss-server-config.$(harness_settings_extension "$root")"
 
     # pause-when-empty-seconds=-1 is load-bearing: no client EVER joins, and a paused
     # server neither ticks the benchmark duration counter nor advances the walk.

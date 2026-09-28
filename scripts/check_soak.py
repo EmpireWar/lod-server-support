@@ -14,14 +14,13 @@ same-client-run, same-dimension windows; dimension/join boundaries get anomaly c
   A6 monotonic:   server cumulative whitelist (disk totals, generation totals, service.*, bandwidth.total_bytes) over process lifetime;
                   client cumulative counters within one run AND one dimension segment only; server per-player rows are never checked
   A7 anomalies:   disk.errors / generation.timeouts / client.dropped > 0 always fail; disk.saturated fails unless the scenario opts in
-  B2 pacing:      d(bandwidth.total_bytes) <= bytesPerSecondLimitGlobal * dt * 1.3 over every consecutive
+  B2 pacing:      d(bandwidth.total_bytes) <= network.bandwidth.global_mib_per_second (converted to bytes/s) * dt * 1.3 over every consecutive
                   server snapshot pair — armed only when the scenario config sets the global cap
 
 Vacuous-pass guards: every scenario declares per-(run, dimension-segment) floors on the number
 of client-laws windows actually evaluated (MIN_CLIENT_WINDOWS) — a run where A1/A2/A5 never
 fired fails loudly instead of passing on zero evidence. --validate additionally rejects scenario
-config overrides whose keys are not real lss-server-config.json fields (GSON silently ignores
-typos, which would de-fang a scenario's whole premise).
+YAML settings with the same strict schema and parser used by the server.
 
 Quiescence predicate: across >=2 consecutive server snapshots in the same join segment,
 service.requests_received, service.columns_sent, disk.submitted, generation.submitted and
@@ -53,7 +52,7 @@ from pathlib import Path
 
 SCENARIO_DIR = Path(__file__).resolve().parent / "soak-scenarios"
 SKEW_MS = 3000  # max |server.wallMs - client.wallMs| for a quiescence join
-DEFAULT_DIRTY_BROADCAST_SECONDS = 5  # used when the scenario -config.json omits the key
+DEFAULT_DIRTY_BROADCAST_TICKS = 200  # schema default; scenario files normally pin this explicitly
 
 # Scenarios with more than one client run (kick → rejoin); everything else has exactly 1.
 EXPECTED_RUNS = {"warm-rejoin": 2, "dirty-while-offline": 2, "dimension-rejoin-warm": 2,
@@ -174,124 +173,14 @@ MIN_CLIENT_WINDOWS = {
 
 # The exclusion circle the client scanner never requests inside: min(client render distance,
 # server view-distance), both pinned to 8 by soak.sh (server.properties view-distance=8,
-# options.txt renderDistance:8). The scanned annulus is Chebyshev rings 9..lodDistanceChunks.
+# options.txt renderDistance:8). The scanned annulus is Chebyshev rings 9..lod.distance.default_chunks.
 EXCLUSION_RADIUS = 8
 
-# Every legal key of lss-server-config.json (ServerConfigBase fields — the Fabric soak server
-# reads exactly these). GSON silently ignores unknown keys, so a typo in a scenario's
-# -config.json would silently fall back to defaults and de-fang the scenario; --validate
-# rejects unknown keys and wrong JSON types instead.
-SERVER_CONFIG_BOOL_KEYS = frozenset({"enabled", "enableChunkGeneration", "useBackgroundReadPriority",
-                                     # NBT->wire transcode kill switch (round 2, 2026-07-29):
-                                     # scenarios may pin it off for object-path A/Bs.
-                                     "useNbtTranscode",
-                                     # The ping backstop's kill switch (Mechanism B) and the
-                                     # send pacer's (send-pacing-plan.md) — both structurally
-                                     # inert on loopback; listed so live-shaped A/B scenarios
-                                     # can pin them (the S-8 same-commit rule; enablePingBackstop
-                                     # was briefly MISFILED in the int set — a bool here would
-                                     # have failed --validate as "must be a JSON integer").
-                                     "enablePingBackstop", "enableSendPacing",
-                                     # LOD-store backfill opt-in (Phase 4) — the key was
-                                     # missing from this allowlist, so a backfill soak
-                                     # scenario could not be written (4-agent round R4).
-                                     "lodStoreBackfill",
-                                     # Compressed-columns kill switch (protocol 19):
-                                     # scenarios pin it off for the raw-path A/B arm.
-                                     "useCompressedColumns",
-                                     # Legacy-client shim toggle. Absent from this list
-                                     # since it was introduced, so no scenario could
-                                     # ever pin it — the same R4 hole as lodStoreBackfill
-                                     # (v0.9.0 review).
-                                     "enableV16Compat",
-                                     # v18 compat rung kill switch (v0.9.1) — listed at
-                                     # introduction so an A/B scenario CAN pin it, unlike
-                                     # the two R4 holes above.
-                                     "enableV18Compat",
-                                     # v19 compat rung kill switch (v0.10.0 C1, protocol
-                                     # 20) — listed at introduction per the same-commit
-                                     # allowlist rule so a dialect A/B scenario CAN pin it.
-                                     "enableV19Compat",
-                                     # Transport yield (v0.10.0 A2, default false): the
-                                     # writability gate is provably inert on loopback, so
-                                     # an armed soak is expected-identical — the S-8
-                                     # same-commit allowlist rule (the twice-shipped
-                                     # R4-class defect).
-                                     "lodYieldsToVanillaTransport",
-                                     # Via cross-MC mismatch guard (v0.10.0 C5, XVER §7)
-                                     # — listed at introduction per the same-commit
-                                     # allowlist rule. Soaks run without Via, so the
-                                     # probe is no-signal and either value is provably
-                                     # inert (an A/B pins exactly that).
-                                     "enableViaMismatchGuard",
-                                     # Far players (E1, FARP §3.4) — registered with the
-                                     # knobs (the R4 lesson). E1 soaks stay mode-off;
-                                     # the E2/E3 coexist scenarios arm these.
-                                     "farPlayersSendSpectators",
-                                     # Region summaries (region-summary-sync-plan.md §9)
-                                     # — listed at introduction per the same-commit
-                                     # allowlist rule so the summary scenarios and their
-                                     # kill-switch A/B arm can pin it.
-                                     "enableRegionSummaries"})
-SERVER_CONFIG_INT_KEYS = frozenset({
-    "lodDistanceChunks", "bytesPerSecondLimitPerPlayer", "diskReaderThreads",
-    # Disk-read concurrency gate K (disk-read-concurrency-gate-plan.md; 0 = AUTO,
-    # store-conditional). Registered WITH the knob (the R4 lesson): every pre-existing
-    # scenario pins it to a no-op (its diskReaderThreads value / the resolved default
-    # pool) so their law baselines stay gate-free; disk-read-gate arms it. Precision
-    # note (stage-B review ACC-5): store-offline-mutate's pin of 3 equals the FABRIC
-    # vanilla AUTO pool; a >=8-core Paper standalone run of that phase resolves a
-    # larger prioritized pool, where 3 would nominally bind — inert there
-    # (enabled=false, no read traffic) and the A7 gated/gate_stops arms flag any leak
-    # (since Amendment 2 the gate_stops arm fires FIRST — saturation binds before
-    # overflow — so arming that phase, or copying its K pin into a new scenario on a
-    # box whose AUTO pool exceeds it, needs the opt-in or a K=pool pin).
-    "maxConcurrentDiskReads",
-    "sendQueueLimitPerPlayer", "bytesPerSecondLimitGlobal",
-    # Canonical bandwidth spellings since the 2026-08-08 key rename (staleness-sweep
-    # finding: only the legacy byte spellings were listed, so a scenario written with
-    # the modern keys would be rejected — the R4 lesson again). Values are MiB/s
-    # doubles in the mod; scenarios may still write ints (validated as numeric below
-    # via the int allowlist — a fractional override belongs in a new float set if ever
-    # needed).
-    "mbPerSecondLimitPerPlayer", "mbPerSecondLimitGlobal",
-    "generationConcurrencyLimitGlobal", "generationTimeoutSeconds",
-    "dirtyBroadcastIntervalSeconds",
-    "generationConcurrencyLimitPerPlayer", "perDimensionTimestampCacheSizeMB",
-    # Miss-memo TTL (0 = off): scenarios may pin the memo off for A/B of the read-churn
-    # dynamics. NOTE ttl=0 restores pre-memo READ CHURN only, not pre-memo ORDERING —
-    # the generation pacing rules are ttl-independent (unified 2026-07-19), so an
-    # inversion A/B against a pre-memo recording is no longer apples-to-apples.
-    "missMemoTtlSeconds",
-    # X-ray masking cutoff (docs/planning/antixray-compat-design.md §3).
-    "xrayMaxBlockHeight",
-    # LOD-store periodic freshness re-sweep (Paper's stale bound; 0 = off).
-    "lodStoreResweepSeconds",
-    # LOD-store on-disk size cap (Phase 5 eviction).
-    "lodStoreMaxMB",
-    # LOD-store backfill pace (store-backfill-tuning-plan.md) — added with the knob itself
-    # (the R4 lesson: a key missing from this allowlist means no scenario can ever set it).
-    # lodStoreBackfillTickCeilingMillis was retired to a constant 2026-08-02: its clamp band
-    # was 20..50 and both ends were degenerate by its own documentation.
-    "lodStoreBackfillColumnsPerSecond",
-    # Far players (E1): cadence + the distance ring (FARP §3.4).
-    "farPlayersUpdateIntervalTicks", "farPlayersMaxDistanceBlocks",
-    "farPlayersMinDistanceBlocks",
-})
-# X-ray masking tri-state ("auto"/"on"/"off"), the LOD-store switch ("off"/"full" —
-# scenarios A/B store gates against it; "memory" retired 2026-08-02), + hidden-block
-# id list — the only
-# non-bool non-int server config keys; validated loosely (any string / list of strings).
-SERVER_CONFIG_STRING_KEYS = frozenset({"xrayObfuscation", "lodStore",
-                                       # Far players mode ("off"/"on"/"opt-in", E1).
-                                       "farPlayers"})
-# updateEvents is Paper-only (the Bukkit event class names driving dirty detection);
-# it was absent here, so no Paper scenario could pin its dirty-detection surface.
-SERVER_CONFIG_STRING_LIST_KEYS = frozenset({"xrayHiddenBlocks", "updateEvents",
-                                            # Far players per-name/UUID privacy list (E1).
-                                            "farPlayersExclude"})
-SERVER_CONFIG_KEYS = (SERVER_CONFIG_BOOL_KEYS | SERVER_CONFIG_INT_KEYS
-                      | SERVER_CONFIG_STRING_KEYS | SERVER_CONFIG_STRING_LIST_KEYS)
+# YAML is parsed and typed by the product implementation, not a second Python parser.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools.settings.settings_file import values as settings_values, render as render_settings
 
 # Headroom for B2: per-tick allocation jitter across a 5 s wall window (ticks can lag and
 # repay within the same wall budget, never sustainably exceed it).
@@ -1075,7 +964,7 @@ def evaluate_laws(ctx):
       snapshot (server); segment-start -> first qpoint and last qpoint -> segment end
       per client (run, dimension segment). These do not count as evaluated windows.
     - B2 over every consecutive raw snapshot pair, armed only when the scenario config
-      sets bytesPerSecondLimitGlobal.
+      sets network.bandwidth.global_mib_per_second (converted to bytes/s).
     Per-(run, segment) client-laws window counts are checked against MIN_CLIENT_WINDOWS.
     """
     violations = []
@@ -1090,18 +979,11 @@ def evaluate_laws(ctx):
     for run, csnaps in sorted(ctx.runs.items()):
         violations += law_A6_client(run, csnaps)
 
-    # B2 over raw series, armed by the scenario's bandwidth cap override — either
-    # spelling, with MB WINNING when both are present (final-review C-M3: this mirrors
-    # the mod's resolveBandwidthKeys ladder exactly; the checker preferring bytes would
-    # arm B2 at a value the server is not enforcing).
+    # B2 uses the normalized canonical raw-work MiB/s budget.
     cap = None
-    mb = ctx.config.get("mbPerSecondLimitGlobal")
+    mb = ctx.config.get("network.bandwidth.global_mib_per_second")
     if isinstance(mb, (int, float)) and not isinstance(mb, bool):
         cap = int(mb * 1024 * 1024)
-    if cap is None:
-        b = ctx.config.get("bytesPerSecondLimitGlobal")
-        if isinstance(b, int) and not isinstance(b, bool):
-            cap = b
     if isinstance(cap, int) and cap > 0:
         violations += law_B2(snaps, cap)
 
@@ -1304,7 +1186,7 @@ class Ctx:
     ends: list
     runs: dict                 # run number -> list of client snapshots
     qpoints: list
-    config: dict               # scenario -config.json contents ({} if unavailable)
+    config: dict               # scenario -config.yaml contents ({} if unavailable)
     platform: str = "fabric"   # SOAK_PLATFORM of the recording (soak.sh --platform)
     quiescent_server: set = field(default_factory=set)   # server snapshot indices
     quiescent_client: set = field(default_factory=set)   # (run, client index) join targets
@@ -1935,7 +1817,7 @@ def check_dirty_broadcast(ctx):
         return
     cmd_wall = cmd["wallMs"]
     # Explicit task-mandated default when the override file omits the key.
-    interval = ctx.config.get("dirtyBroadcastIntervalSeconds", DEFAULT_DIRTY_BROADCAST_SECONDS)
+    interval = (ctx.config.get("updates.dirty_broadcast_interval_ticks", DEFAULT_DIRTY_BROADCAST_TICKS) / 20.0)
     before = [s for s in snaps if s["wallMs"] < cmd_wall]
     if not before:
         yield Violation("dirty-broadcast", f"setblock@{cmd_wall}",
@@ -1982,12 +1864,12 @@ def make_disc_completeness(scenario, run=1):
     @named_check(scenario, ["client.columns.known", "client.columns.empty",
                             "client.columns.satisfied"])
     def check(ctx):
-        lod = ctx.config.get("lodDistanceChunks")
+        lod = ctx.config.get("lod.distance.default_chunks")
         if not isinstance(lod, int) or isinstance(lod, bool) or lod <= EXCLUSION_RADIUS:
             yield Violation("disc-completeness", f"run{run}",
-                            "scenario config must pin lodDistanceChunks above the exclusion "
+                            "scenario config must pin lod.distance.default_chunks above the exclusion "
                             "radius for the disc-completeness check",
-                            {"lodDistanceChunks": lod, "exclusion_radius": EXCLUSION_RADIUS})
+                            {"lod.distance.default_chunks": lod, "exclusion_radius": EXCLUSION_RADIUS})
             return
         fc = ctx.final_client(run)
         if fc is None:
@@ -2004,7 +1886,7 @@ def make_disc_completeness(scenario, run=1):
                             "columns.known+empty+satisfied below the scanned annulus area — "
                             "positions were silently orphaned",
                             {"known": known, "empty": empty, "satisfied": satisfied,
-                             "total": total, "annulus_area": area, "lodDistanceChunks": lod,
+                             "total": total, "annulus_area": area, "lod.distance.default_chunks": lod,
                              "exclusion_radius": EXCLUSION_RADIUS})
     check.__name__ = f"check_disc_completeness_run{run}"
     return check
@@ -2265,10 +2147,9 @@ def check_bandwidth_throttle(ctx):
     send-queue breaker); only the recovery mechanism changed — a want dropped by a
     queue-full break is re-declared by the client's 1 Hz want-set, not rescued by the
     deleted 10 s in-flight timeout sweep."""
-    if ("bytesPerSecondLimitGlobal" not in ctx.config
-            and "mbPerSecondLimitGlobal" not in ctx.config):
+    if "network.bandwidth.global_mib_per_second" not in ctx.config:
         yield Violation("bandwidth-throttle", "config",
-                        "scenario config must set a global bandwidth cap (either spelling)"
+                        "scenario config must set a global bandwidth cap"
                         " or B2 stays unarmed", {})
     last = ctx.server_snaps[-1]
     if last["service"]["queue_full"] < 1:
@@ -2466,11 +2347,11 @@ def check_teleport_prune(ctx):
                         "expected a single overworld segment (same-dimension teleport)",
                         {"segments": [s[1] for s in segs]})
         return
-    lod = ctx.config.get("lodDistanceChunks")
+    lod = ctx.config.get("lod.distance.default_chunks")
     if not isinstance(lod, int) or isinstance(lod, bool) or lod <= EXCLUSION_RADIUS:
         yield Violation("teleport-prune", "config",
-                        "scenario config must pin lodDistanceChunks above the exclusion radius",
-                        {"lodDistanceChunks": lod})
+                        "scenario config must pin lod.distance.default_chunks above the exclusion radius",
+                        {"lod.distance.default_chunks": lod})
         return
     area = (2 * lod + 1) ** 2 - (2 * EXCLUSION_RADIUS + 1) ** 2
     fc = snaps[-1]
@@ -2513,7 +2394,7 @@ def check_dirty_range_filter(ctx):
                         {"setblocks": len(setblocks), "near_forceload": near_fl is not None})
         return
     far_cmd, near_cmd = setblocks
-    interval = ctx.config.get("dirtyBroadcastIntervalSeconds", DEFAULT_DIRTY_BROADCAST_SECONDS)
+    interval = (ctx.config.get("updates.dirty_broadcast_interval_ticks", DEFAULT_DIRTY_BROADCAST_TICKS) / 20.0)
     snaps = ctx.runs.get(1)
     if not snaps:
         yield Violation("dirty-range-filter", "run1", "no client snapshots in run 1", {})
@@ -2575,7 +2456,7 @@ def check_dirty_range_filter(ctx):
                                        "client.columns.dirty"])
 def check_dirty_during_backfill(ctx):
     """Edit + save-all fired while the backfill stream is still in flight (the scenario
-    config throttles bytesPerSecondLimitGlobal so the disc takes ~25s to stream instead
+    config throttles network.bandwidth.global_mib_per_second (converted to bytes/s) so the disc takes ~25s to stream instead
     of ~5s): invalidation-mailbox events race live serves for nearby positions. The
     conservation laws judge the interleaving; this check pins the premise — traffic
     genuinely in flight at the edit instant — plus dirty drain and final convergence."""
@@ -3461,7 +3342,7 @@ def check_paper_dirty_falling_block(ctx):
         yield Violation("paper-dirty-falling-block", "run1", "no client snapshots in run 1", {})
         return
     cmd_wall = cmd["wallMs"]
-    interval = ctx.config.get("dirtyBroadcastIntervalSeconds", DEFAULT_DIRTY_BROADCAST_SECONDS)
+    interval = (ctx.config.get("updates.dirty_broadcast_interval_ticks", DEFAULT_DIRTY_BROADCAST_TICKS) / 20.0)
     before = [s for s in snaps if s["wallMs"] < cmd_wall]
     if not before:
         yield Violation("paper-dirty-falling-block", f"summon@{cmd_wall}",
@@ -3620,42 +3501,34 @@ CHECKS = {
 # ---------------------------------------------------------------------- validate mode
 
 def validate_config_overrides(cfg):
-    """Reject -config.json keys that are not real lss-server-config.json fields (GSON
-    silently ignores unknown keys — a typo would silently revert the scenario to defaults)
-    and values whose JSON type does not match the field."""
-    errors = []
-    for key in sorted(cfg.keys() - SERVER_CONFIG_KEYS):
-        errors.append(f"config key '{key}' is not a lss-server-config.json field "
-                      f"(GSON would silently ignore it); known keys: {sorted(SERVER_CONFIG_KEYS)}")
-    for key, value in sorted(cfg.items()):
-        if key in SERVER_CONFIG_BOOL_KEYS and not isinstance(value, bool):
-            errors.append(f"config key '{key}' must be a JSON boolean, got {value!r}")
-        elif key in SERVER_CONFIG_INT_KEYS and (not isinstance(value, int) or isinstance(value, bool)):
-            errors.append(f"config key '{key}' must be a JSON integer, got {value!r}")
-        elif key in SERVER_CONFIG_STRING_KEYS and not isinstance(value, str):
-            errors.append(f"config key '{key}' must be a JSON string, got {value!r}")
-        elif key in SERVER_CONFIG_STRING_LIST_KEYS and (
-                not isinstance(value, list) or not all(isinstance(v, str) for v in value)):
-            errors.append(f"config key '{key}' must be a JSON list of strings, got {value!r}")
-    return errors
+    """Validate canonical path overrides with the real product schema, including types."""
+    try:
+        render_settings(cfg)
+        return []
+    except (RuntimeError, ValueError, OSError) as error:
+        return [str(error)]
 
 
-def validate_scenario(name):
+def validate_scenario(name, platform="fabric"):
     errors = []
     scen_path = SCENARIO_DIR / f"{name}.json"
-    cfg_path = SCENARIO_DIR / f"{name}-config.json"
+    cfg_path = SCENARIO_DIR / f"{name}-config.yaml"
+    paper_path = SCENARIO_DIR / f"{name}-config.paper.yaml"
+    if platform != "fabric" and paper_path.is_file():
+        cfg_path = paper_path
     scen, cfg = None, None
     for path, label in ((scen_path, "scenario"), (cfg_path, "config")):
         if not path.is_file():
             errors.append(f"{label} file missing: {path}")
             continue
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as e:
+            data = (json.loads(path.read_text(encoding="utf-8")) if label == "scenario"
+                    else settings_values(path, platform="paper" if platform != "fabric" or name.startswith("paper-") else "mod", normalized=True))
+        except (json.JSONDecodeError, OSError, RuntimeError) as e:
             errors.append(f"{label} file {path.name} does not parse: {e}")
             continue
         if not isinstance(data, dict):
-            errors.append(f"{label} file {path.name} must be a JSON object")
+            errors.append(f"{label} file {path.name} must be a mapping")
             continue
         if label == "scenario":
             scen = data
@@ -3664,8 +3537,7 @@ def validate_scenario(name):
 
     if scen is not None:
         errors += validate_timeline(scen)
-    if cfg is not None:
-        errors += validate_config_overrides(cfg)
+    # settings_values already validated the complete document using the Java schema.
 
     if name not in ANOMALY_OPT_INS:
         errors.append(f"scenario '{name}' has no ANOMALY_OPT_INS entry (must be declared "
@@ -3872,19 +3744,20 @@ def run_checker(results_dir, scenario, expect_session_version=None, platform="fa
 
     violations.extend(command_validation_violations(server["commands"]))
 
-    cfg_path = SCENARIO_DIR / f"{scenario}-config.json"
+    cfg_path = results_dir / "server-config.yaml"
+    if not cfg_path.is_file():
+        cfg_path = SCENARIO_DIR / f"{scenario}-config.yaml"
+        paper_path = SCENARIO_DIR / f"{scenario}-config.paper.yaml"
+        if platform != "fabric" and paper_path.is_file():
+            cfg_path = paper_path
     config = {}
     if cfg_path.is_file():
         try:
-            config = json.loads(cfg_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as e:
+            config = settings_values(cfg_path, platform="paper" if platform != "fabric" or scenario.startswith("paper-") else "mod", normalized=True)
+        except (json.JSONDecodeError, OSError, RuntimeError) as e:
             warnings.append(f"{cfg_path.name} unreadable ({e}); using defaults")
     else:
         warnings.append(f"{cfg_path.name} not found; using defaults")
-    for e in validate_config_overrides(config):
-        # --validate is the hard gate pre-run; at evaluation time surface it loudly but
-        # keep judging the recorded data.
-        warnings.append(f"{cfg_path.name}: {e}")
 
     qpoints, windows, client_windows = [], 0, 0
     schema_ok = check_global_schema(server["snapshots"], runs, violations)
@@ -4360,8 +4233,8 @@ def selftest():
                        "columns.known": known, "columns.empty": empty})]},
                    qpoints=[], config=config)
     # lod 24 / exclusion 8 -> annulus 49^2 - 17^2 = 2112
-    clean("disc complete at boundary", list(disc(disc_ctx(2000, 112, {"lodDistanceChunks": 24}))))
-    hits("disc one orphaned position", list(disc(disc_ctx(2000, 111, {"lodDistanceChunks": 24}))),
+    clean("disc complete at boundary", list(disc(disc_ctx(2000, 112, {"lod.distance.default_chunks": 24}))))
+    hits("disc one orphaned position", list(disc(disc_ctx(2000, 111, {"lod.distance.default_chunks": 24}))),
          "disc-completeness")
     hits("disc config missing lod", list(disc(disc_ctx(99999, 0, {}))), "disc-completeness")
 
@@ -4641,11 +4514,11 @@ def selftest():
     clean("teleport-prune pruned", list(check_teleport_prune(_ctx(
         server_snaps=[_srv(1000, over={"generation.completed": 1500})],
         runs={1: [_cli(1000, over={"columns.known": 2000, "columns.empty": 200})]},
-        config={"lodDistanceChunks": 24}, quiescent_server={0}))))
+        config={"lod.distance.default_chunks": 24}, quiescent_server={0}))))
     hits("teleport-prune double disc", list(check_teleport_prune(_ctx(
         server_snaps=[_srv(1000, over={"generation.completed": 1500})],
         runs={1: [_cli(1000, over={"columns.known": 4000, "columns.empty": 200})]},
-        config={"lodDistanceChunks": 24}, quiescent_server={0}))), "teleport-prune")
+        config={"lod.distance.default_chunks": 24}, quiescent_server={0}))), "teleport-prune")
 
     # --- dirty-resave: flat after no-edit re-saves; rise/legacy-skip both proven ---
     resave_cmds = [_cmd(64_000, "save-all"), _cmd(95_000, "save-all")]
@@ -4991,7 +4864,7 @@ def selftest():
     hits("disk-saturation no supersession (flood premise broke)", list(check_disk_saturation(
         stress_ctx({**sat_srv, "service.superseded": 0}, sat_cli))), "disk-saturation")
 
-    bw_cfg = {"bytesPerSecondLimitGlobal": 262144}
+    bw_cfg = {"network.bandwidth.global_mib_per_second": 0.25}
     bw_srv = {"service.queue_full": 30}
     bw_cli = {"received_bytes": 60_000_000}
     clean("bandwidth-throttle clean", list(check_bandwidth_throttle(
@@ -5280,7 +5153,7 @@ def selftest():
                           _srv(135_000, over={"dirty.broadcast_positions": after_broadcast}),
                           _srv(230_000, over={"dirty.broadcast_positions": after_broadcast + 1})],
             commands=drf_cmds,
-            config={"dirtyBroadcastIntervalSeconds": 5},
+            config={"updates.dirty_broadcast_interval_ticks": 100},
             runs={1: [_cli(120_000, over={"received_columns": 2200, "requested_total": 2300}),
                       _cli(175_000, over={"received_columns": quiet_received,
                                           "requested_total": quiet_requested}),
@@ -5320,7 +5193,7 @@ def selftest():
                           _srv(100_000, over={"dirty.broadcast_positions": after_broadcast}),
                           _srv(140_000, over={"dirty.broadcast_positions": after_broadcast})],
             commands=fb_cmds,
-            config={"dirtyBroadcastIntervalSeconds": 5},
+            config={"updates.dirty_broadcast_interval_ticks": 100},
             runs={1: [_cli(90_000, over={"received_columns": 2250}),
                       _cli(140_000, over={"received_columns": final_received,
                                           "columns.dirty": final_dirty})]})
@@ -5337,7 +5210,7 @@ def selftest():
          "paper-dirty-falling-block")
     hits("falling-block landing window unbracketed", list(check_paper_dirty_falling_block(_ctx(
         server_snaps=[_srv(140_000, over={"dirty.broadcast_positions": 11})],
-        commands=fb_cmds, config={"dirtyBroadcastIntervalSeconds": 5},
+        commands=fb_cmds, config={"updates.dirty_broadcast_interval_ticks": 100},
         runs={1: [_cli(90_000, over={"received_columns": 2250}),
                   _cli(140_000, over={"received_columns": 2251})]}))),
          "paper-dirty-falling-block")
@@ -5369,35 +5242,35 @@ def selftest():
 
     # --- Config override allowlist ---
     cases[0] += 1
-    assert validate_config_overrides({"lodDistanceChunks": 24,
-                                      "enableChunkGeneration": False}) == [], \
+    assert validate_config_overrides({"lod.distance.default_chunks": 24,
+                                      "generation.enabled": False}) == [], \
         "config allowlist: legal overrides must validate"
     cases[0] += 1
     assert validate_config_overrides({"diskReaderThread": 1}), \
         "config allowlist: typo key must be rejected"
     cases[0] += 1
-    assert validate_config_overrides({"enableChunkGeneration": "false"}), \
+    assert validate_config_overrides({"generation.enabled": "false"}), \
         "config allowlist: string-for-bool must be rejected"
     cases[0] += 1
-    assert validate_config_overrides({"lodDistanceChunks": True}), \
+    assert validate_config_overrides({"lod.distance.default_chunks": True}), \
         "config allowlist: bool-for-int must be rejected"
     cases[0] += 1
-    assert validate_config_overrides({"maxConcurrentDiskReads": 5}) == [], \
+    assert validate_config_overrides({"storage.disk.max_concurrent_reads": 5}) == [], \
         "config allowlist: the gate key must validate (the R4 lesson — every no-op pin " \
         "depends on this registration)"
     cases[0] += 1
-    assert validate_config_overrides({"maxConcurrentDiskReads": "5"}), \
+    assert validate_config_overrides({"storage.disk.max_concurrent_reads": "5"}), \
         "config allowlist: string-for-int gate key must be rejected"
     cases[0] += 1
-    assert validate_config_overrides({"xrayObfuscation": "on",
-                                      "xrayHiddenBlocks": ["diamond_ore"],
-                                      "xrayMaxBlockHeight": 64}) == [], \
+    assert validate_config_overrides({"privacy.xray.mode": "on",
+                                      "privacy.xray.hidden_blocks": ["diamond_ore"],
+                                      "privacy.xray.max_y_blocks": 64}) == [], \
         "config allowlist: legal xray overrides must validate"
     cases[0] += 1
-    assert validate_config_overrides({"xrayObfuscation": True}), \
+    assert validate_config_overrides({"privacy.xray.mode": True}), \
         "config allowlist: non-string for the xray tri-state must be rejected"
     cases[0] += 1
-    assert validate_config_overrides({"xrayHiddenBlocks": [1, 2]}), \
+    assert validate_config_overrides({"privacy.xray.hidden_blocks": [1, 2]}), \
         "config allowlist: non-string list entries must be rejected"
 
     # ---- session-version assertion (C6 negotiated-protocol observability) ----
@@ -5450,7 +5323,7 @@ def main(argv=None):
     if opts.selftest:
         return selftest()
     if opts.validate:
-        errors = validate_scenario(opts.validate)
+        errors = validate_scenario(opts.validate, opts.platform)
         if errors:
             print(f"VALIDATE FAIL: {opts.validate}")
             for e in errors:

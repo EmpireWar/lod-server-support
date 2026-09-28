@@ -174,11 +174,11 @@ defaults), value label (`IntFunction<Label>`, `Label = key | literal`), binding
 `Function<LSSClientConfig,V>` — the legacy API passes the storage's data object
 and the tests bind fresh instances; review A-7), `enabledBy` (another option's
 id, same page), `saveHook` (`SAVE` | `SAVE_AND_PUSH_FAR_PLAYER_PREFS`, each a
-method over a config instance), `visibility` (`ALWAYS` | `SEEU_ONLY`).
-`MenuContext` = three booleans (`governorOn`, `xaeroPresent`, `seeuPresent`)
+method over a config instance), `visibility` (`ALWAYS` | `RETIRED_COEXISTENCE_ONLY`).
+`MenuContext` = three booleans (`governorOn`, `xaeroPresent`, `retiredPresenceFlag`)
 with a `current()` factory over `LSSClientConfig.CONFIG`,
 `LoaderServices.isModLoaded("xaeroworldmap")` and
-`FarPlayerClientSupport.isSeeuPresent()` — all legal xplat inputs.
+`FarPlayerClientSupport.retiredPresenceProbe()` — all legal xplat inputs.
 `RateSliderStops` moves into xplat beside it and becomes PUBLIC (review A-10/B-7).
 That is exactly the feature set the two live pages use today — nothing
 speculative (no enum kind until an enum option exists).
@@ -362,7 +362,7 @@ Docs:
   binding round-trip per option on a fresh instance; `enabledBy` resolves to a
   `BoolSpec` on the same page; stops monotonic and inside the `validate()`
   clamps; all far-player options carry the push hook; `visibility` hides
-  exactly the SeeU option.
+  exactly the the historical renderer option.
 - `SodiumGenerationTest`: the probe with an injected resource-presence
   predicate → `MODERN`/`LEGACY`(both prefixes)/`NONE`, MODERN wins when both
   answer (cannot happen live — pinned anyway), a throwing predicate → `NONE`;
@@ -516,8 +516,8 @@ Built as planned in v1.1 with these recorded specifics:
 - **Catalog shape**: `OptionSpec` is a sealed interface with `BoolSpec`/`IntSpec`
   records + small fluent builders (a 10-arg record ctor was unreadable); tooltips use
   the enumerable `Tooltip.Condition` (`ALWAYS`, `GOVERNOR_ON`, `XAERO_PRESENT`,
-  `SEEU_ABSENT`); `Impact` is NULLABLE (the LOD-distance slider ships with no impact
-  line — preserved); `Visibility` = `ALWAYS` | `SEEU_ONLY`. `MenuContext.current()`
+  `RETIRED_COEXISTENCE_ABSENT`); `Impact` is NULLABLE (the LOD-distance slider ships with no impact
+  line — preserved); `Visibility` = `ALWAYS` | `RETIRED_COEXISTENCE_ONLY`. `MenuContext.current()`
   contains every lookup (loader-less unit contexts read as "absent").
 - **Legacy builder**: resolution is name + arity over `getMethods()` with a
   parameter-type PREFERENCE for overloads (0.7's two `setTooltip`s); a 0.5-style

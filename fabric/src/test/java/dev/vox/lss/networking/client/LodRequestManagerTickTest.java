@@ -379,16 +379,16 @@ class LodRequestManagerTickTest {
             public int pendingIngestBacklog() { return 4321; }
         };
         dev.vox.lss.api.LSSApi.registerColumnConsumer(reporting);
-        boolean previous = dev.vox.lss.config.LSSClientConfig.CONFIG.enableIngestBackpressure;
+        boolean previous = dev.vox.lss.config.LSSClientConfig.CONFIG.enableIngestBackpressure();
         try {
-            dev.vox.lss.config.LSSClientConfig.CONFIG.enableIngestBackpressure = true;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.ingest_backpressure", true);
             assertEquals(4321, manager.ingestBacklogSupplier.getAsInt(),
                     "the production supplier must surface the LSSApi aggregate");
-            dev.vox.lss.config.LSSClientConfig.CONFIG.enableIngestBackpressure = false;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.ingest_backpressure", false);
             assertEquals(-1, manager.ingestBacklogSupplier.getAsInt(),
                     "the kill switch must force no-signal");
         } finally {
-            dev.vox.lss.config.LSSClientConfig.CONFIG.enableIngestBackpressure = previous;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.ingest_backpressure", previous);
             dev.vox.lss.api.LSSApi.removeColumnConsumer(reporting);
         }
     }
@@ -723,11 +723,11 @@ class LodRequestManagerTickTest {
     @Test
     void governorKillSwitchBindsThroughTheProductionConfigRead() {
         // The production binding pin (the adaptive-cadence pattern): the manager's
-        // DEFAULT seam must read LSSClientConfig.CONFIG.enableAdaptiveTransferRate — a
+        // DEFAULT seam must read LSSClientConfig.CONFIG.enableAdaptiveTransferRate() — a
         // hardcoded true would keep a governed cap alive with the shipped kill switch off.
         var overworld = dim("overworld");
-        boolean old = LSSClientConfig.CONFIG.enableAdaptiveTransferRate;
-        LSSClientConfig.CONFIG.enableAdaptiveTransferRate = false;
+        boolean old = LSSClientConfig.CONFIG.enableAdaptiveTransferRate();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.adaptive_rate", false);
         try {
             manager.governor.tick(1, 0, 0, 0, 0, 1, false, 50, true);
             manager.governor.tick(1 + TransferRateGovernor.INTERVAL_MILLIS,
@@ -740,7 +740,7 @@ class LodRequestManagerTickTest {
                     "config false must hard-reset through the DEFAULT seam");
             assertEquals(24, sent.get(0).count(), "no governed cap: the full annulus declares");
         } finally {
-            LSSClientConfig.CONFIG.enableAdaptiveTransferRate = old;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.adaptive_rate", old);
         }
     }
 
@@ -844,12 +844,12 @@ class LodRequestManagerTickTest {
     @Test
     void killSwitchBindsThroughTheProductionConfigRead() {
         // The production binding pin (the #71 config-gate pattern): the scanner's DEFAULT
-        // seam must read LSSClientConfig.CONFIG.enableAdaptiveScanCadence — a hardcoded
+        // seam must read LSSClientConfig.CONFIG.enableAdaptiveScanCadence() — a hardcoded
         // `() -> true` or a re-bind to any other default-true boolean passes every other
         // test green while the shipped kill switch silently stops killing.
         var overworld = dim("overworld");
-        boolean old = LSSClientConfig.CONFIG.enableAdaptiveScanCadence;
-        LSSClientConfig.CONFIG.enableAdaptiveScanCadence = false;
+        boolean old = LSSClientConfig.CONFIG.enableAdaptiveScanCadence();
+        dev.vox.lss.config.ClientConfigTestSupport.set("scan.adaptive_cadence", false);
         try {
             plainTick(overworld);
             assertEquals(1, sent.size());
@@ -858,7 +858,7 @@ class LodRequestManagerTickTest {
             assertEquals(LSSConstants.TICKS_PER_SECOND, ticksToNextBatch(overworld, 1),
                     "config false must hold the periodic cadence through the DEFAULT seam");
         } finally {
-            LSSClientConfig.CONFIG.enableAdaptiveScanCadence = old;
+            dev.vox.lss.config.ClientConfigTestSupport.set("scan.adaptive_cadence", old);
         }
     }
     // ---- Join slow start: the production wiring pins (join-slow-start-plan.md §1.4) ----
@@ -888,8 +888,8 @@ class LodRequestManagerTickTest {
                         + firstCounts.get(0));
         // Negative arm (impl review: without it a supplier hardcoded to true passes):
         // the same production wiring with the shipped toggle OFF declares uncapped.
-        boolean old = LSSClientConfig.CONFIG.enableJoinSlowStart;
-        LSSClientConfig.CONFIG.enableJoinSlowStart = false;
+        boolean old = LSSClientConfig.CONFIG.enableJoinSlowStart();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.slow_start_on_join", false);
         try {
             var m2 = new LodRequestManager();
             m2.onSessionConfig(config(8, true), "lss-slow-start-pin-off");
@@ -902,7 +902,7 @@ class LodRequestManagerTickTest {
                     "toggle off: the first walk is uncapped (the supplier reads config,"
                             + " not a constant), got " + offCounts.get(0));
         } finally {
-            LSSClientConfig.CONFIG.enableJoinSlowStart = old;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.slow_start_on_join", old);
         }
     }
 
@@ -985,8 +985,8 @@ class LodRequestManagerTickTest {
         // manual knob of 1 is the binding clamp — and the latch must compare against
         // the SAME composed governed half. The pre-fix code re-read burst =
         // ceil(sustained/4) = 1 <= manual and latched a manually-capped walk.
-        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
-        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 1;
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", 1);
         try {
             setupManager(config(8, true));
             manager.joinSlowStartEnabled = () -> true; // live RAMP: governed half = 2
@@ -1000,7 +1000,7 @@ class LodRequestManagerTickTest {
             assertFalse(manager.governor.windowLimitedLatched(),
                     "manual (1) < the governed half (2): the manual knob was the binder");
         } finally {
-            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", prior);
         }
     }
 
@@ -1010,8 +1010,8 @@ class LodRequestManagerTickTest {
         // off): the walk truncates against the MANUAL knob, and the latch's
         // governed-binding conjunct must refuse (a manually-capped loop never claims
         // to be governor-window-limited).
-        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
-        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 10;
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", 10);
         try {
             setupManager(config(8, true)); // joinSlowStartEnabled=false in setupManager
             manager.transferGovernorEnabled = () -> true;
@@ -1022,7 +1022,7 @@ class LodRequestManagerTickTest {
             assertFalse(manager.governor.windowLimitedLatched(),
                     "the manual knob was the binder — no governed window-limit claim");
         } finally {
-            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", prior);
         }
     }
 
@@ -1072,8 +1072,8 @@ class LodRequestManagerTickTest {
 
     @Test
     void manualBelowTheGovernedHalfNeverLatchesOnTheLegacyArm() {
-        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
-        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 1;
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", 1);
         try {
             setupLegacyArmManager(config(8, true));
             manager.joinSlowStartEnabled = () -> true;
@@ -1085,14 +1085,14 @@ class LodRequestManagerTickTest {
             assertFalse(manager.governor.windowLimitedLatched(),
                     "manual (1) < the governed half (2): the manual knob was the binder");
         } finally {
-            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", prior);
         }
     }
 
     @Test
     void manualCapBindingNeverLatchesTheWindowLimitOnTheLegacyArm() {
-        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
-        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 10;
+        int prior = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", 10);
         try {
             setupLegacyArmManager(config(8, true));
             manager.transferGovernorEnabled = () -> true;
@@ -1103,7 +1103,7 @@ class LodRequestManagerTickTest {
             assertFalse(manager.governor.windowLimitedLatched(),
                     "the manual knob was the binder — no governed window-limit claim");
         } finally {
-            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", prior);
         }
     }
 }

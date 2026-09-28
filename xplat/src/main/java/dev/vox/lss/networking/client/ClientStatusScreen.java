@@ -24,16 +24,6 @@ public final class ClientStatusScreen extends Screen {
         int left = Math.max(3, width / 2 - 155);
         addRenderableWidget(Button.builder(Component.translatable("lss.status.export"), button ->
                 ClientCommandActions.exportDiagnostics(this::feedback)).bounds(left, height - 27, 90, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable(
-                dev.vox.lss.config.LSSClientConfig.CONFIG.receiveServerLods ? "lss.status.receive_off" : "lss.status.receive_on"), button -> {
-            var cfg = dev.vox.lss.config.LSSClientConfig.CONFIG;
-            cfg.receiveServerLods = !cfg.receiveServerLods;
-            ClientNetGlue.reconcileClientConfig();
-            boolean saved = cfg.trySave();
-            button.setMessage(Component.translatable(cfg.receiveServerLods ? "lss.status.receive_off" : "lss.status.receive_on"));
-            feedback(Component.literal("Reception " + (cfg.receiveServerLods ? "ON" : "OFF")
-                    + (saved ? "; saved." : "; applied, but not saved — check client log.")));
-        }).bounds(left + 93, height - 27, 90, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("lss.status.more"), button -> textPage++)
                 .bounds(left + 186, height - 27, 60, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("lss.status.done"), button -> onClose())
@@ -52,6 +42,11 @@ public final class ClientStatusScreen extends Screen {
         var snapshot = ClientStatus.latest();
         var lines = snapshot == null ? java.util.List.of("Waiting for a current-session snapshot…") : snapshot.lines();
         var wrappedLines = new java.util.ArrayList<net.minecraft.util.FormattedCharSequence>();
+        var config = dev.vox.lss.config.LSSClientConfig.CONFIG;
+        if (config.error() != null) wrappedLines.addAll(font.split(
+                Component.translatable("lss.settings.inactive", config.error()), Math.max(50, width - 30)));
+        if (!config.pendingReconnect().isEmpty()) wrappedLines.addAll(font.split(
+                Component.translatable("lss.settings.pending_reconnect_notice"), Math.max(50, width - 30)));
         if (lastActionFeedback != null) wrappedLines.addAll(font.split(lastActionFeedback, Math.max(50, width - 30)));
         for (String line : lines) wrappedLines.addAll(font.split(Component.literal(line), Math.max(50, width - 30)));
         int rows = Math.max(1, (height - 72) / 11);

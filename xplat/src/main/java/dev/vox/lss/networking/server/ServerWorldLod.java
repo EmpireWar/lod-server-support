@@ -31,7 +31,7 @@ final class ServerWorldLod {
     }
 
     /** The LOD distance for the player's CURRENT dimension — the override if the
-     *  dimension id is keyed, else {@code config.lodDistanceChunks}. */
+     *  dimension id is keyed, else {@code config.lodDistanceChunks()}. */
     static int distance(ServerConfigBase config, ServerPlayer player) {
         return config.lodDistanceForWorld(dimensionKey(player));
     }

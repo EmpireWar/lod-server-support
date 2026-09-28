@@ -26,7 +26,11 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
 
     private final boolean useBackgroundReadPriority;
 
-    private final boolean useNbtTranscode;
+    private volatile SerializationPolicy serializationPolicy;
+    public record SerializationPolicy(boolean transcode, boolean selective) {}
+    public void updateSerializationPolicy(boolean transcode, boolean selective) {
+        this.serializationPolicy = new SerializationPolicy(transcode, selective);
+    }
 
     /** Convenience for tests: production defaults for the serialize path
      *  (transcode ON — the {@code useNbtTranscode} default). */
@@ -37,7 +41,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
     public PaperChunkDiskReader(int threadCount, boolean useBackgroundReadPriority, boolean useNbtTranscode) {
         super(threadCount);
         this.useBackgroundReadPriority = useBackgroundReadPriority;
-        this.useNbtTranscode = useNbtTranscode;
+        this.serializationPolicy = new SerializationPolicy(useNbtTranscode, false);
     }
 
     void setReadOverride(PaperNbtSectionSerializer.ChunkNbtRead read) {
@@ -47,6 +51,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
     public void submitReadDirect(UUID playerUuid, RequestRegistration registration, String dimension, ServerLevel level,
                                   int chunkX, int chunkZ, long submissionOrder,
                                   long clientTimestamp) {
+        var readPolicy = this.serializationPolicy;
         var registryAccess = level.registryAccess();
         var override = this.readOverride;
         PaperNbtSectionSerializer.ChunkNbtRead read;
@@ -65,7 +70,7 @@ public class PaperChunkDiskReader extends AbstractChunkDiskReader {
         int maxSectionY = level.getMaxSectionY();
         submitRead(playerUuid, registration, chunkX, chunkZ, dimension, submissionOrder, clientTimestamp,
                 () -> PaperNbtSectionSerializer.readAndSerializeSections(read, registryAccess, chunkX, chunkZ,
-                        maskEntry, minSectionY, maxSectionY, this.useNbtTranscode));
+                        maskEntry, minSectionY, maxSectionY, readPolicy.transcode()));
     }
 
     /**

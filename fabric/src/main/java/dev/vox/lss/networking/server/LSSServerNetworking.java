@@ -166,6 +166,7 @@ public class LSSServerNetworking {
         );
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            dev.vox.lss.config.LSSServerConfig.beginServerLifecycle();
             if (!server.isDedicatedServer() && !Boolean.getBoolean("lss.test.integratedServer")) {
                 LSSLogger.info(Brand.shortName() + " LOD request processing deferred until LAN");
                 return;
@@ -176,6 +177,7 @@ public class LSSServerNetworking {
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            dev.vox.lss.config.LSSServerConfig.CONFIG.close();
             var service = requestService;
             if (service != null) {
                 LSSLogger.info("Stopping " + Brand.shortName() + " LOD request processing service");

@@ -230,12 +230,43 @@ public final class SqliteLodStore implements LodStoreService {
         record Resweep() implements Op {}
         record BackfillMark(String dim, int rx, int rz) implements Op {}
         record DropAll() implements Op {}
+        record Policy(StorePolicy policy, java.util.concurrent.CompletableFuture<Void> adopted) implements Op {}
     }
 
     private final LodStoreMode mode;
     private final LodStoreDiagnostics diag;
     private final StoreCodec codec;
     private final Environment env;
+    public record StorePolicy(long maxDbBytes, int resweepSeconds, long revision) {}
+    private volatile StorePolicy policy;
+    private final java.util.Set<java.util.concurrent.CompletableFuture<Void>> policyReceipts =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Queued on the existing SQLite owner; no connection or identity changes. */
+    public java.util.concurrent.CompletableFuture<Void> updatePolicy(long capBytes, int resweepSeconds, long revision) {
+        var receipt = new java.util.concurrent.CompletableFuture<Void>();
+        policyReceipts.add(receipt);
+        receipt.whenComplete((v, e) -> policyReceipts.remove(receipt));
+        if (shutdown.get() || latchedOff || !batcher.isAlive()) {
+            receipt.completeExceptionally(new IllegalStateException("Store owner is inactive"));
+            return receipt;
+        }
+        var update = new Op.Policy(new StorePolicy(capBytes <= 0 ? Long.MAX_VALUE : capBytes,
+                Math.max(0, resweepSeconds), revision), receipt);
+        controlQueue.add(update);
+        if (shutdown.get() || latchedOff || !batcher.isAlive()) {
+            controlQueue.remove(update);
+            receipt.completeExceptionally(new IllegalStateException("Store owner is inactive"));
+        }
+        return receipt;
+    }
+
+    public long adoptedPolicyRevision() { return policy.revision(); }
+    long nextResweepNanosForTest() { return nextResweepNanos; }
+    private void cancelPolicyReceipts() {
+        for (var receipt : policyReceipts)
+            receipt.completeExceptionally(new java.util.concurrent.CancellationException("Store owner stopped"));
+    }
     private final Path dbPath;
 
     private final ArrayBlockingQueue<Op> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
@@ -338,6 +369,7 @@ public final class SqliteLodStore implements LodStoreService {
         this.mode = mode;
         this.codec = codec;
         this.env = env;
+        this.policy = new StorePolicy(env.maxDbBytes(), env.resweepSeconds(), 0);
         this.diag = diag;
         Files.createDirectories(env.storeDir());
         // noexec /tmp: sqlite-jdbc extracts its native lib to org.sqlite.tmpdir; the
@@ -1161,6 +1193,7 @@ public final class SqliteLodStore implements LodStoreService {
     @Override
     public void shutdown() {
         if (!this.shutdown.compareAndSet(false, true)) return;
+        cancelPolicyReceipts();
         this.serving = false; // a post-shutdown get() must miss, not race closing conns
         this.batcher.interrupt();
         try {
@@ -1477,8 +1510,8 @@ public final class SqliteLodStore implements LodStoreService {
         } finally {
             this.sweepDone.countDown();
         }
-        this.nextResweepNanos = this.env.resweepSeconds() > 0
-                ? System.nanoTime() + TimeUnit.SECONDS.toNanos(this.env.resweepSeconds())
+        this.nextResweepNanos = this.policy.resweepSeconds() > 0
+                ? System.nanoTime() + TimeUnit.SECONDS.toNanos(this.policy.resweepSeconds())
                 : Long.MAX_VALUE;
         while (!this.shutdown.get() && !this.latchedOff) {
             // Test seam: lets a test single-step the batcher, so the window between
@@ -1528,7 +1561,7 @@ public final class SqliteLodStore implements LodStoreService {
                 // expiry floor inside sweepTombstones, no longer the idle gate.
                 sweepTombstones(now);
                 if (now >= this.nextResweepNanos) {
-                    this.nextResweepNanos = now + TimeUnit.SECONDS.toNanos(this.env.resweepSeconds());
+                    this.nextResweepNanos = now + TimeUnit.SECONDS.toNanos(this.policy.resweepSeconds());
                     commitTxn();
                     runSweep(false);
                 }
@@ -1554,12 +1587,14 @@ public final class SqliteLodStore implements LodStoreService {
                 // latchOff() stops serving, so a permanently broken writer can not
                 // serve the undeleted row either.
                 if (op instanceof Op.DeleteRows) this.controlQueue.add(op);
+                if (op instanceof Op.Policy update) update.adopted().completeExceptionally(t);
                 if (++this.writerFailures >= WRITE_FAILURE_LATCH) {
                     latchOff("repeated write failures", t);
                 }
             }
             this.diag.setQueueDepth(queueDepth());
         }
+        cancelPolicyReceipts();
         // Graceful exit: flush queued deletes (never shed — see controlQueue), then the
         // txn. Containment is PER OP: one failing delete must not abandon the rest
         // (the boot sweep is the cross-restart backstop for whatever still fails —
@@ -1579,6 +1614,7 @@ public final class SqliteLodStore implements LodStoreService {
 
     private void latchOff(String why, Throwable t) {
         this.latchedOff = true;
+        cancelPolicyReceipts();
         this.serving = false;
         if (this.latchWarned.compareAndSet(false, true)) {
             LSSLogger.warn("LOD store disabled for this session (" + why + ") — serving"
@@ -1630,6 +1666,18 @@ public final class SqliteLodStore implements LodStoreService {
             throw new SQLException("test-injected writer failure");
         }
         switch (op) {
+            case Op.Policy update -> {
+                commitTxn();
+                if (update.policy().revision() < this.policy.revision()) {
+                    update.adopted().completeExceptionally(new java.util.concurrent.CancellationException("Superseded store policy"));
+                } else {
+                    if (update.policy().resweepSeconds() != this.policy.resweepSeconds())
+                        this.nextResweepNanos = update.policy().resweepSeconds() == 0 ? Long.MAX_VALUE
+                                : System.nanoTime() + TimeUnit.SECONDS.toNanos(update.policy().resweepSeconds());
+                    this.policy = update.policy();
+                    update.adopted().complete(null);
+                }
+            }
             case Op.Deposit dep -> applyDeposit(dep);
             case Op.DeleteRows del -> {
                 Integer dimId = this.dimIds.get(del.dim());
@@ -2024,7 +2072,7 @@ public final class SqliteLodStore implements LodStoreService {
             // whether or not the vacuum keeps up; the vacuum is now purely about
             // returning space to the filesystem.
             long liveBytes = logicalDbBytes();
-            if (liveBytes > this.env.maxDbBytes()) {
+            if (liveBytes > this.policy.maxDbBytes()) {
                 commitTxn();
                 // Firm cap (review B12): ONE 512-row/dim batch per 5 s tick
                 // (~780 KB/s) is out-runnable by deposits — the backfill default alone
@@ -2033,9 +2081,9 @@ public final class SqliteLodStore implements LodStoreService {
                 // and with the ts index each pass is an index walk, not a table scan.
                 // Evict to a little UNDER the cap: landing exactly on it puts the
                 // store back into this branch on the very next gauge tick.
-                long target = (long) (this.env.maxDbBytes() * EVICTION_TARGET_FRACTION);
+                long target = (long) (this.policy.maxDbBytes() * EVICTION_TARGET_FRACTION);
                 for (int pass = 0; pass < MAX_EVICTION_PASSES_PER_TICK
-                        && liveBytes > this.env.maxDbBytes(); pass++) {
+                        && liveBytes > this.policy.maxDbBytes(); pass++) {
                     int evicted = evictOldestBatch(liveBytes - target);
                     if (evicted == 0) break;
                     // Count + (once) log BEFORE the vacuum: evictOldestBatch has
@@ -2055,7 +2103,7 @@ public final class SqliteLodStore implements LodStoreService {
                         this.capLogEmissions++;
                         LSSLogger.info("LOD store size cap: evicted " + evicted
                                 + " oldest rows (live " + (liveBytes >> 20) + " MB > cap "
-                                + (this.env.maxDbBytes() >> 20) + " MB) — the store is at "
+                                + (this.policy.maxDbBytes() >> 20) + " MB) — the store is at "
                                 + "its size cap and will keep evicting silently; running "
                                 + "totals in '/" + Brand.serverCommand() + " store status' (evicted=), raise or "
                                 + "zero lodStoreMaxMB (0 = uncapped) for full retention");
@@ -2083,7 +2131,7 @@ public final class SqliteLodStore implements LodStoreService {
     /** The active size cap in bytes (Long.MAX_VALUE = uncapped); the backfill's
      *  cap-stop gate reads these two rather than re-deriving gauge accounting. */
     long sizeCapBytes() {
-        return this.env.maxDbBytes();
+        return this.policy.maxDbBytes();
     }
 
     /** DropAll fence for the backfill's done-marks (review B9). */

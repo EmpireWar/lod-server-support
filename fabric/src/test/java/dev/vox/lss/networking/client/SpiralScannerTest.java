@@ -524,30 +524,30 @@ class SpiralScannerTest {
 
     @Test
     void effectiveLodDistanceIsMinOfServerAndClientOverride() {
-        int saved = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int saved = LSSClientConfig.CONFIG.lodDistanceChunks();
         try {
             var s = scanner(10);
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0; // 0 = override disabled, server wins
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0); // 0 = override disabled, server wins
             assertEquals(10, s.getEffectiveLodDistance());
-            LSSClientConfig.CONFIG.lodDistanceChunks = 6; // client below server clamps down
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 6); // client below server clamps down
             assertEquals(6, s.getEffectiveLodDistance());
-            LSSClientConfig.CONFIG.lodDistanceChunks = 15; // client above server has no effect
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 15); // client above server has no effect
             assertEquals(10, s.getEffectiveLodDistance());
         } finally {
-            LSSClientConfig.CONFIG.lodDistanceChunks = saved;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", saved);
         }
     }
 
     @Test
     void pruneDistanceBuffersTheEffectiveLodDistance() {
-        int saved = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int saved = LSSClientConfig.CONFIG.lodDistanceChunks();
         try {
-            LSSClientConfig.CONFIG.lodDistanceChunks = 6;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 6);
             var s = scanner(10);
             // Buffer applies to the client-clamped effective distance (6), not the server's 10
             assertEquals(6 + LSSConstants.LOD_DISTANCE_BUFFER, s.getPruneDistance());
         } finally {
-            LSSClientConfig.CONFIG.lodDistanceChunks = saved;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", saved);
         }
     }
 
@@ -719,9 +719,9 @@ class SpiralScannerTest {
 
     @Test
     void lodDistanceShrinkThenGrowRescansTheOuterBandWithoutStranding() {
-        int saved = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int saved = LSSClientConfig.CONFIG.lodDistanceChunks();
         try {
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0; // server distance (8) in effect
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0); // server distance (8) in effect
             var columns = new ColumnStateMap();
             seedSatisfied(columns, 3, 8);
             var s = scanner(8);
@@ -729,7 +729,7 @@ class SpiralScannerTest {
             assertEquals(0, fireScan(s, 2, columns, queue));
             assertEquals(9, s.getConfirmedRing(), "precondition: confirmed at d=8");
 
-            LSSClientConfig.CONFIG.lodDistanceChunks = 4; // shrink
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 4); // shrink
             assertEquals(0, fireScan(s, 2, columns, queue), "shrunk scan is a clean no-op");
             // 2026-08-18 (the lod-shrink rung, review round): the shrink now RESETS the
             // prefix once and re-anchors it INTO the shrunk regime — a prefix parked
@@ -747,7 +747,7 @@ class SpiralScannerTest {
             assertEquals(0, fireScan(s, 2, columns, queue), "retries beyond the shrunk lod are not requested");
             assertTrue(columns.hasRetries(), "...but must not be lost while out of scan range");
 
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0; // grow back to the server's 8
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0); // grow back to the server's 8
             int grown = fireScan(s, 2, columns, queue);
             assertEquals(2, grown, "grown scan re-walks and re-declares the outer band");
             var requeued = new java.util.HashSet<Long>();
@@ -761,7 +761,7 @@ class SpiralScannerTest {
             assertEquals(0, fireScan(s, 2, columns, queue));
             assertEquals(9, s.getConfirmedRing(), "nothing strands past the old confirmed radius");
         } finally {
-            LSSClientConfig.CONFIG.lodDistanceChunks = saved;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", saved);
         }
     }
 
@@ -879,10 +879,10 @@ class SpiralScannerTest {
         // queries once per scan). ModCompat's gate is flipped reflectively and MUST be
         // restored — a leak makes VoxyCompatTest#modCompatStaysInertWithoutVoxyMod and
         // #effectiveLodDistanceIsMinOfServerAndClientOverride order-dependent.
-        int savedClient = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int savedClient = LSSClientConfig.CONFIG.lodDistanceChunks();
         setVoxyLoaded(true);
         try {
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0);
             VoxyConfig.reset();
             VoxyConfig.CONFIG.sectionRenderDistance = 0.25f; // 8 chunks
             var s = scanner(10);
@@ -901,16 +901,16 @@ class SpiralScannerTest {
         } finally {
             setVoxyLoaded(false);
             VoxyConfig.reset();
-            LSSClientConfig.CONFIG.lodDistanceChunks = savedClient;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", savedClient);
         }
     }
 
     @Test
     void voxyDistanceParticipatesInMinLadderOnlyWhenPositive() throws Exception {
-        int savedClient = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int savedClient = LSSClientConfig.CONFIG.lodDistanceChunks();
         setVoxyLoaded(true);
         try {
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0);
             VoxyConfig.reset(); // sectionRenderDistance 0 → voxy distance 0
             var s = scanner(10);
             assertEquals(10, refreshedEffectiveDistance(s), "voxy distance 0 is ignored (not-configured sentinel)");
@@ -923,7 +923,7 @@ class SpiralScannerTest {
         } finally {
             setVoxyLoaded(false);
             VoxyConfig.reset();
-            LSSClientConfig.CONFIG.lodDistanceChunks = savedClient;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", savedClient);
         }
     }
 
@@ -1778,15 +1778,15 @@ class SpiralScannerTest {
         // read (or a dropped lambda) in the default would keep the whole suite green while
         // the live knob went dead. Same save/restore pattern as the adaptive kill switch's
         // production-binding pin in LodRequestManagerTickTest.
-        int old = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
-        LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = 300;
+        int old = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
+        dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", 300);
         try {
             var s = scanner(16); // default seam untouched
             var queue = new Sink();
             assertEquals(300, fireScan(s, 2, new ColumnStateMap(), queue),
                     "a fresh scanner must bind the cap from the production config field");
         } finally {
-            LSSClientConfig.CONFIG.lodColumnsPerSecondLimit = old;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.download.max_columns_per_second", old);
         }
     }
 
@@ -2410,9 +2410,9 @@ class SpiralScannerTest {
         // stationary player kept a permanently blank annulus (retention deleted the
         // incidental crossing-collapse that used to heal this in one second). The
         // lod-shrink rung (the F1 exclusion rung's twin) full-resets once per shrink.
-        int saved = LSSClientConfig.CONFIG.lodDistanceChunks;
+        int saved = LSSClientConfig.CONFIG.lodDistanceChunks();
         try {
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0; // server distance (60) in effect
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0); // server distance (60) in effect
             var columns = new ColumnStateMap();
             seedNonExcludedSquare(columns, CX, CZ, 60, 2);
             var s = scanner(60);
@@ -2423,7 +2423,7 @@ class SpiralScannerTest {
             // The shrink; a dirty at ring 30 arrives while shrunk — its reopen is dropped
             // by the set-time lod clamp (30 > 10), which is safe ONLY because the rung
             // has already put ring 30 above the prefix.
-            LSSClientConfig.CONFIG.lodDistanceChunks = 10;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 10);
             long dirtied = ringPos(30, 0);
             assertTrue(columns.markDirtyIfKnown(dirtied));
             s.reopenRing(30);
@@ -2439,7 +2439,7 @@ class SpiralScannerTest {
 
             // Grow back: the annulus sits ABOVE the prefix, so the frontier walk
             // re-declares both the pruned band and the dropped dirty position.
-            LSSClientConfig.CONFIG.lodDistanceChunks = 0;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", 0);
             int declared = fireScan(s, 2, columns, queue);
             assertTrue(declared > 0, "the regrown walk declares the stranded outer band");
             var set = new LongOpenHashSet();
@@ -2449,7 +2449,7 @@ class SpiralScannerTest {
             assertTrue(set.contains(ringPos(43, 0)),
                     "the pruned annulus's first ring re-declares");
         } finally {
-            LSSClientConfig.CONFIG.lodDistanceChunks = saved;
+            dev.vox.lss.config.ClientConfigTestSupport.set("lod.distance_chunks", saved);
         }
     }
 

@@ -102,6 +102,21 @@ class ClientSessionGateTest {
                 "the governed rate carries across the rebuild");
     }
 
+    @Test
+    void generationEnableRepushReopensSessionTerminalColumnsAtUnchangedDistance() {
+        gate.onJoin(true, false, true, true);
+        gate.onSessionConfig(new SessionConfigS2CPayload(V, true, 64, false), true, true);
+        var previous = gate.getRequestManager();
+        long position = dev.vox.lss.common.PositionUtil.packPosition(20, 20);
+        previous.columnsForTest().onNotGenerated(position);
+        assertEquals(ColumnStateMap.SATISFIED, previous.columnsForTest().classify(position));
+        gate.onSessionConfig(new SessionConfigS2CPayload(V, true, 64, true), true, true);
+        var replacement = gate.getRequestManager();
+        assertNotSame(previous, replacement);
+        assertEquals(-1L, replacement.columnsForTest().classify(position),
+                "generation reload reopens missing terrain without a distance change or reconnect");
+    }
+
     /** The synthetic disabled shape the codec's drain branch produces for a foreign version. */
     private static SessionConfigS2CPayload codecForeignShape(int protocolVersion) {
         return new SessionConfigS2CPayload(protocolVersion, false, 0, false);

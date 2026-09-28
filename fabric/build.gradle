@@ -271,8 +271,8 @@ afterEvaluate {
                 // maxConcurrentDiskReads: a large no-op (>= any pool) — the parity and
                 // fault gametests expect every submitted read to resolve; a surprise
                 // gate drop would flake them (disk-read-concurrency-gate-plan.md).
-                new File(cfgDir, "lss-server-config.json").text =
-                        '{\n  "lodStore": "off",\n  "lodStoreBackfill": false,\n  "maxConcurrentDiskReads": 64\n}\n'
+                new File(cfgDir, "lss-server-config.yaml").text =
+                        'config_version: 1\nstorage:\n  disk:\n    max_concurrent_reads: 64\n  lod_store:\n    enabled: false\n    backfill:\n      enabled: false\n'
             }
         }
     }

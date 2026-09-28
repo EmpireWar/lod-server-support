@@ -130,15 +130,15 @@ public class LSSGameTests {
         // The bandwidth pair reads through the resolved accessors (2026-08-08 rename):
         // the raw fields are a file-format concern and sit at the -1 sentinel post-validate.
         helper.assertTrue(c.bytesPerSecondPerPlayer() >= LSSConstants.MIN_BYTES_PER_SECOND && c.bytesPerSecondPerPlayer() <= LSSConstants.MAX_BYTES_PER_SECOND_PER_PLAYER, "bytesPerSecondPerPlayer");
-        helper.assertTrue(c.sendQueueLimitPerPlayer >= LSSConstants.MIN_SEND_QUEUE_SIZE && c.sendQueueLimitPerPlayer <= LSSConstants.MAX_SEND_QUEUE_SIZE, "sendQueueLimitPerPlayer");
+        helper.assertTrue(c.sendQueueLimitPerPlayer() >= LSSConstants.MIN_SEND_QUEUE_SIZE && c.sendQueueLimitPerPlayer() <= LSSConstants.MAX_SEND_QUEUE_SIZE, "sendQueueLimitPerPlayer");
         helper.assertTrue(c.bytesPerSecondGlobal() >= LSSConstants.MIN_BYTES_PER_SECOND && c.bytesPerSecondGlobal() <= LSSConstants.MAX_BYTES_PER_SECOND_GLOBAL_LIMIT, "bytesPerSecondGlobal");
-        helper.assertTrue(c.generationConcurrencyLimitGlobal >= LSSConstants.MIN_CONCURRENT_GENERATIONS && c.generationConcurrencyLimitGlobal <= LSSConstants.MAX_CONCURRENT_GENERATIONS, "generationConcurrencyLimitGlobal");
-        helper.assertTrue(c.generationTimeoutSeconds >= LSSConstants.MIN_GENERATION_TIMEOUT && c.generationTimeoutSeconds <= LSSConstants.MAX_GENERATION_TIMEOUT, "generationTimeoutSeconds");
+        helper.assertTrue(c.generationConcurrencyLimitGlobal() >= LSSConstants.MIN_CONCURRENT_GENERATIONS && c.generationConcurrencyLimitGlobal() <= LSSConstants.MAX_CONCURRENT_GENERATIONS, "generationConcurrencyLimitGlobal");
+        helper.assertTrue(c.generationTimeoutTicks() >= (20 * LSSConstants.MIN_GENERATION_TIMEOUT) && c.generationTimeoutTicks() <= (20 * LSSConstants.MAX_GENERATION_TIMEOUT), "generationTimeoutSeconds");
         // 0 = dirty pushes disabled (v0.11.0) — a first-class value beside the sending band.
-        helper.assertTrue(c.dirtyBroadcastIntervalSeconds == 0 || (c.dirtyBroadcastIntervalSeconds >= LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL && c.dirtyBroadcastIntervalSeconds <= LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL), "dirtyBroadcastIntervalSeconds");
+        helper.assertTrue(c.dirtyBroadcastIntervalTicks() == 0 || (c.dirtyBroadcastIntervalTicks() >= (20 * LSSConstants.MIN_DIRTY_BROADCAST_INTERVAL) && c.dirtyBroadcastIntervalTicks() <= (20 * LSSConstants.MAX_DIRTY_BROADCAST_INTERVAL)), "dirtyBroadcastIntervalSeconds");
         // The real clamp semantic (R-2 / config review 9.1): per-player is bounded by the
         // configured GLOBAL cap, not a protocol constant (MAX_CONCURRENCY_LIMIT is deleted).
-        helper.assertTrue(c.generationConcurrencyLimitPerPlayer >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.generationConcurrencyLimitPerPlayer <= c.generationConcurrencyLimitGlobal, "generationConcurrencyLimitPerPlayer");
+        helper.assertTrue(c.generationConcurrencyLimitPerPlayer() >= LSSConstants.MIN_CONCURRENCY_LIMIT && c.generationConcurrencyLimitPerPlayer() <= c.generationConcurrencyLimitGlobal(), "generationConcurrencyLimitPerPlayer");
         helper.succeed();
     }
 }

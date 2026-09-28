@@ -1,0 +1,9 @@
+SnakeYAML Engine 3.1.1 — https://github.com/snakeyaml/snakeyaml-engine
+Copyright (c) 2018, SnakeYAML
+Licensed under the Apache License, Version 2.0.
+
+The library is redistributed under dev.vox.lss.internal.yaml. Relocation changes
+package names; the parser implementation is otherwise unmodified.
+Binary SHA-256: 59d73655cf077f154137e2d6f6f92c041a954c0b1c534c63800047a0d70a6947
+Source SHA-256: 2896d52c792259f648d0f0ef23cf87ee7bbd1c37837e46ad0d27d12041b6a39c
+The original binary targets Java 11 and has no production dependencies.

@@ -78,10 +78,18 @@ public class ColumnTimestampCache {
         final int[] slots = new int[1024];
         int liveCount;
         long lastTouchEpochSeconds;
+        long region;
+        final long identity = TILE_IDS.incrementAndGet();
     }
 
+    private static final AtomicLong TILE_IDS = new AtomicLong();
+    private final Map<String, java.util.NavigableSet<Tile>> evictionOrder = new HashMap<>();
+    private java.util.NavigableSet<Tile> order(String dimension) {
+        return evictionOrder.computeIfAbsent(dimension, k -> new java.util.TreeSet<>(
+                Comparator.comparingLong((Tile t) -> t.lastTouchEpochSeconds).thenComparingLong(t -> t.identity)));
+    }
     private final Map<String, Long2ObjectOpenHashMap<Tile>> caches = new HashMap<>();
-    private final long maxBytesPerDimension;
+    private long maxBytesPerDimension;
 
     // ---- Miss memo (docs/planning/miss-memo-design.md) ----
     // packedXZ -> expiry deadline (monotonic nanos), per dimension: "this chunk was
@@ -95,8 +103,8 @@ public class ColumnTimestampCache {
     // UNTOUCHED by the tile redesign (design §4) beyond the overflow cap's derivation,
     // which keeps the old numeric value (bytes/64 == the retired mbToEntries result).
     private final Map<String, Long2LongOpenHashMap> missExpiryByPosition = new HashMap<>();
-    private final long missTtlNanos;
-    private final int missMemoOverflowCap;
+    private long missTtlNanos;
+    private int missMemoOverflowCap;
 
     // Cross-thread observability for the soak/benchmark exporters (the cache itself is
     // processing-thread-only): liveSizes mirrors each dimension's current entry count
@@ -110,10 +118,16 @@ public class ColumnTimestampCache {
     private boolean preEpochWarned;
 
     public ColumnTimestampCache(long maxBytesPerDimension, long missTtlNanos) {
+        adoptPolicy(maxBytesPerDimension, missTtlNanos);
+    }
+
+    /** Processing-owner only. Adoption never traverses real timestamps. */
+    public void adoptPolicy(long maxBytesPerDimension, long missTtlNanos) {
         this.maxBytesPerDimension = Math.max(TILE_HEAP_BYTES, maxBytesPerDimension);
-        this.missTtlNanos = Math.max(0, missTtlNanos);
-        this.missMemoOverflowCap = (int) Math.min(Integer.MAX_VALUE,
-                this.maxBytesPerDimension / 64);
+        long ttl = Math.max(0, missTtlNanos);
+        if (ttl != this.missTtlNanos) this.missExpiryByPosition.clear();
+        this.missTtlNanos = ttl;
+        this.missMemoOverflowCap = (int) Math.min(Integer.MAX_VALUE, this.maxBytesPerDimension / 64);
     }
 
     // ---- stamp <-> slot conversion (design §2.2 — every clamp rounds UP) ----
@@ -142,7 +156,7 @@ public class ColumnTimestampCache {
             Tile tile = tiles == null ? null : tiles.get(region);
             if (tile != null && tile.slots[slot] != 0) {
                 tile.slots[slot] = 0;
-                if (--tile.liveCount == 0) tiles.remove(region);
+                if (--tile.liveCount == 0) { tiles.remove(region); order(dimension).remove(tile); }
                 bumpLiveSize(dimension, -1);
             }
         } else {
@@ -160,6 +174,7 @@ public class ColumnTimestampCache {
             Tile tile = tiles.get(region);
             if (tile == null) {
                 tile = new Tile();
+                tile.region = region;
                 tiles.put(region, tile);
             }
             if (tile.slots[slot] == 0) {
@@ -167,7 +182,9 @@ public class ColumnTimestampCache {
                 bumpLiveSize(dimension, 1);
             }
             tile.slots[slot] = offsetOf(timestamp);
+            order(dimension).remove(tile);
             tile.lastTouchEpochSeconds = now;
+            order(dimension).add(tile);
         }
         // A positive stamp IS the miss-clear choke point: every serve path (probe, disk
         // success, generation delivery, resync) lands here, so a served column can never
@@ -260,7 +277,7 @@ public class ColumnTimestampCache {
             if (tile.slots[slot] != 0) {
                 tile.slots[slot] = 0;
                 removed++;
-                if (--tile.liveCount == 0) tiles.remove(PositionUtil.packRegionOf(pos));
+                if (--tile.liveCount == 0) { tiles.remove(PositionUtil.packRegionOf(pos)); order(dimension).remove(tile); }
             }
         }
         if (removed > 0) bumpLiveSize(dimension, -removed);
@@ -274,44 +291,28 @@ public class ColumnTimestampCache {
      * put, so any region with recent activity is protected. Returns the total number
      * of column entries evicted across all dimensions (the counter keeps its meaning).
      */
-    public int evictIfOversized() {
-        // Miss-memo maps evict FIRST and wholesale when over-cap: a miss is always cheaper
-        // to lose than a stamp (losing one costs a redundant not-found read; losing a stamp
-        // costs a redundant serve), and the memo repopulates within one declaration cycle.
-        for (var misses : missExpiryByPosition.values()) {
-            if (misses.size() > this.missMemoOverflowCap) misses.clear();
-        }
+    public int evictIfOversized() { return trimOversized(Integer.MAX_VALUE); }
+
+    /** Incremental maintenance: at most maxTiles removals across all dimensions. */
+    public int trimOversized(int maxTiles) {
+        // Dropping a memo map cannot fabricate a timestamp; repopulate under the new cap.
+        missExpiryByPosition.entrySet().removeIf(e -> e.getValue().size() > missMemoOverflowCap);
         int evicted = 0;
         for (var entry : caches.entrySet()) {
             var tiles = entry.getValue();
-            long budgetTiles = this.maxBytesPerDimension / TILE_HEAP_BYTES;
-            long excess = tiles.size() - budgetTiles;
-            if (excess <= 0) continue;
-            // ONE sorted pass, oldest lastTouch first — never a rescan per victim. A
-            // per-victim linear scan is O(tiles²) exactly where eviction runs in bulk
-            // (load() deliberately admits an over-budget file, so a config shrink from
-            // distance 1024 to 256 evicts ~38k tiles on the processing thread) — the
-            // multi-second freeze the deleted per-entry evictOldest was rewritten for.
-            // Snapshot to plain values first: fastutil entries are LIVE VIEWS whose
-            // getValue() nulls once their key is removed.
-            record Victim(long key, int liveCount, long lastTouch) {}
-            var victims = new ArrayList<Victim>(tiles.size());
-            for (var e : tiles.long2ObjectEntrySet()) {
-                victims.add(new Victim(e.getLongKey(),
-                        e.getValue().liveCount, e.getValue().lastTouchEpochSeconds));
+            var oldest = order(entry.getKey());
+            int removed = 0;
+            while (tiles.size() > maxBytesPerDimension / TILE_HEAP_BYTES && maxTiles > 0) {
+                Tile tile = oldest.pollFirst();
+                if (tile == null) break;
+                tiles.remove(tile.region);
+                removed += tile.liveCount;
+                maxTiles--;
             }
-            victims.sort(Comparator.comparingLong(Victim::lastTouch));
-            int dimEvicted = 0;
-            for (int i = 0; i < excess; i++) {
-                tiles.remove(victims.get(i).key());
-                dimEvicted += victims.get(i).liveCount();
-            }
-            if (dimEvicted > 0) {
-                evicted += dimEvicted;
-                bumpLiveSize(entry.getKey(), -dimEvicted);
-            }
+            if (removed > 0) { bumpLiveSize(entry.getKey(), -removed); evicted += removed; }
+            if (maxTiles == 0) break;
         }
-        if (evicted > 0) evictionCount.addAndGet(evicted);
+        evictionCount.addAndGet(evicted);
         return evicted;
     }
 
@@ -397,7 +398,7 @@ public class ColumnTimestampCache {
                 Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 // Filesystems without atomic rename (some network mounts — same fallback as
-                // JsonConfig.save): a torn file on crash is tolerable, the loader discards it.
+                // settings persistence): a torn file on crash is tolerable, the loader discards it.
                 Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING);
             }
             // debug, not info: besides the ~5-min periodic save, the invalidation debounce
@@ -557,6 +558,9 @@ public class ColumnTimestampCache {
                             }
                         }
                     }
+                    if (previous != null) order(dimension).remove(previous);
+                    tile.region = regionKey;
+                    order(dimension).add(tile);
                     tiles.put(regionKey, tile);
                     // Mirror bump PER TILE, inside the loop: a mid-tile EOF throws to the
                     // outer catch, and a batched end-of-dimension bump would leave every
@@ -624,6 +628,8 @@ public class ColumnTimestampCache {
                 System.arraycopy(src.slots, 0, copy.slots, 0, 1024);
                 copy.liveCount = src.liveCount;
                 copy.lastTouchEpochSeconds = src.lastTouchEpochSeconds;
+                copy.region = e.getLongKey();
+                snapshot.order(entry.getKey()).add(copy);
                 tilesCopy.put(e.getLongKey(), copy);
             }
             snapshot.caches.put(entry.getKey(), tilesCopy);

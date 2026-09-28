@@ -21,6 +21,16 @@ public abstract class RecordedOption<V> implements StatefulOptionBuilder<V> {
     public Supplier<V> getter;
     public StorageEventHandler storageHandler;
     public Function<ConfigState, Boolean> enabledProvider;
+    private V baseline;
+    private V staged;
+
+    public void resetFromBinding() { baseline = getter.get(); staged = baseline; }
+    public void modifyValue(V value) { staged = value; }
+    public V getValidatedValue() { return staged; }
+    public boolean hasChanged() { return !java.util.Objects.equals(baseline, staged); }
+    /** Mirrors the real API: the baseline is marked clean before storage handlers run. */
+    public void applyChanges() { setter.accept(staged); baseline = staged; }
+
     public ResourceLocation[] dependencies = new ResourceLocation[0];
 
     RecordedOption(ResourceLocation id) {
@@ -36,6 +46,12 @@ public abstract class RecordedOption<V> implements StatefulOptionBuilder<V> {
     @Override
     public StatefulOptionBuilder<V> setTooltip(Component tooltip) {
         this.tooltip = tooltip;
+        return this;
+    }
+
+    @Override
+    public StatefulOptionBuilder<V> setTooltip(Function<V, Component> tooltip) {
+        this.tooltip = tooltip.apply(defaultValue);
         return this;
     }
 
@@ -68,6 +84,7 @@ public abstract class RecordedOption<V> implements StatefulOptionBuilder<V> {
     public StatefulOptionBuilder<V> setBinding(Consumer<V> setter, Supplier<V> getter) {
         this.setter = setter;
         this.getter = getter;
+        resetFromBinding();
         return this;
     }
 }

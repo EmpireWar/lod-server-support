@@ -21,7 +21,7 @@ website: https://modrinth.com/plugin/lod-server-support
 commands:
   lsslod:
     description: LOD Server Support admin commands
-    usage: /lsslod <stats|diag|store|set|help>
+    usage: /lsslod <stats|diag|diagnostics|store|reload|help>
     permission: lss.admin
 permissions:
   lss.admin:

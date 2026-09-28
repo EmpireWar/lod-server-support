@@ -42,10 +42,15 @@ public abstract class SodiumStatusEntryHook {
         }
         if (!sodium) return;
         Screen parent = (Screen) (Object) this;
+        dev.vox.lss.config.menu.SodiumDraftRefresh.open(parent);
+
         lss$statusButton = addRenderableWidget(Button.builder(Component.translatable("lss.status.open"), button ->
-                net.minecraft.client.Minecraft.getInstance().setScreen(
-                        new dev.vox.lss.networking.client.ClientStatusScreen(parent,
-                                dev.vox.lss.config.menu.SodiumStatusReturn.capture(parent))))
+                {
+                    var draft = dev.vox.lss.config.LSSClientConfig.CONFIG.edits();
+                    if (draft.hasRetainedEdits()) dev.vox.lss.config.menu.ClientSettingsSaveScreen.show(draft);
+                    else net.minecraft.client.Minecraft.getInstance().setScreen(
+                            new dev.vox.lss.networking.client.ClientStatusScreen(parent));
+                })
                 .bounds(0, 0, 105, 20).build());
         lss$statusButton.visible = false;
         lss$statusLayoutPending = true;
@@ -53,7 +58,28 @@ public abstract class SodiumStatusEntryHook {
     @Inject(method = "render", at = @At("HEAD"))
     private void lss$placeStatusEntry(net.minecraft.client.gui.GuiGraphics graphics,
             int mouseX, int mouseY, float delta, CallbackInfo callback) {
-        if (!lss$statusLayoutPending || lss$statusButton == null) return;
+        if (lss$statusButton == null) return;
+        var draft = dev.vox.lss.config.LSSClientConfig.CONFIG.edits();
+        var font = net.minecraft.client.Minecraft.getInstance().font;
+        String noticeKey = switch (draft.outcome()) {
+            case FAILED -> "lss.settings.failure_notice";
+            case CONFLICT -> "lss.settings.conflict_notice";
+            case UNSAVED -> "lss.settings.unsaved_notice";
+            case SAVED -> "lss.settings.saved_notice";
+            case CLEAN -> draft.pendingReload() ? "lss.settings.saved_notice" : "lss.settings.save_notice";
+        };
+        graphics.drawCenteredString(font, Component.translatable(noticeKey,
+                dev.vox.lss.common.Brand.clientCommand()), width / 2, 5, 0xffffff88);
+        graphics.drawCenteredString(font, Component.translatable("lss.settings.sharing_state",
+                Component.translatable(draft.activeSharing() ? "options.on" : "options.off"),
+                Component.translatable(dev.vox.lss.config.menu.SodiumDraftRefresh.previewSharing(this) ? "options.on" : "options.off")),
+                width / 2, 16, 0xffffff88);
+        if (draft.hasRetainedEdits()) lss$statusButton.setMessage(Component.translatable("lss.settings.recovery"));
+        else lss$statusButton.setMessage(Component.translatable("lss.status.open"));
+        if (!dev.vox.lss.config.LSSClientConfig.CONFIG.pendingReconnect().isEmpty())
+            graphics.drawCenteredString(font, Component.translatable("lss.settings.pending_reconnect_notice"),
+                    width / 2, 27, 0xffffff88);
+        if (!lss$statusLayoutPending) return;
         lss$statusLayoutPending = false;
         var bounds = dev.vox.lss.common.diagnostics.StatusEntryLayout.find(width, height, lss$statusModern,
                 (x, y) -> {

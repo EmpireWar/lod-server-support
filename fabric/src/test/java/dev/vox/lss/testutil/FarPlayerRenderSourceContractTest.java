@@ -95,7 +95,7 @@ class FarPlayerRenderSourceContractTest {
                 tree + ": the tag draw's push must be unwound in a finally (fold D1)");
         // Fold (b): the 64..tracking-radius gap — tracked players past vanilla's cap get the LSS
         // tag under vanilla's ladder, camera-distance based, only where vanilla drew a body.
-        assertTrue(src.contains("boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames();"),
+        assertTrue(src.contains("boolean nameTags = config.nameTags() && Minecraft.renderNames();"),
                 tree + ": every tag (proxy or real) must honour the hide-GUI key (fold D3)");
         assertTrue(src.contains("for (var realPlayer : level.players())")
                         && src.contains("if (active.contains(realPlayer.getUUID())) continue;")

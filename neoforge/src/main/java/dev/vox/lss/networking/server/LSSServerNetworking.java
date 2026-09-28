@@ -59,6 +59,7 @@ public class LSSServerNetworking {
     // ---- NeoForge event handlers (registered by LSSNeoMod) ----
 
     public static void onServerStarted(ServerStartedEvent event) {
+        dev.vox.lss.config.LSSServerConfig.beginServerLifecycle();
         var server = event.getServer();
         if (!server.isDedicatedServer() && !Boolean.getBoolean("lss.test.integratedServer")) {
             // Integrated server: the service starts only if/when the host opens to LAN
@@ -99,6 +100,7 @@ public class LSSServerNetworking {
     }
 
     public static void onServerStopping(ServerStoppingEvent event) {
+        dev.vox.lss.config.LSSServerConfig.CONFIG.close();
         var service = requestService;
         if (service != null) {
             LSSLogger.info("Stopping " + Brand.shortName() + " LOD request processing service");

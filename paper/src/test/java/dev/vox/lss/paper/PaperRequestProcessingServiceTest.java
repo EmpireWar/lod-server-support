@@ -86,6 +86,14 @@ class PaperRequestProcessingServiceTest {
         boolean throwOnShutdown = false;
         boolean shutdownCalled = false;
         boolean invalidationsSeenBeforeShutdown = false;
+        java.util.concurrent.CompletableFuture<Void> policyAdoption = java.util.concurrent.CompletableFuture.completedFuture(null);
+        long requestedPolicyRevision;
+        @Override
+        public java.util.concurrent.CompletableFuture<Void> updateSettingsPolicy(boolean enabled, long budget,
+                long ttlNanos, long revision) {
+            requestedPolicyRevision = revision;
+            return policyAdoption;
+        }
 
         RecordingProcessor(Map<UUID, PaperPlayerRequestState> players, PaperChunkDiskReader diskReader) {
             // Never start()ed: the recording overrides observe the main-thread glue only.
@@ -210,9 +218,12 @@ class PaperRequestProcessingServiceTest {
     private PaperRequestProcessingService service;
 
     @BeforeEach
-    void buildRig() {
-        config = new PaperConfig();
-        config.validate();
+    void buildRig() { buildRig(true); }
+
+    private void buildRig(boolean generationEnabled) {
+        config = new MutablePaperSettings();
+        MutablePaperSettings.set(config, "generation.enabled", generationEnabled);
+        MutablePaperSettings.normalize(config);
         players = new ConcurrentHashMap<>();
         diskReader = new PaperChunkDiskReader(1, false);
         processor = new RecordingProcessor(players, diskReader);
@@ -290,7 +301,7 @@ class PaperRequestProcessingServiceTest {
 
     @Test
     void batchRequestGateDropsBeyondLodPlusBufferAndKeepsClientTimestamps() {
-        config.lodDistanceChunks = 16; // gate at 16 + 32 = 48 Chebyshev
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 16); // gate at 16 + 32 = 48 Chebyshev
         var player = playerIn(UUID.randomUUID(), level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
 
@@ -318,8 +329,8 @@ class PaperRequestProcessingServiceTest {
 
     @Test
     void batchRequestGateUsesPerWorldLodOverrideByDimensionId() {
-        config.lodDistanceChunks = 16;
-        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 8); // gate at 8 + 32 = 40
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 16);
+        MutablePaperSettings.dimension(config, "minecraft:the_nether", 8); // gate at 8 + 32 = 40
         var player = playerIn(UUID.randomUUID(), level(Level.NETHER));
         var state = service.registerPlayer(player, 1);
 
@@ -483,8 +494,8 @@ class PaperRequestProcessingServiceTest {
 
     @Test
     void dimensionChangeRePushesSessionConfigWithNewWorldDistance() {
-        config.lodDistanceChunks = 512;
-        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 64);
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 512);
+        MutablePaperSettings.dimension(config, "minecraft:the_nether", 64);
         var uuid = UUID.randomUUID();
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
@@ -509,7 +520,7 @@ class PaperRequestProcessingServiceTest {
         // SKIPPED — the client rebuilds its manager on any SessionConfig, so an
         // unconditional push would tax every portal even with the feature off (the client
         // rebuilds its whole request manager on any SessionConfig).
-        config.lodDistanceChunks = 512;
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 512);
         var uuid = UUID.randomUUID();
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(uuid, overworld);
@@ -535,9 +546,9 @@ class PaperRequestProcessingServiceTest {
         // Configured-but-equal (not just empty map): two worlds explicitly overridden to
         // the same value must still skip the push — a "push whenever overrides exist" bug
         // would fail here.
-        config.lodDistanceChunks = 512;
-        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 96);
-        config.lodDistanceChunksByWorld.put("minecraft:the_end", 96);
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 512);
+        MutablePaperSettings.dimension(config, "minecraft:the_nether", 96);
+        MutablePaperSettings.dimension(config, "minecraft:the_end", 96);
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.NETHER));
         service.getDialectTracker().onHandshake(uuid, dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT);
@@ -556,8 +567,8 @@ class PaperRequestProcessingServiceTest {
     void dimensionChangeDoesNotRePushToALegacyDialectSession() {
         // The push is v20-shaped; a legacy (v18) session must never receive it even when
         // the distance genuinely differs — it picks the new world's distance up on rejoin.
-        config.lodDistanceChunks = 512;
-        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 64);
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 512);
+        MutablePaperSettings.dimension(config, "minecraft:the_nether", 64);
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         service.getDialectTracker().onHandshake(uuid, dev.vox.lss.common.HandshakeGate.WireDialect.V18);
@@ -737,7 +748,7 @@ class PaperRequestProcessingServiceTest {
 
     @Test
     void tickWithEnabledFalseDoesNothingAndResumesWhenFlipped() {
-        config.enabled = false;
+        MutablePaperSettings.set(config, "service.enabled", false);
         var uuid = UUID.randomUUID();
         var player = playerIn(uuid, level(Level.OVERWORLD));
         var state = service.registerPlayer(player, 1);
@@ -756,7 +767,7 @@ class PaperRequestProcessingServiceTest {
         assertEquals(1, processor.ticketQueue.size(), "ticket queue untouched");
 
         // The same rig does work once enabled — proves the recorders are live, not vacuous
-        config.enabled = true;
+        MutablePaperSettings.set(config, "service.enabled", true);
         service.tick();
         assertEquals(1, processor.snapshots.size());
         assertEquals(1, processor.sendActionDrains.get());
@@ -1015,7 +1026,7 @@ class PaperRequestProcessingServiceTest {
         // The test-wiring ctor never publishes the x-ray mask manager (xrayMasks stays
         // null), so its shutdown's guarded retract must leave a live production manager
         // alone — the invariant behind PaperXrayMaskManager.deactivate(owner).
-        var foreign = PaperXrayMaskManager.activate(new PaperConfig());
+        var foreign = PaperXrayMaskManager.activate(new MutablePaperSettings());
         try {
             service.shutdown();
             assertSame(foreign, PaperXrayMaskManager.current(),
@@ -1167,7 +1178,7 @@ class PaperRequestProcessingServiceTest {
         var overworld = level(Level.OVERWORLD);
         var player = playerIn(UUID.randomUUID(), overworld);
         service.registerPlayer(player, 1);
-        config.enabled = false;
+        MutablePaperSettings.set(config, "service.enabled", false);
         service.enqueueRemove(player.getUUID());
         service.tick();
         assertTrue(service.getPlayers().isEmpty(),
@@ -1509,9 +1520,9 @@ class PaperRequestProcessingServiceTest {
         var state = service.registerPlayer(playerIn(UUID.randomUUID(), level(Level.OVERWORLD)),
                 LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         int boot = state.getGenSlotCap();
-        config.generationConcurrencyLimitGlobal = boot + 5;
-        config.generationConcurrencyLimitPerPlayer = boot + 5;
-        config.validate(); // publish the validated pair, as the runtime command does
+        MutablePaperSettings.set(config, "generation.concurrency.global", boot + 5);
+        MutablePaperSettings.set(config, "generation.concurrency.per_player", boot + 5);
+        MutablePaperSettings.normalize(config); // publish the validated pair, as the runtime command does
         service.tick();
         assertEquals(boot + 5, state.getGenSlotCap(),
                 "the per-player cap must follow config on the next tick for EXISTING states");
@@ -1535,16 +1546,16 @@ class PaperRequestProcessingServiceTest {
                     new dev.vox.lss.common.region.RegionSummaryWire.Request(
                             "minecraft:overworld", 0, 0, 1));
             var uuid = UUID.randomUUID();
-            config.enableRegionSummaries = false;
+            MutablePaperSettings.set(config, "updates.region_summaries", false);
             wired.handleRegionSummaryRequest(uuid, body);
             assertEquals(0, wired.getRegionSummaries().diagnostics().getRequests(),
                     "enableRegionSummaries=false must drop at the handler");
-            config.enableRegionSummaries = true;
-            config.enabled = false;
+            MutablePaperSettings.set(config, "updates.region_summaries", true);
+            MutablePaperSettings.set(config, "service.enabled", false);
             wired.handleRegionSummaryRequest(uuid, body);
             assertEquals(0, wired.getRegionSummaries().diagnostics().getRequests(),
                     "the master enabled=false gate must drop too");
-            config.enabled = true;
+            MutablePaperSettings.set(config, "service.enabled", true);
             wired.handleRegionSummaryRequest(uuid, body);
             assertEquals(1, wired.getRegionSummaries().diagnostics().getRequests(),
                     "with both gates open the request reaches the service");
@@ -1561,9 +1572,54 @@ class PaperRequestProcessingServiceTest {
             assertFalse(wired.getRegionSummaries().hasRequestedThisSession(legacy),
                     "and never becomes stamps-eligible");
         } finally {
-            config.enabled = true;
-            config.enableRegionSummaries = true;
+            MutablePaperSettings.set(config, "service.enabled", true);
+            MutablePaperSettings.set(config, "updates.region_summaries", true);
             wired.shutdown();
         }
     }
+    @Test
+    void settingsControlRunsWhileDisabledAndGetsCancelledWhenPumpStops() throws Exception {
+        MutablePaperSettings.set(config, "service.enabled", false);
+        var controlled = service.submitSettingsControl(() -> "adopted");
+        assertFalse(controlled.isDone());
+        service.tick();
+        assertEquals("adopted", controlled.get(1, java.util.concurrent.TimeUnit.SECONDS));
+        var waiting = service.submitSettingsControl(() -> "must not run");
+        service.shutdown();
+        assertTrue(waiting.isCompletedExceptionally(), "queued control cannot silently disappear during teardown");
+        assertTrue(service.submitSettingsControl(() -> "late").isCompletedExceptionally());
+    }
+
+    @Test
+    void generationRefreshWaitsForWorkerAdoptionThenReportsLegacyReconnect() throws Exception {
+        service.shutdown();
+        buildRig(false);
+        var current = UUID.randomUUID();
+        service.registerPlayer(playerIn(current, level(Level.OVERWORLD)), LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var legacy = UUID.randomUUID();
+        service.getDialectTracker().onHandshake(legacy, dev.vox.lss.common.HandshakeGate.WireDialect.V18);
+        service.registerPlayer(playerIn(legacy, level(Level.OVERWORLD)), LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var sent = new ArrayList<UUID>();
+        service.setSessionConfigSender((player, cfg, enabled) -> {
+            assertTrue(service.generationEnabledForSession(), "announcement follows adoption");
+            sent.add(player.getUUID());
+        });
+        var previous = config.snapshot();
+        MutablePaperSettings.set(config, "generation.enabled", true);
+        processor.policyAdoption = new java.util.concurrent.CompletableFuture<>();
+        var adopted = service.reconcileSettings(previous, config.snapshot(), 1);
+        assertEquals(1, processor.requestedPolicyRevision);
+        assertFalse(adopted.isDone());
+        assertFalse(service.generationEnabledForSession(), "handshakes retain previous advertised policy while pending");
+        service.tick();
+        assertTrue(sent.isEmpty());
+        assertEquals(0, processor.sendActionDrains.get(), "old terminal packets wait for the worker fence");
+        processor.policyAdoption.complete(null);
+        service.tick();
+        adopted.get(1, java.util.concurrent.TimeUnit.SECONDS);
+        assertEquals(List.of(current), sent);
+        assertEquals(1, service.lastSettingsLegacyReconnects());
+        assertEquals(1, processor.sendActionDrains.get(), "normal terminal delivery resumes after refresh");
+    }
+
 }

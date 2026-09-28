@@ -289,14 +289,14 @@ public final class FarPlayerRenderer {
     }
 
     private void renderContained(RenderLevelStageEvent event) {
-        var config = LSSClientConfig.CONFIG;
+        var config = LSSClientConfig.CONFIG.snapshot().farPlayers();
         // The bit gate covers arm + the soak/benchmark properties; the EFFECTIVE
         // enabled term (config AND the SeeU-coexist gate, E3) is checked HERE because
         // the bit deliberately no longer carries it (the subscription is the prefs
         // carrier — E2 review M2): a disabled viewer still delivers its shareSelf
         // opt-out, it just renders nothing.
         if (FarPlayerClientSupport.capabilityBit() == 0
-                || !FarPlayerClientSupport.effectiveFarPlayersEnabled()) {
+                || !config.enabled()) {
             if (!proxies.isEmpty() || !vehicles.isEmpty()) clear();
             return;
         }
@@ -330,10 +330,10 @@ public final class FarPlayerRenderer {
         float partialTick = minecraft.getTimer().getGameTimeDeltaPartialTick(false);
         int animationTick = localPlayer.tickCount;
         long now = FarPlayerClientSupport.monotonicMillis();
-        int maxRender = config.farPlayersMaxRenderDistanceBlocks;
-        int minRender = config.farPlayersMinDistanceBlocks;
-        boolean fullBright = config.farPlayersFullBright;
-        boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames(); // F1/hide-GUI hides every tag (fold D3)
+        int maxRender = config.renderDistanceBlocks();
+        int minRender = config.distance().minBlocks();
+        boolean fullBright = config.fullBright();
+        boolean nameTags = config.nameTags() && Minecraft.renderNames(); // F1/hide-GUI hides every tag (fold D3)
         int drawn = 0, culled = 0, mounts = 0;
         List<PendingTag> pendingTags = new ArrayList<>();
 
@@ -380,8 +380,8 @@ public final class FarPlayerRenderer {
                 restorePose(poseStack, passMark);
                 continue;
             }
-            boolean allowWalk = config.farPlayersMaxAnimationDistanceBlocks > 0
-                    && distance <= config.farPlayersMaxAnimationDistanceBlocks;
+            boolean allowWalk = config.animationDistanceBlocks() > 0
+                    && distance <= config.animationDistanceBlocks();
             // Rider-while-seated attribution (issue-#160 review MINOR-1): from frame 2
             // of a ride the proxy IS a passenger, and apply's snapTo/setPose reach
             // makeBoundingBox — which Create-class mixins wrap with vehicle-state
@@ -1075,7 +1075,7 @@ public final class FarPlayerRenderer {
         if (r == null) return "FarPlayerRender: off";
         return "FarPlayerRender: drawn=" + r.lastDrawn + ", culled=" + r.lastCulled
                 + ", mounts=" + r.lastMounts + ", tags=" + r.lastTags
-                + ", light=" + (LSSClientConfig.CONFIG.farPlayersFullBright ? "full" : "floor");
+                + ", light=" + (LSSClientConfig.CONFIG.farPlayersFullBright() ? "full" : "floor");
     }
 
     /** Monotonic id from the LSS block, probed against the live level (a taken id —

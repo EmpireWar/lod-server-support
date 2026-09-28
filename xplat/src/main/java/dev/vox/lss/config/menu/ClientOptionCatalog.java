@@ -172,7 +172,7 @@ public final class ClientOptionCatalog {
                 .build();
 
         // Xaero's World Map bridge (issue #223, xaero-map-bridge-plan.md §2.9): write
-        // received LODs into Xaero's map. Requires reload and reconnect; with
+        // received LODs into Xaero's map. Apply reloads, then reconnect activates it; with
         // Xaero absent the toggle is inert — say so where the user is looking.
         var xaero = BoolSpec.builder(ID_XAERO_MAP_BRIDGE)
                 .name("lss.config.xaero_map_bridge")

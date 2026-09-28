@@ -223,7 +223,12 @@ class LegacySodiumPageTest {
         var store = new SettingsStore<>(temp, "lss", schema, line -> {},
                 (temporary, destination) -> { if (fail.get()) throw new java.io.IOException("disk full"); });
         var live = new dev.vox.lss.common.config.SettingsHandle<>(store);
-        var cfg = new ClientSettingsEditSession(store, () -> live.state().effective());
+        var reloads = new java.util.concurrent.atomic.AtomicInteger();
+        var cfg = new ClientSettingsEditSession(store, () -> live.state().effective(),
+                () -> live.state().configured(), () -> {
+                    try { reloads.incrementAndGet(); live.commit(live.prepareReload()); }
+                    catch (Exception failure) { throw new AssertionError(failure); }
+                });
         var pages = LegacySodiumPage.buildWith(handles, cfg, PLAIN, "LSS", hook -> hook.run(cfg));
         @SuppressWarnings("unchecked") var share = (Option<Boolean>) ((OptionPage) pages.get(1)).getOptions().get(1);
         share.setValue(false);
@@ -236,11 +241,11 @@ class LegacySodiumPageTest {
         cfg.open(new Object());
         var reopened = LegacySodiumPage.buildWith(handles, cfg, PLAIN, "LSS", hook -> hook.run(cfg));
         assertEquals(false, ((OptionPage) reopened.get(1)).getOptions().get(1).getValue());
+        assertEquals(0, reloads.get(), "failed save must not request reload");
         fail.set(false);
-        assertTrue(cfg.save());
+        assertTrue(cfg.apply());
+        assertEquals(1, reloads.get(), "recovery must reload the saved draft");
         assertFalse(store.read().configured().farPlayers().sharing().enabled());
-        assertTrue(live.state().effective().farPlayers().sharing().enabled());
-        live.commit(live.prepareReload());
         assertFalse(live.state().effective().farPlayers().sharing().enabled());
     }
 

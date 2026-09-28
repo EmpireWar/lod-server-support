@@ -28,7 +28,7 @@ public final class ClientSettingsSaveScreen extends Screen {
         boolean conflict = draft.outcome() == ClientSettingsEditSession.Outcome.CONFLICT;
         addRenderableWidget(Button.builder(Component.translatable(conflict
                 ? "lss.settings.rebase" : "lss.settings.retry"), button -> {
-            boolean saved = conflict ? draft.rebaseAndSave() : draft.save();
+            boolean saved = conflict ? draft.rebaseAndApply() : draft.apply();
             if (saved) { SodiumDraftRefresh.resetOwnBindings(parent); onClose(); }
             else rebuildWidgets();
         }).bounds(x, height - 40, 100, 20).build());

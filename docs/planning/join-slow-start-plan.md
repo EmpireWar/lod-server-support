@@ -162,7 +162,7 @@ precedent) pins the real wiring.
   ("Start LOD downloads slowly after joining and speed up as the connection proves
   itself — keeps joining responsive on slow connections. Turn off to load LODs at
   full speed from the first second."). When `enableAdaptiveTransferRate` is false
-  at menu build, pick a `.tooltip.governor_off` variant (the SeeU conditional
+  at menu build, pick a `.tooltip.governor_off` variant (the the historical renderer conditional
   precedent) noting the toggle is inert. VSS lang needs nothing (the rebrand is a
   blanket value rewrite; these strings carry no brand token — recorded so nobody
   re-derives it).

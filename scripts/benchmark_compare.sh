@@ -20,6 +20,7 @@ set -euo pipefail
 MAIN_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$MAIN_ROOT/scripts/lib/harness-lock.sh"
 harness_acquire
+source "$HARNESS_LIB_DIR/settings.sh"
 V16_REF="${V16_REF:-v0.6.2}"
 V16_WT="${V16_WT:-$(dirname "$MAIN_ROOT")/lss-bench-${V16_REF}}"
 OUT_ROOT="${OUT_ROOT:-$MAIN_ROOT/benchmark-compare-results}"
@@ -57,8 +58,10 @@ cmd_baseworld() {
     local seconds="${1:?baseworld needs a duration in seconds}"
     # Fresh scenario with each config at its shipped defaults (generation ON) — delete any
     # staged config so the run regenerates pure defaults, and clear the client cache.
-    rm -f "$MAIN_ROOT/fabric/build/run/benchmark-server/config/lss-server-config.json"
-    rm -f "$MAIN_ROOT/fabric/build/run/benchmark-client/config/lss-client-config.json"
+    rm -f "$MAIN_ROOT/fabric/build/run/benchmark-server/config/lss-server-config.yaml" \
+        "$MAIN_ROOT/fabric/build/run/benchmark-server/config/lss-server-config.json"
+    rm -f "$MAIN_ROOT/fabric/build/run/benchmark-client/config/lss-client-config.yaml" \
+        "$MAIN_ROOT/fabric/build/run/benchmark-client/config/lss-client-config.json"
     rm -rf "$MAIN_ROOT/fabric/build/run/benchmark-client/config/lss/cache" \
            "$MAIN_ROOT/fabric/build/run/benchmark-client/.lss/cache"  # both roots (stage D)
     log "Building base world: fresh run for ${seconds}s (generation enabled, defaults)"
@@ -72,6 +75,20 @@ cmd_coverage() {
 }
 
 stage_server_config() { # <path> <use_bg_read>
+    if [[ "$1" == *.yaml ]]; then
+        harness_stage_yaml "$1" server 'service.enabled=true' "lod.distance.default_chunks=$LOD_R" \
+            'lod.distance.by_dimension={}' 'network.bandwidth.per_player_mib_per_second=20' \
+            'network.bandwidth.global_mib_per_second=100' 'storage.disk.reader_threads=5' \
+            'storage.disk.max_concurrent_reads=5' 'network.send_queue_limit_per_player=4000' \
+            'generation.enabled=false' 'generation.concurrency.global=32' 'generation.concurrency.per_player=16' \
+            'generation.timeout_ticks=1200' 'updates.dirty_broadcast_interval_ticks=200' \
+            'storage.timestamp_cache_mib_per_dimension=32' 'storage.miss_memo_ttl_seconds=30' \
+            "storage.disk.background_priority=$2" 'compatibility.protocols.v16=true' \
+            'storage.lod_store.enabled=false' 'storage.lod_store.backfill.enabled=false'
+        return
+    fi
+    # Historical protocol arm predates YAML; retain its original JSON contract.
+
     cat > "$1" <<EOF
 {
   "enabled": true,
@@ -97,6 +114,13 @@ EOF
 }
 
 stage_client_config() { # <path>
+    if [[ "$1" == *.yaml ]]; then
+        harness_stage_yaml "$1" client 'lod.receive=true' "lod.distance_chunks=$LOD_R" \
+            'compatibility.protocols.v16=true' 'compatibility.v16_generation=true'
+        return
+    fi
+    # Historical comparison checkout predates YAML.
+
     cat > "$1" <<EOF
 {
   "receiveServerLods": true,
@@ -135,8 +159,8 @@ cmd_run() {
     local cli_cfg_dir="$root/fabric/build/run/benchmark-client/config"
     mkdir -p "$srv_cfg_dir" "$cli_cfg_dir"
     rm -rf "$cli_cfg_dir/lss/cache" "$root/fabric/build/run/benchmark-client/.lss/cache"  # both roots (stage D)
-    stage_server_config "$srv_cfg_dir/lss-server-config.json" "$bg_read"
-    stage_client_config "$cli_cfg_dir/lss-client-config.json"
+    stage_server_config "$srv_cfg_dir/lss-server-config.$(harness_settings_extension "$root")" "$bg_read"
+    stage_client_config "$cli_cfg_dir/lss-client-config.$(harness_settings_extension "$root")"
 
     # Stale-artifact guard: benchmark.sh collects from these paths — a crashed run must
     # yield MISSING files, not silently re-collect the previous run's output.

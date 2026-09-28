@@ -74,20 +74,10 @@ API fact below was re-read from the right archive.)
   on all five lines; `renderState.nameTag`/`nameTagAttachment` are already null at proxy range.
   (c) NeoForge's `RenderNameTagEvent` + `isNameplateInRenderDistance` gate inside
   `dispatcher.render` also caps living entities at 64.
-- **F7 — prior art, SeeU (cat4blep/SeeU; `research/seeu`, branches `backport-1.21.1`/`1.21.11`
-  fetched).** LICENSE: SeeU relicensed to `LicenseRef-SeeU-Restricted-1.0` (all rights reserved,
-  no derivative works, no reuse of source) at 0.8 (`4d1439e`); earlier MIT releases keep MIT; the
-  `backport-1.21.1` head ships NO license file. **This plan copies no SeeU code, structure or
-  snippet; every item is reached independently from vanilla APIs and observable facts.** What we
-  learned by observation: its 1.21.1 backport passes vanilla's `LightTexture.FULL_BRIGHT` for
-  every proxy and vehicle (no black reports in its tracker); it frustum-culls through
-  `dispatcher.shouldRender` (which carries vanilla's distance term — wrong for far mounts); it
-  reflects into Melius Vanish on Fabric (with a fail-open throw path — the bug not to repeat);
-  it ships a vanilla-fog disable (broke Voxy fog once, its issue #9) and `setGlowingTag(true)`
-  (rejected by LSS for privacy); it tried a reflective Voxy raycast + depth readback for LOD
-  occlusion and reverted it the same day; its issues #2/#4 are the 640-block cull and the
-  768-block far plane, closed unresolved. `far-player-proxies-plan.md:306` ("SeeU is MIT-licensed")
-  is stale and gets corrected (WI-11).
+- **F7 — independent implementation.** The renderer is implemented from vanilla
+  APIs and observable behavior; no third-party renderer code or snippets are reused.
+  Full brightness, frustum culling, vanish filtering and privacy are verified against
+  LSS behavior and the relevant Minecraft bytecode.
 - **User decision (2026-09-04):** render proxies BRIGHTER than possibly correct rather than dark.
 
 ## 1. Goals / non-goals
@@ -102,10 +92,10 @@ instrument so the next regression is measurable, not eyeballed.
 
 Non-goals: no wire/protocol change (verified: the `lss:far_player_*` channels, `FarPlayerWire`,
 the capability bit and the prefs carrier are untouched; `WireParityTest`'s channel census would
-red otherwise); no fog mixin (Roxy already forces no-fog under Voxy; SeeU's broke Voxy fog); no
+red otherwise); no fog mixin (Roxy already forces no-fog under Voxy; broke Voxy fog); no
 glow; no far-plane extension (Voxy does not extend it — a proxy past the far plane is invisible,
 documented); no change to the handoff predicate or the mount ladder semantics (E2/E3 pins); no
-copying of SeeU code (F7).
+copying of the historical renderer code (F7).
 
 ## 2. Work items
 
@@ -413,7 +403,7 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
   stub in `fabric/src/test/java/me/drex/vanish/api/VanishAPI.java` (an interface with static
   methods delegating to a `dev.vox.lss.testutil` holder — interface fields are final), covering
   present/absent/throwing AND an order-sensitivity case (the stub returns false for exactly one
-  `(actor, observer)` pairing so a swapped argument order REDS — the SeeU-order trap);
+  `(actor, observer)` pairing so a swapped argument order REDS — the argument-order trap);
   `FarPlayerBroadcastServiceTest.filterLadderExcludesEveryIneligibleShape` already drives the seam.
   Optional: a `far_players.vanish_dropped` counter.
 
@@ -456,7 +446,7 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
   full-bright option; name tags (own-draw, sqrt scale, NORMAL only, sneak-hide); hidden-node parity
   (fail-visible) + Melius (fail-hidden); WI-4's SUPERSEDED block in
   `neoforge-1.21.1-far-player-render-plan.md` §3/§9/§10; "no fog mixin" and "no far-plane mixin"
-  reaffirmed; `far-player-proxies-plan.md:306` "SeeU is MIT-licensed" → the F7 licence facts.
+  reaffirmed; `far-player-proxies-plan.md:306` "the historical renderer is MIT-licensed" → the F7 licence facts.
 - `per-version-surfaces.md` (per line, hand-edited — never cherry-picked): the 1.21.1 NeoForge
   render row loses "NO explicit buffer flush" and gains the WI-3 frustum delta + WI-6; the
   1.21.11/1.21.10 rows record "frustum cull skipped (no frustum on the render path)".
@@ -564,7 +554,7 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 - Q7 more prior art: **nothing further**; licence-first — no code reuse. Explicitly out of scope:
   a measured-interpolation rewrite (LSS's declared-cadence motion is review-pinned), a packet
   sequence gate (epoch + latest-wins mailbox cover it), forced-first-frame on subscribe,
-  SeeU Extra/non-player entities, the locator bar, a settings hotkey (page-less stacks — a
+  the historical renderer Extra/non-player entities, the locator bar, a settings hotkey (page-less stacks — a
   separate ask), fog mixin and glow (rejected).
 
 ## 7. Draft reply for #268 (post only after user approval)
@@ -596,7 +586,7 @@ enumerates the deltas; WI-3 adds one (the frustum source) — the row is updated
 
 Panel: R1 Fable (MC-API/render), R2 Opus (server privacy), R3 Opus (config/tests/pins),
 R4 Opus (multi-line port), R5 Opus (adversarial UX/compat/scope). All verdicts:
-ship-with-corrections / request-changes; no design refutation. Folded MAJORs: SeeU licence
+ship-with-corrections / request-changes; no design refutation. Folded MAJORs: the historical renderer licence
 (R5) → no code reuse, F7 rewritten; name tags gated at 64 on ALL lines (R1/R4/R5) → own-draw
 everywhere, fallback deleted; `LightCoordsUtil` on 26.x (R1/R4); `Avatar` owns the model-parts
 byte on newer lines (R1/R4); no frustum on 1.21.11/1.21.10 and no `noCulling`/
@@ -679,7 +669,7 @@ Accepted-open: see fold (g).
   `endBatch()` stays forbidden.
 - 2026-09-04 — Fabric/NeoForge honor `lss./vss.farplayers.hidden` (fail-visible) and Melius
   Vanish (fail-hidden); Paper keeps fail-hidden for its Folia race.
-- 2026-09-04 — No SeeU code is reused (restricted licence since 0.8); "no fog mixin", "no glow",
+- 2026-09-04 — No the historical renderer code is reused (restricted licence since 0.8); "no fog mixin", "no glow",
   "no far-plane mixin" reaffirmed.
 
 ## 11. Port record — `main` (26.2) and `support/mc26.1-v0.14` (26.1), 2026-09-05

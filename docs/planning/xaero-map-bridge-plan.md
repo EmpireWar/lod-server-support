@@ -277,7 +277,7 @@ CFR decompile output in `cfr-out262/`, XaeroPlus clone). Key findings:
    enabled-dep on `lss:receive_server_lods`), lang keys
    `lss.config.xaero_map_bridge{,.tooltip,.tooltip.not_installed}` — the
    not-installed tooltip selected at menu build when `xaeroworldmap` is absent
-   (the join_slow_start governor-off / SeeU conditional-tooltip precedent).
+   (the join_slow_start governor-off / the historical renderer conditional-tooltip precedent).
    Strings stay brand-neutral (Brand discipline; the VSS jar shares them).
 10. **The cached-server gap is documented, not engineered around (v1).** On a
     server where the client already holds stamps, converged columns answer

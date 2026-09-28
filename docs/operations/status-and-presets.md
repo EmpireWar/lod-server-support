@@ -1,8 +1,7 @@
-# Status, local diagnostics and settings presets
+# Status, local diagnostics and settings
 
 `/lss status` opens a client screen without Sodium. Sodium's options screens also
-have a **LOD status** entry. The screen can toggle reception through the existing
-owner apply path; **More** cycles text pages on small screens. VSS uses `/vss` for these local commands. `/lss diag`
+have a **LOD status** entry. The screen shows effective reception and any saved/pending choice; **More** cycles text pages on small screens. VSS uses `/vss` for these local commands. `/lss diag`
 retains the detailed troubleshooting counters and also describes OFF, dormant,
 negotiation and missing-consumer states without creating a request manager.
 
@@ -31,27 +30,34 @@ server log for completion or a sanitized write failure; the queued message does
 not mean the files have been written. Client completion feedback is shown only
 while its originating session remains current.
 
-Presets always require a preview followed by an explicit apply:
+Settings are activated only at startup or by `/lss reload` on the client and
+`/lsslod reload` on the server. VSS uses `/vss reload` and `/vsslod reload`.
+The old `set`, preset preview/apply/undo and reception-toggle paths are removed.
 
-- Client: `/lss preset map-only` previews enabling reception while preserving the
-  existing Xaero write preference. `/lss preset map-only-xaero-writes` explicitly
-  selects persistent Xaero map writes too. A compatible consumer is required;
-  these LSS settings do not select recipients, uninstall mods or prevent Voxy
-  from consuming columns.
-- Server: `/lsslod preset pregenerated-world` previews server-global generation
-  disabling **for the next restart**. It does not claim the world is completely
-  generated. Existing running services keep their effective generation setting.
-- Use `preset apply` on the same surface to apply/save the preview, or
-  `preset undo` to restore the changed settings from the last application.
+Sodium edits a draft. Apply validates and atomically saves YAML while keeping live
+settings unchanged. A saved notice identifies the reload command; pending sharing
+changes are shown separately from active privacy. A failed save retains the draft
+for retry. If the file changed elsewhere, reload/rebase or discard the draft
+explicitly before retrying; unrelated file edits must not be overwritten.
 
-A changed relevant value or replaced scope requires a new preview. Undo refuses
-conflicting edits and preserves unrelated settings. Undo history expires at
-restart, config replacement, or another preset application; client world/session
-replacement also expires it. Save failures are reported as unsaved. Restart-only
-choices remain staged across subsequent unrelated config saves. Server reports show
-running generation separately from the configured restart value and mark a pending
-restart. Configured values can remain unsaved after a persistence failure.
+For an already generated world, set `generation.enabled: false`, then reload the
+server. This prevents new generation admissions while admitted Minecraft work
+drains. It does not prove that terrain exists. To reproduce the historical 32/4/1
+operating point, edit `lod.distance.default_chunks`, the applicable dimension/world
+overrides, and `generation.concurrency.global`/`per_player`, then reload. Those
+measurements establish that operating point only; they are not a comparison with
+fresh defaults or a recommendation for every server.
 
-`/lsslod preset conservative` previews server radius 32, global generation concurrency 4 and per-player concurrency 1. Review the patch, then use `/lsslod preset apply`; `/lsslod preset undo` restores the changed values when the existing conflict checks allow it. This is opt-in and does not change defaults. The numbers are the settings under which the accepted Minecraft 26.2 V27 reference measurement ran; that measurement did not compare them against the defaults or other operating points, and it does not cover every support line. The six final native server-preset runs and 12 UI runs have completed. The [final acceptance index](../implementation/final-native-acceptance-2026-09-20.json) records all 54 selected native cases, including eight user-accepted images with the disclosed map limitations. Evidence integration and owned rig/gallery cleanup are complete; Windows desktop coexistence was separately confirmed by the user. These functional checks do not broaden the V27 performance claim. The [settings reference](../reference/settings.md) records domains and scope; [performance](performance.md) explains the calibration and limits.
+Reload first validates the complete candidate. Syntax errors, unknown keys or an
+unsupported `config_version` leave the active snapshot unchanged. Valid reloads
+report applied paths/counts, normalization, inactive platform settings and pending
+restart/reconnect paths. Comments and hand-authored values remain on disk. A
+subsystem adoption timeout is reported as pending rather than as successful rollback.
+
+Client cache identity, protocol compatibility and Xaero enabling wait for a new
+physical connection. A dimension switch or server session-config refresh does not
+activate them. Server reader pools, store enabling, wire compression, compatibility,
+masking and Paper event selection wait for a restart. See the
+[settings reference](../reference/settings.md) for every field's boundary.
 
 For setup and diagnosis, see [installation](installation.md), [troubleshooting](troubleshooting.md) and [performance](performance.md). Maintainers use the [live status/settings checklist](status-settings-live-acceptance.md) for exact-artifact acceptance.

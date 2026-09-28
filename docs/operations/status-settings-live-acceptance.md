@@ -1,4 +1,4 @@
-# P1/P7 live status and settings acceptance
+# YAML settings and status live acceptance
 
 This is a run checklist, not completed evidence. Use final candidate jars and the [owned disposable rig](disposable-rigs.md). Preserve the run/profile/scenario hashes, actual loaded mod versions, candidate and fixture hashes, action timeline, screenshots, command receipts, config before/after copies, and resulting exports. Keep private paths and raw logs out of public exports. A successful click or clean process exit does not prove the resulting state.
 
@@ -45,91 +45,82 @@ python3 tools/rig/private_input.py "$LSS_RUN_DIR" --window "$LSS_WINDOW" --ident
 
 Use observed widget coordinates for `click X Y`; do not reuse coordinates across GUI scales or generations. For VSS repeat the relevant branded surfaces with `/vss` and `/vsslod`. Server console command text omits the leading slash. The rig's `commands/<unique-id>.json` accepts a recorded `launch_id`, one-line `command` and optional `response_contains`; its receipt must report the semantic response, not merely submission.
 
-## Screen, state and existing controls
+## Client drafts, reload and privacy
 
-1. Open the actual Sodium options screen and its **LOD status** button on each applicable row. Exercise page changes, **More**, resize/GUI scale, **Done**, and reopen. Check wrapping, reachable controls, restored parent screen and no duplicate entry. From the title-screen Sodium route, **Export** feedback must remain visible even without a player. Exercise `/lss status` in the no-Sodium variant.
-2. Run `/lss diag` with reception OFF, then with reception ON and no compatible consumer in a separately reviewed variant. Preserve useful discovery, reception, consumer, renderer, version and freshness facts even when detailed manager counters are absent. Verify unknown integration resolution is not labeled unavailable or failed.
-3. In connected runs, capture negotiated service and a server explicitly disabled by its disposable configuration. Exercise protocol rejection/handshake failure only with the matching controlled fixture; keep them distinct from explicit server disable. A missing fixture leaves that row unverified.
-4. Apply reception through the status button and through each existing Sodium generation's normal Apply flow. Observe manager/traffic behavior and persisted `receiveServerLods`, not only the checkbox. Verify existing rate slider semantics, page order and far-player preference application using the profile's applicable consumer/renderer. UI slider indices must not become persisted columns/s values. Stage an unrelated slow-start change without Apply, open status and change reception, then return through both **Done** and **Escape** in recorded attempts. Reception must refresh without losing the pending slow-start edit. A real Apply must save that preserved edit; merely seeing an enabled Apply button is insufficient. Escape must return only once: modern Sodium handles its own Escape release by undoing and closing, so the status screen must consume the complete key pair before restoring that parent. Restore all original values afterward.
-5. Exercise the existing `receive-lifecycle` and `xaero-map` scenarios with real backlog. OFF must retire acceptance while keeping committed Xaero rebuild debt visible; ON resumes fresh work. Disconnect and same-dimension replacement retire the native world and immediately remove old status counters; an old callback cannot republish them. Rapidly open status/export around replacement and verify the captured lifecycle belongs to the observed session.
-6. Compare successive samples: queues are labeled observations, rate gate events are interval deltas, and remote causes stay unknown. `/lss diag` retains its detailed active counters. Do not infer a frame-time pass from visual smoothness; use the separate preregistered status-collection experiment.
+1. Open Sodium through each applicable modern/legacy route and the standalone
+   status screen. Check page order, reachable controls, resize/GUI scale, Done and
+   Escape. Status is read-only; it cannot toggle reception.
+2. Stage reception, a rate and a sharing change. Before Apply neither YAML nor the
+   effective values may change. Apply saves only edited paths, preserves comments
+   and unrelated high hand-authored rates, and shows translated reload guidance.
+   Verify this in English, Simplified Chinese and Traditional Chinese, including
+   active sharing versus the saved sharing choice.
+3. Run `/lss reload`. Reception off retires acceptance; reception on resumes fresh
+   work. Combined reception-off/sharing-off must still send the privacy preference
+   when connected. Renderer-only changes must not rebuild the terrain session.
+4. Retain committed Xaero map debt while reception is off. Reject late callbacks
+   from a replaced session. Cache identity, protocol and Xaero enabling changes
+   remain pending across dimension switches, server re-pushes and reset; only a new
+   physical connection adopts them. Reconnect and verify the actual consumer path.
+5. Open a menu, edit a value, then change YAML externally. Save must report a
+   conflict and retain the draft. Rebase or discard explicitly. Save errors also
+   retain edits; after correcting the failure, Retry must persist the intended
+   patch without silently overwriting unrelated values.
+6. Check malformed YAML, missing YAML, future config versions and repeated reloads.
+   Rejected candidates preserve active settings. A no-op must not rewrite the file,
+   rebuild sessions or send extra preference changes. Capture terminal receipts,
+   not only the initial “Reading” message.
 
-## Real persistence failure
+## Real save and export failures
 
-Use only the config file inside this run's disposable tree. After successful startup, set `LSS_CONFIG_FILE` to the **actual adopted** client or server config path. The following creates a directory at the temporary-file save target, which makes the production write fail without replacing the existing config or depending on Unix permission bits. It refuses existing blockers and paths outside the run:
+Use only the run-owned adopted config. After opening the draft, move that file to
+an owned backup in the same directory and create an empty directory at its original
+filename. Apply must fail visibly, retain the draft and leave effective settings
+unchanged. Remove only that empty directory, restore the exact saved file, then
+retry. Capture hashes before and after. Never create a blocker over an existing
+file, and restore it in failure cleanup. The settings writer uses unique temporary
+names, so creating an arbitrary `.tmp` directory is not a valid save-failure test.
 
-```sh
-python3 - "$LSS_RUN_DIR" "$LSS_CONFIG_FILE" <<'PY'
-from pathlib import Path
-import sys
-root = Path(sys.argv[1]).resolve(strict=True)
-config = Path(sys.argv[2]).resolve(strict=True)
-assert config.is_relative_to(root) and config.is_file()
-blocker = config.with_name(config.name + '.tmp')
-assert not blocker.exists() and not blocker.is_symlink()
-blocker.mkdir()
-print(blocker)
-PY
-```
+For export failure, use a fresh disposable run whose diagnostics destination does
+not exist and put an owned regular file at that destination before requesting an
+export. Expect failure feedback without raw exception details in the report.
+Remove only that blocker, retry, and inspect the JSON/text output and bounded
+retention. Reports must exclude fixture identity/address/seed/path markers.
 
-Record the original file bytes, then apply a reception change through the status button and apply a client preset in separate attempts. The effective state must change, feedback must say **not saved**, and original on-disk bytes must remain unchanged. Repeat the server preset staging and an existing runtime `set` action with the server blocker; a failed save must not masquerade as persisted success or undo the effective runtime change. Existing Sodium Apply retains its established logged failure behavior; do not require a new dialog that that path does not implement.
+## Server reload and owner adoption
 
-Remove only the empty blocker created above, then retry the action and confirm actual persistence:
+Run on disposable Fabric, Paper and applicable NeoForge servers. Include a Folia
+attempt with clients in separate regions. Use the shared settings-file helper for
+edits, then the real server command; wait for the terminal response and verify the
+active behavior independently.
 
-```sh
-python3 - "$LSS_RUN_DIR" "$LSS_CONFIG_FILE" <<'PY'
-from pathlib import Path
-import sys
-root = Path(sys.argv[1]).resolve(strict=True)
-config = Path(sys.argv[2]).resolve(strict=True)
-assert config.is_relative_to(root) and config.is_file()
-config.with_name(config.name + '.tmp').rmdir()
-PY
-```
+- Apply generation off/on while work is admitted. New admission follows the new
+  revision, admitted jobs drain, queued requests do not retain slots, and current
+  clients receive the new policy after worker adoption. Legacy reconnect counts
+  and draining messages must describe the actual result.
+- Change global/per-player generation concurrency together, timeout, bandwidth,
+  disk-read gate, queue limits, timestamp cache/miss TTL, region summaries and
+  serialization policy. In-flight jobs retain their captured policy; subsequent
+  work adopts the new one. No owner waits for a parser or disk flush.
+- On mod servers, lower/raise backfill rate and stop/resume while normal serving
+  continues. Test store cap/resweep adoption without opening a second worker or
+  promising immediate file shrink. Paper must report inactive backfill fields.
+- Change dimension distance, clear it, and verify handshake, range filtering and
+  session re-push. On Paper, verify exact world-name override, dimension fallback
+  and global fallback. Permission and far-player privacy tightening must shed
+  stale subscriptions/rosters.
+- Change restart-only reader-pool size, store enabling and masking, then perform
+  another unrelated hot reload. Pending values must remain inactive. Revert their
+  saved values and verify pending clears; in a separate run restart and prove boot
+  adoption. A disabled server must still answer the reload command and report a
+  pending service-enable change.
+- Reject malformed/unknown/future-version files without publication. Check busy
+  reloads, shutdown during preparation/adoption, and no-op behavior. An adoption
+  timeout/failure must not be called a successful rollback.
 
-For export failure, use a separate fresh disposable run whose `lss-diagnostics` destination does not yet exist, and create a regular file at that destination before invoking `/lss diagnostics export`. Expect generic failure feedback with no raw exception/path disclosure in report content. Remove only that test-created file, retry, and inspect the resulting JSON plus text. For VSS use `vss-diagnostics`. Generate more than ten reports and check bounded retention; inspect exports for fixture-provided identity/address/seed/path markers. The local displayed output path is expected; embedding it in the report is not.
-
-## Client preset state transitions
-
-Use fresh disposable configurations or deliberately recorded starting values.
-
-| Action sequence | Required result |
-| --- | --- |
-| Reception OFF, Xaero writes OFF; `/lss preset map-only` | Preview says reception becomes true, preserves the map-write choice, requires a compatible consumer and promises no recipient routing. No file/effective change yet. |
-| `/lss preset apply`; `/lss preset undo` | Apply changes only the previewed values and saves; undo restores those values. World/cache data is retained. |
-| `/lss preset map-only-xaero-writes` then `apply` | Preview explicitly selects persistent Xaero writes; apply publishes both final booleans before one reconciliation. Observe actual compatible map behavior separately. |
-| Preview reception ON from OFF; turn reception ON with the status button; `preset apply` | Relevant-input mismatch rejects the stale preview and requires a fresh preview. |
-| Apply from OFF to ON; turn reception OFF with the status button; `preset undo` | Conflicting undo is refused. |
-| Preview/apply while changing an unrelated name-tag preference between steps | The unrelated preference is preserved; it does not silently join the preset patch. |
-| Preview or apply, then replace connection/world/config scope; apply or undo | Old preview/undo is expired. Repeat application replaces the previous undo history. |
-
-## Server restart overlay and scope
-
-Run the following on disposable Fabric, Paper and applicable NeoForge servers, with running generation initially true. Folia uses the existing owner command path; do not traverse regions synchronously to collect status.
-
-```text
-/lsslod set
-/lsslod preset pregenerated-world
-/lsslod preset apply
-/lsslod diagnostics export
-/lsslod set lodDistanceChunks 300
-/lsslod diagnostics export
-```
-
-The preview must explicitly say **SERVER GLOBAL**, generation false for restart, and running generation unchanged. Before apply the file must be unchanged. After a successful apply, exported `generationEnabled` remains true while `generationConfiguredForRestart` is false; the summary marks restart pending. The saved config contains false, and the subsequent unrelated distance save preserves it. Record and restore the original distance after the test.
-
-Run `/lsslod preset undo` before restart in one attempt: it restores only the generation choice. In another attempt, stage and save again, stop through the owning runner, and restart the same disposable server state with a new run identity. Both generation fields must now be false, the restart-pending note absent, and old undo unavailable. A save-failure attempt must keep the configured restart choice distinct from the unchanged on-disk value.
-
-On every support line, exercise the world-distance command separately:
-
-```text
-/lsslod set lodDistanceChunks minecraft:overworld 256
-/lsslod set lodDistanceChunks minecraft:overworld default
-/lsslod set generationConcurrencyLimitGlobal minecraft:overworld 2
-/lsslod preset pregenerated-world minecraft:overworld
-```
-
-For Paper replace `minecraft:overworld` with the actual disposable Bukkit world name for the world-name override, then also verify dimension fallback and global fallback. Set/removal must publish a fresh map and re-push the effective distance. The last two commands must reject global settings/presets in a world operation without applying or saving a mutation. Other lines do not gain 26.2's world syntax from this checklist.
+The [owned server reload driver](server-console-preset-smoke.md) automates the
+saved-only, hot generation, no-op, invalid/retry and restoration subset. It does
+not replace the other transition, restart, multi-region or client UI evidence.
 
 ## Close the attempt
 
@@ -139,6 +130,9 @@ tools/rig/rig status "$LSS_RUN_DIR"
 tools/rig/rig collect "$LSS_RUN_DIR"
 ```
 
-Wait for completed owned-process cleanup before collection. Keep `ui-apply`'s four base assertions and `receive-lifecycle`'s five required assertions tied to their proof. A reviewed UI run may explicitly add `parent_binding_refreshed`, `pending_edit_preserved` and `escape_parent_preserved` before creation, with a matching required count of seven. Never increase a proof count after launch or substitute these UI observations for lifecycle fixture assertions. Attach this expanded checklist's observations separately; do not fabricate fixture counts or mark unexercised states passed. Link the exact attempts in the central ledger, including failures and applicability reasons. Product tests and screenshots alone do not close live UI, save-failure, lifecycle or performance acceptance.
-
-The reusable [owned server console driver and receipt checker](server-console-preset-smoke.md) automates the server apply/undo, real save-failure, and two-run restart checks below; it does not replace client UI acceptance.
+Wait for completed owned-process cleanup before collection. Tie each assertion to
+its exact artifact, run identity, console receipt and observed behavior. Preserve
+failed attempts. Keep this validation in private WSL displays; desktop coexistence
+does not require Windows foreground input. Do not claim an unavailable renderer,
+unsupported platform or unexercised state passed. Record results in the YAML
+implementation ledger; historic performance evidence remains unchanged.

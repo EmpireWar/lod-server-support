@@ -52,11 +52,17 @@ public final class ClientSettingsEditSession {
             outcome = Outcome.CLEAN;
             return true;
         } catch (Exception failure) {
-            error = failure.getMessage();
+            recordFailure(failure);
             baseHash = null;
             outcome = Outcome.FAILED;
             return false;
         }
+    }
+    private void recordFailure(Exception failure) {
+        String message = java.util.Objects.toString(failure.getMessage(), failure.getClass().getSimpleName());
+        if (!java.util.Objects.equals(error, message))
+            dev.vox.lss.common.LSSLogger.warn("Client settings draft error: " + message);
+        error = message;
     }
     public Object get(String path) { return changes.containsKey(path) ? changes.get(path) : persisted.get(path); }
     public boolean bool(String path) { return (Boolean) get(path); }
@@ -95,7 +101,7 @@ public final class ClientSettingsEditSession {
             outcome = Outcome.SAVED;
             return true;
         } catch (Exception failure) {
-            error = failure.getMessage();
+            recordFailure(failure);
             // A conflict always requires an explicit reread/rebase action.
             try { outcome = store.read().hash().equals(baseHash) ? Outcome.FAILED : Outcome.CONFLICT; }
             catch (Exception unreadable) { outcome = Outcome.CONFLICT; }
@@ -115,7 +121,7 @@ public final class ClientSettingsEditSession {
     public void onReload() {
         if (!changes.isEmpty()) {
             try { if (!store.read().hash().equals(baseHash)) outcome = Outcome.CONFLICT; }
-            catch (Exception failure) { outcome = Outcome.CONFLICT; error = failure.getMessage(); }
+            catch (Exception failure) { outcome = Outcome.CONFLICT; recordFailure(failure); }
         } else readDisk();
     }
 }

@@ -33,7 +33,7 @@
   "lss.status.done": "完成",
   "lss.status.page": "第 %s/%s 頁",
   "lss.settings.reload_busy": "設定正在重新載入，請稍候。",
-  "lss.settings.reload_failed": "設定未變更：%s",
+  "lss.settings.reload_failed": "設定未變更。重新載入未能完成；請查看遊戲日誌後重試。",
   "lss.settings.reload_unchanged": "目前生效的用戶端設定未變更。",
   "lss.settings.reloaded": "用戶端設定已重新載入。",
   "lss.settings.pending_reconnect": "已接受；需要重新連線：%s",
@@ -55,7 +55,7 @@
   "lss.settings.recovery": "復原草稿",
   "lss.settings.conflict_detail": "YAML 檔案已變更或無法讀取。您的編輯已保留。「合併並儲存」會重新讀取檔案，僅合併您選擇的編輯。「捨棄草稿」會保留磁碟檔案。任何編輯均未生效。",
   "lss.settings.failure_detail": "儲存失敗。即使 Sodium 顯示沒有變更，您的編輯仍已保留。您可直接重試、保留草稿以便稍後處理，或捨棄草稿。執行中的設定未變更。",
-  "lss.settings.inactive": "設定未啟用：%s。請修復設定檔並重新啟動用戶端。",
+  "lss.settings.inactive": "設定未啟用。請修復設定檔並重新啟動用戶端；詳情請查看遊戲日誌。",
   "lss.status.waiting": "正在等待目前連線的狀態快照…",
   "lss.status.on": "開",
   "lss.status.off": "關",
@@ -111,5 +111,10 @@
   "lss.settings.adoption_pending": "設定已接受；部分功能仍在等待啟用。可再次執行用戶端重載指令以重試。",
   "lss.settings.adoption_failed": "設定已接受，但部分功能啟用失敗。請檢查記錄並再次執行用戶端重載指令以重試。",
   "lss.settings.normalized": "已調整 %s：要求值 %s；生效值 %s。YAML 未變更。",
-  "lss.status.settings.adoption": "功能套用版本：%s/%s；等待啟用：%s"
+  "lss.status.settings.adoption": "功能套用版本：%s/%s；等待啟用：%s",
+  "lss.status.export_waiting": "正在等待目前工作階段的狀態快照；請稍後重試。",
+  "lss.status.export_busy": "診斷匯出正在進行；請在本次匯出完成後重試。",
+  "lss.status.export_success": "診斷資訊已匯出：%s",
+  "lss.status.export_failed": "診斷資訊匯出失敗；請檢查目錄權限與剩餘磁碟空間。",
+  "lss.settings.error_logged": "技術細節已記錄到遊戲日誌。"
 }

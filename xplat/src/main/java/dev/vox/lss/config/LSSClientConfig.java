@@ -98,7 +98,7 @@ public final class LSSClientConfig {
         var current = handle;
         if (current == null) {
             reloadBusy.set(false);
-            feedback.accept(Component.translatable("lss.settings.inactive", error));
+            feedback.accept(Component.translatable("lss.settings.inactive"));
             return;
         }
         reload.reload(owner::execute, candidate -> {
@@ -110,7 +110,8 @@ public final class LSSClientConfig {
         }).whenComplete((result, failure) -> owner.execute(() -> {
             reloadBusy.set(false);
             if (failure != null) {
-                feedback.accept(Component.translatable("lss.settings.reload_failed", SettingsReload.message(failure)));
+                LSSLogger.warn("Client settings reload failed: " + SettingsReload.message(failure));
+                feedback.accept(Component.translatable("lss.settings.reload_failed"));
                 return;
             }
             error = null;

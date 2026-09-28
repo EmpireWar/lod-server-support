@@ -508,6 +508,22 @@ def run(root):
                 time.sleep(.1)
         from commands import Commands
         commands = Commands(root, launched)
+        if scenario.get('checker') == 'yaml-reload':
+            # The driver edits only this run's adopted file and uses the same command
+            # queue as manual owned-console tools. Keep polling on the supervisor.
+            import threading
+            def settings_exercise():
+                from drive_yaml_reload import ReloadDriver
+                driver = None
+                try:
+                    spec = runtime['settings_observer']
+                    driver = ReloadDriver(root, inside(root, spec['config_relative']), scenario['server_platform'])
+                    driver.execute()
+                except Exception as error:
+                    if driver is not None: driver.finish_native(error)
+                    else: write(root/'evidence/yaml-reload.json', {'status':'failed','error':str(error)})
+                else: driver.finish_native()
+            threading.Thread(target=settings_exercise, name='rig-yaml-driver', daemon=True).start()
         from measure import Sampler
         sampler = Sampler({launch['id']: identity(proc.pid) if Path(launch['argv'][0]).name == 'java' else None for launch, proc in launched})
         rss_stream = open(root / 'evidence/rss-samples.jsonl', 'x')
@@ -518,12 +534,12 @@ def run(root):
             for observation in sampler.sample():
                 rss_stream.write(json.dumps(observation) + '\n')
             rss_stream.flush()
-            if (root / 'proof.json').exists():
+            if (root / 'proof.json').exists() or (scenario.get('checker') == 'yaml-reload' and (root/'evidence/yaml-reload.json').exists()):
                 break
             if any(p.poll() is not None for p in children):
                 raise ValueError('startup/process exited before semantic proof')
             time.sleep(.1)
-        observation_completed = time.monotonic() >= deadline and not stopped and not (root / 'stop').exists()
+        observation_completed = (time.monotonic() >= deadline or (scenario.get('checker') == 'yaml-reload' and (root/'evidence/yaml-reload.json').exists())) and not stopped and not (root / 'stop').exists()
         from proof import check_proof
         errors = check_proof(read(root / 'proof.json') if (root / 'proof.json').exists() else {}, manifest, scenario, root)
         if (root/'proof.json').is_file():
@@ -632,6 +648,19 @@ def run(root):
             except Exception as error:
                 write(root/'evidence/source-correctness.json',{'status':'failed','run_hash':manifest['run_hash'],'errors':['mixed-source checker failed: '+str(error)]})
                 manifest.update(status='failed',errors=['mixed-source checker failed: '+str(error)])
+        if scenario.get('checker') == 'yaml-reload' and observation_completed:
+            try:
+                from check_yaml_reload import inspect
+                outcome = inspect(root)
+                write(root/'evidence/yaml-reload-result.json', outcome)
+                proof = {key:manifest[key] for key in ('run_id','profile_hash','scenario_hash','run_hash')}
+                proof.update(ready=outcome['status']=='passed', handshake=outcome['status']=='passed', test_count=outcome['test_count'],
+                             assertions={key:outcome['status']=='passed' for key in scenario['assertions']}, failures=outcome['errors'])
+                write(root/'proof.json',proof)
+                errors = check_proof(proof,manifest,scenario,root)
+                manifest.update(status='failed' if errors else 'passed',errors=errors)
+            except Exception as error:
+                manifest.update(status='failed',errors=['native YAML reload checker failed: '+str(error)])
         if scenario.get('checker') == 'folia-regions' and observation_completed:
             try:
                 from check_regions import check, load_rows, handshakes

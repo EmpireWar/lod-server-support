@@ -12,10 +12,22 @@ with tempfile.TemporaryDirectory(dir=a.output) as temporary:
    if not observer:jar.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\nPremain-Class: dev.vox.lssfixture.settings.SettingsAgent\n\n')
    for file in classes.rglob('*.class'):
     if not observer or file.name.startswith('SettingsRecorder'):jar.write(file,file.relative_to(classes))
-   if not observer:
+   # Knot verifies one ASM resource across its explicit startup classpath. Fabric
+   # already supplies ASM there; Paperclip's premain classpath is only paper.jar.
+   if not observer and a.platform=='paper':
     with zipfile.ZipFile(a.asm) as dep:
      for name in dep.namelist():
       if name.endswith('.class') and name!='module-info.class':jar.writestr(name,dep.read(name))
+# Check actual artifact entries: the observer must remain bootstrap-safe, and each
+# launch gets exactly its intended ASM provider rather than a duplicate agent copy.
+with zipfile.ZipFile(a.output/'lss-rig-settings-agent.jar') as jar:
+ names=jar.namelist();asm_classes=[name for name in names if name.startswith('org/objectweb/asm/')]
+ if len(names)!=len(set(names)):raise ValueError('duplicate agent archive entries')
+ if a.platform=='fabric' and asm_classes:raise ValueError('Fabric agent must use startup-classpath ASM')
+ if a.platform=='paper' and names.count('org/objectweb/asm/ClassReader.class')!=1:raise ValueError('Paper premain requires one bundled ASM provider')
+with zipfile.ZipFile(a.output/'lss-rig-settings-observer.jar') as jar:
+ if any(not name.startswith('dev/vox/lssfixture/settings/SettingsRecorder') or not name.endswith('.class') for name in jar.namelist()):
+  raise ValueError('bootstrap observer contains classes outside its MC-free recorder')
 with zipfile.ZipFile(a.candidate) as jar:
  prefix='dev/vox/lss/'+('paper/Paper' if a.platform=='paper' else 'networking/server/')
  hashes={kind:hashlib.sha256(jar.read(prefix+name+'.class')).hexdigest() for kind,name in [('service','RequestProcessingService'),('generation','ChunkGenerationService')]}

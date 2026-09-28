@@ -2,7 +2,7 @@ package dev.vox.lss.common.config;
 
 import java.util.Set;
 
-/** Engine-independent metadata; bindings remain in RuntimeSettings/ClientOptionCatalog.
+/** Engine-independent metadata; YAML schema and client menu retain typed bindings.
  * Stored values are described separately from effective runtime policy (notably AUTO). */
 public record SettingDescriptor(String key, Type type, String units, String documentationKey,
         String defaultPolicy, String domain, String validationBinding, Set<Scope> scopes,

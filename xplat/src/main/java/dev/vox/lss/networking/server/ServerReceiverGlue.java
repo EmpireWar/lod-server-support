@@ -92,7 +92,7 @@ public final class ServerReceiverGlue {
     public static void onChunkSaveData(ServerLevel level, ChunkAccess chunk,
                                        RequestProcessingService service) {
         if (!(chunk instanceof LevelChunk levelChunk)) return;
-        if (service == null || !LSSServerConfig.CONFIG.enabled) return;
+        if (service == null || !(service == null ? LSSServerConfig.CONFIG : service.settingsConfig()).enabled()) return;
         // Skip gate (2026-08-05 review P3 + the three-lens follow-up): see skipDirtyHash.
         if (skipDirtyHash(service.hasEverRegisteredPlayer(), service.getLodStore() != null,
                 service.timestampCacheBootedEmpty())) return;
@@ -143,7 +143,7 @@ public final class ServerReceiverGlue {
     public static void onChunkLoaded(ServerLevel level, ChunkAccess chunk,
                                      RequestProcessingService service, boolean newlyGenerated) {
         if (!(chunk instanceof LevelChunk levelChunk)) return;
-        if (newlyGenerated || !LSSServerConfig.CONFIG.enabled) return;
+        if (newlyGenerated || !(service == null ? LSSServerConfig.CONFIG : service.settingsConfig()).enabled()) return;
         if (service == null || skipDirtyHash(service.hasEverRegisteredPlayer(),
                 service.getLodStore() != null, service.timestampCacheBootedEmpty())) {
             // Nobody can seed yet: the persistent spawn set loads in prepareLevels BEFORE
@@ -177,7 +177,7 @@ public final class ServerReceiverGlue {
                 pendingLoadSeedCount--;
             }
         }
-        if (service == null || !LSSServerConfig.CONFIG.enabled) return;
+        if (service == null || !(service == null ? LSSServerConfig.CONFIG : service.settingsConfig()).enabled()) return;
         String dimension = DIMENSION_STRINGS.computeIfAbsent(level.dimension(),
                 key -> key.location().toString());
         service.getDirtyContentFilter().forget(dimension, cx, cz);
@@ -229,7 +229,7 @@ public final class ServerReceiverGlue {
      */
     public static int flushPendingLoadSeeds(net.minecraft.server.MinecraftServer server,
                                             RequestProcessingService service) {
-        if (service == null || !LSSServerConfig.CONFIG.enabled) return 0;
+        if (service == null || !(service == null ? LSSServerConfig.CONFIG : service.settingsConfig()).enabled()) return 0;
         if (skipDirtyHash(service.hasEverRegisteredPlayer(), service.getLodStore() != null,
                 service.timestampCacheBootedEmpty())) return 0;
         java.util.Map<ResourceKey<Level>, it.unimi.dsi.fastutil.longs.LongOpenHashSet> pending;
@@ -326,8 +326,8 @@ public final class ServerReceiverGlue {
         // resolution. Deliberately consulted for v20 handshakes too (the gate discards
         // it there) — the answer is future diagnostics, and the probe is one cached
         // MethodHandle invoke per join (review m12, kept with rationale).
-        var config = LSSServerConfig.CONFIG;
-        int viaProtocol = config.enableViaMismatchGuard
+        var config = service == null ? LSSServerConfig.CONFIG : service.settingsConfig();
+        int viaProtocol = config.enableViaMismatchGuard()
                 ? dev.vox.lss.common.compat.ViaProbe.playerProtocol(player.getUUID())
                 : dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL;
         handleHandshake(payload, player, service, responder,
@@ -402,18 +402,18 @@ public final class ServerReceiverGlue {
                 + " (protocol v" + payload.protocolVersion()
                 + ", capabilities=" + payload.capabilities() + ")");
 
-        var config = LSSServerConfig.CONFIG;
+        var config = service == null ? LSSServerConfig.CONFIG : service.settingsConfig();
         // Per-player service gate (plan §2.2): rides the SAME input the server-wide
         // kill switch uses, so a denied player takes the already-pinned DISABLED path
         // verbatim — a SessionConfig advertising enabled=false in the client's OWN
         // dialect, no registration, never silence (silence is the version-skew signal
         // and sends the discovery ladder into its retry rungs). Short-circuit order is
         // load-bearing: at the shipped default the permission probe is never consulted.
-        boolean serviceDenied = config.requireServicePermission
+        boolean serviceDenied = config.requireServicePermission()
                 && !PlayerServiceGate.holdsService(serviceGate);
         var decision = HandshakeGate.evaluate(payload.protocolVersion(),
-                payload.capabilities(), config.enabled && !serviceDenied, service != null,
-                config.enableV16Compat, config.enableV18Compat, config.enableV19Compat,
+                payload.capabilities(), config.enabled() && !serviceDenied, service != null,
+                config.enableV16Compat(), config.enableV18Compat(), config.enableV19Compat(),
                 dev.vox.lss.common.compat.ViaProbe.isMismatch(viaProtocol, nativeProtocol));
 
         if (decision.outcome() == HandshakeGate.Outcome.VIA_MISMATCH) {
@@ -451,10 +451,10 @@ public final class ServerReceiverGlue {
         // Anchored on the DECISION, not merely on serviceDenied (the Paper core's
         // twin carries the full rationale): outcome DISABLED — not NO_CONSUMER, whose
         // rung outranks the enabled check, so logging there would double up AND burn
-        // the session's one line on a handshake the gate never decided; config.enabled
+        // the session's one line on a handshake the gate never decided; config.enabled()
         // + servicePresent — with LSS dark regardless, naming a permission would send
         // the admin hunting a grant that changes nothing.
-        boolean deniedByServiceGate = serviceDenied && config.enabled && service != null
+        boolean deniedByServiceGate = serviceDenied && config.enabled() && service != null
                 && decision.outcome() == HandshakeGate.Outcome.DISABLED;
         if (deniedByServiceGate && serviceGate.claimDenialLog()) {
             LSSLogger.info("LOD unavailable for " + player.getName().getString()
@@ -494,7 +494,7 @@ public final class ServerReceiverGlue {
                         // admission values (see the v16 compat design §4.1).
                         LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                         config.generationLimits().perPlayer(),
-                        config.enableChunkGeneration)
+                        service == null ? config.enableChunkGeneration() : service.generationEnabledForSession())
                 : new SessionConfigS2CPayload(
                         // v18/v19 compat: the CURRENT 4-field layout, echoing the legacy
                         // client's own version — its gate hard-requires it (v18-compat
@@ -504,7 +504,7 @@ public final class ServerReceiverGlue {
                                   : LSSConstants.PROTOCOL_VERSION,
                         decision.effectiveEnabled(),
                         lod,
-                        config.enableChunkGeneration,
+                        service == null ? config.enableChunkGeneration() : service.generationEnabledForSession(),
                         // v20-only append (the encoder omits it for the echo versions).
                         net.minecraft.SharedConstants.getCurrentVersion()
                                 .dataVersion().version()));

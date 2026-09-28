@@ -20,4 +20,14 @@ public final class FabricClientLoaderServices extends FabricLoaderServices {
     public void sendToServer(CustomPacketPayload payload) {
         ClientPlayNetworking.send(payload);
     }
+    @Override
+    public EnqueueOutcome enqueueToServer(CustomPacketPayload payload) {
+        try {
+            if (!ClientPlayNetworking.canSend(payload.type())) return EnqueueOutcome.NO_CHANNEL;
+            ClientPlayNetworking.send(payload);
+            return EnqueueOutcome.SENT;
+        } catch (RuntimeException failure) {
+            return EnqueueOutcome.FAILED;
+        }
+    }
 }

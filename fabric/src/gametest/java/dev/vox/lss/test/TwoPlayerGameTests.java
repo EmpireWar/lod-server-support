@@ -347,8 +347,8 @@ public class TwoPlayerGameTests {
         var mockB = placeMockServerPlayer(helper);
         int pcx = mockA.getBlockX() >> 4;
         int pcz = mockA.getBlockZ() >> 4;
-        var chunkPos = new ChunkPos(pcx - FANOUT_CHUNK_OFFSET, pcz + 4);
-        Gt.assertTrue(helper, FANOUT_CHUNK_OFFSET <= LSSServerConfig.CONFIG.lodDistanceChunks,
+        var chunkPos = chunkAt(pcx - FANOUT_CHUNK_OFFSET, pcz + 4);
+        Gt.assertTrue(helper, FANOUT_CHUNK_OFFSET <= LSSServerConfig.CONFIG.lodDistanceChunks(),
                 "premise: the column must be inside the broadcaster's RAW lodDistance range");
         long packed = PositionUtil.packPosition(chunkPos.x, chunkPos.z);
         var dim = LSSConstants.DIM_STR_OVERWORLD;
@@ -454,9 +454,8 @@ public class TwoPlayerGameTests {
                                     + "column dirty (save hook -> live filter -> live tracker)");
                     // Forward the mark to this test's own service and fire ITS broadcaster:
                     // intervalTicks manual ticks guarantee at least one broadcast pass.
-                    service.getDirtyTracker().markDirty(dim, chunkPos.x, chunkPos.z);
-                    int intervalTicks = LSSServerConfig.CONFIG.dirtyBroadcastIntervalSeconds
-                            * LSSConstants.TICKS_PER_SECOND;
+                    service.getDirtyTracker().markDirty(dim, chunkPos.x(), chunkPos.z());
+                    int intervalTicks = LSSServerConfig.CONFIG.dirtyBroadcastIntervalTicks();
                     for (int i = 0; i < intervalTicks; i++) {
                         service.tick();
                     }

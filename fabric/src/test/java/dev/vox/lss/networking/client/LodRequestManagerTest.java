@@ -72,16 +72,16 @@ class LodRequestManagerTest {
         // so without this pin a dev's enableRegionScan:false would silently run every
         // default-ctor suite on the legacy arm with a green board proving nothing
         // about the shipped arm.
-        boolean prior = dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan;
+        boolean prior = dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan();
         try {
-            dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan = true;
+            dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_order", true);
             assertTrue(new LodRequestManager().scannerForTest() instanceof RegionScanner,
                     "enableRegionScan=true must select the region arm");
-            dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan = false;
+            dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_order", false);
             assertFalse(new LodRequestManager().scannerForTest() instanceof RegionScanner,
                     "enableRegionScan=false must select the legacy arm");
         } finally {
-            dev.vox.lss.config.LSSClientConfig.CONFIG.enableRegionScan = prior;
+            dev.vox.lss.config.ClientConfigTestSupport.set("scan.region_order", prior);
         }
     }
 

@@ -189,7 +189,7 @@ public class ColumnCacheStore {
                 Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             } catch (AtomicMoveNotSupportedException e) {
                 // Filesystems without atomic rename (some network mounts — same fallback as
-                // JsonConfig.save): a torn file on crash is tolerable, the loader discards it.
+                // settings persistence): a torn file on crash is tolerable, the loader discards it.
                 Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING);
             }
             LSSLogger.info("Saved " + columns.size() + " cached column entries for " + dimensionKey(dimension));

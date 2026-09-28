@@ -156,176 +156,15 @@ public class CommandGameTests {
                 server, null);
 
         commands.performPrefixedCommand(source, "lsslod help");
-        Gt.assertTrue(helper, anyLineContains(lines, "set <key> <value>"),
-                "help must document the set verb, got: " + lines);
+        Gt.assertTrue(helper, anyLineContains(lines, "reload"),
+                "help must document the reload verb, got: " + lines);
         Gt.assertTrue(helper, anyLineContains(lines, "store backfill start|stop|status"),
                 "Fabric help includes the backfill verbs, got: " + lines);
 
         lines.clear();
         commands.performPrefixedCommand(source, "lsslod");
-        Gt.assertTrue(helper, anyLineContains(lines, "set <key> <value>"),
+        Gt.assertTrue(helper, anyLineContains(lines, "reload"),
                 "the bare root must render the same help (was a parse error), got: " + lines);
-        helper.succeed();
-    }
-
-    /**
-     * v0.11.0 stage C: /lsslod set through the real tree — the listing, a real apply
-     * (mutate-and-restore per the ServiceLifecycleGameTests precedent), the 0-semantics
-     * pin, and the parse-error reply. NOTE the real handler calls config.save(), which
-     * writes the gametest run dir's staged config — restored in finally AND re-saved so
-     * the file-side effect cannot leak into later tests (fabric/build.gradle's doFirst
-     * re-stages each run regardless; the restore keeps the in-memory config honest).
-     */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void lsslodSetAppliesClampsAndRestores(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var server = level.getServer();
-        var commands = server.getCommands();
-        var lines = new ArrayList<String>();
-        var source = new CommandSourceStack(recorder(lines), Vec3.ZERO, Vec2.ZERO, level,
-                4, "lss-test", Component.literal("lss-test"),
-                server, null);
-        var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
-        int savedDistance = config.lodDistanceChunks;
-        int savedDirty = config.dirtyBroadcastIntervalSeconds;
-        try {
-            commands.performPrefixedCommand(source, "lsslod set");
-            Gt.assertTrue(helper, anyLineContains(lines, "lodDistanceChunks = " + savedDistance),
-                    "the listing shows current values, got: " + lines);
-
-            lines.clear();
-            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks 96");
-            Gt.assertTrue(helper, anyLineContains(lines, "lodDistanceChunks = 96"),
-                    "the apply replies with the effective value, got: " + lines);
-            Gt.assertTrue(helper, config.lodDistanceChunks == 96, "the mutation applied");
-
-            lines.clear();
-            commands.performPrefixedCommand(source, "lsslod set dirtyBroadcastIntervalSeconds 0");
-            Gt.assertTrue(helper, config.dirtyBroadcastIntervalSeconds == 0,
-                    "0 = off must survive the real command surface (R-2)");
-
-            lines.clear();
-            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks many");
-            Gt.assertTrue(helper, anyLineContains(lines, "not an integer"),
-                    "a parse error replies without mutating, got: " + lines);
-            Gt.assertTrue(helper, config.lodDistanceChunks == 96, "parse error assigned nothing");
-        } finally {
-            config.lodDistanceChunks = savedDistance;
-            config.dirtyBroadcastIntervalSeconds = savedDirty;
-            config.validate();
-            config.save();
-        }
-        helper.succeed();
-    }
-
-    /**
-     * v0.11.0 stage C (review F9): the SessionConfig re-push COMPOSED through the real
-     * command — `set lodDistanceChunks` dispatched with a registered CURRENT-dialect
-     * player must mutate the config AND report the push in its reply (the wire receipt;
-     * the client-side apply is Tier 3 territory). The count assert tolerates >=1
-     * because other multi-tick gametests can hold registered players concurrently —
-     * "re-pushed to 0" (our mock skipped) is the failure this pins.
-     */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void setLodDistanceRepushesSessionConfigToRegisteredPlayers(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var server = level.getServer();
-        var commands = server.getCommands();
-        var service = dev.vox.lss.networking.server.LSSServerNetworking.getRequestService();
-        Gt.assertTrue(helper, service != null, "service active on the gametest server");
-        var player = placeMockServerPlayer(helper);
-        var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
-        int savedDistance = config.lodDistanceChunks;
-        var lines = new ArrayList<String>();
-        var source = new CommandSourceStack(recorder(lines), Vec3.ZERO, Vec2.ZERO, level,
-                4, "lss-test", Component.literal("lss-test"),
-                server, null);
-        try {
-            service.registerPlayer(player, dev.vox.lss.common.LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-            int target = savedDistance == 96 ? 128 : 96; // must differ or the re-push is skipped
-            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks " + target);
-            Gt.assertTrue(helper, config.lodDistanceChunks == target,
-                    "the real command path applied the distance");
-            Gt.assertTrue(helper, anyLineContains(lines, "re-pushed to "),
-                    "the reply must carry the re-push receipt, got: " + lines);
-            Gt.assertTrue(helper, !anyLineContains(lines, "re-pushed to 0 "),
-                    "the registered CURRENT-dialect mock must be counted, got: " + lines);
-        } finally {
-            service.removePlayer(player.getUUID());
-            config.lodDistanceChunks = savedDistance;
-            config.validate();
-            config.save();
-        }
-        helper.succeed();
-    }
-
-    /** Per-world set/clear through Brigadier must reach negotiation and the range gate. */
-    @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void setWorldLodDistanceUpdatesHandshakeAndRangeWithoutChangingDefault(GameTestHelper helper) {
-        ServerLevel level = helper.getLevel();
-        var server = level.getServer();
-        var commands = server.getCommands();
-        var service = LSSServerNetworking.getRequestService();
-        Gt.assertTrue(helper, service != null, "service active on the gametest server");
-        var player = placeMockServerPlayer(helper);
-        var config = LSSServerConfig.CONFIG;
-        int savedDistance = config.lodDistanceChunks;
-        var savedOverrides = config.lodDistanceChunksByWorld;
-        var lines = new ArrayList<String>();
-        var source = new CommandSourceStack(recorder(lines), Vec3.ZERO, Vec2.ZERO, level,
-                4, "lss-test", Component.literal("lss-test"), server, null);
-        String world = level.dimension().location().toString();
-        var replies = new ArrayList<dev.vox.lss.networking.payloads.SessionConfigS2CPayload>();
-        var handshake = new dev.vox.lss.networking.payloads.HandshakeC2SPayload(
-                LSSConstants.PROTOCOL_VERSION, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
-        try {
-            config.lodDistanceChunks = 96;
-            config.lodDistanceChunksByWorld = new java.util.LinkedHashMap<>();
-            LSSServerNetworking.handleHandshake(handshake, player, service, replies::add);
-            Gt.assertTrue(helper, replies.size() == 1 && replies.get(0).lodDistanceChunks() == 96,
-                    "control: the first handshake uses the default");
-
-            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks " + world + " 7");
-            Gt.assertTrue(helper, config.lodDistanceChunks == 96 && config.lodDistanceForWorld(world) == 7,
-                    "a world override must preserve the global default");
-            Gt.assertTrue(helper, anyLineContains(lines, "re-pushed to ")
-                            && !anyLineContains(lines, "re-pushed to 0 "),
-                    "an override-only mutation must push to the negotiated client: " + lines);
-            replies.clear();
-            LSSServerNetworking.handleHandshake(handshake, player, service, replies::add);
-            Gt.assertTrue(helper, replies.size() == 1 && replies.get(0).lodDistanceChunks() == 7,
-                    "the current world's override must be advertised on the wire");
-
-            var state = service.getPlayers().get(player.getUUID());
-            long before = state.getTotalRequestsReceived();
-            int cx = player.getBlockX() >> 4;
-            int cz = player.getBlockZ() >> 4;
-            int radius = 7 + LSSConstants.LOD_DISTANCE_BUFFER;
-            service.handleBatchRequest(player, new dev.vox.lss.networking.payloads.BatchChunkRequestC2SPayload(
-                    new long[]{PositionUtil.packPosition(cx + radius, cz),
-                            PositionUtil.packPosition(cx + radius + 1, cz)}, new long[]{0L, 0L}, 2));
-            Gt.assertTrue(helper, state.getTotalRequestsReceived() == before + 1,
-                    "only the override boundary is accepted; the global radius must not leak through");
-
-            lines.clear();
-            commands.performPrefixedCommand(source, "lsslod set lodDistanceChunks " + world + " default");
-            Gt.assertTrue(helper, !config.lodDistanceChunksByWorld.containsKey(world), "clear removes the override");
-            Gt.assertTrue(helper, anyLineContains(lines, "re-pushed to ")
-                            && !anyLineContains(lines, "re-pushed to 0 "),
-                    "clearing an override must also push the restored distance: " + lines);
-            replies.clear();
-            LSSServerNetworking.handleHandshake(handshake, player, service, replies::add);
-            Gt.assertTrue(helper, replies.size() == 1 && replies.get(0).lodDistanceChunks() == 96,
-                    "clearing restores the advertised default");
-        } finally {
-            service.removePlayer(player.getUUID());
-            service.getDialectTracker().onDisconnect(player.getUUID());
-            server.getPlayerList().remove(player);
-            config.lodDistanceChunks = savedDistance;
-            config.lodDistanceChunksByWorld = savedOverrides;
-            config.validate();
-            config.save();
-        }
         helper.succeed();
     }
 
@@ -374,30 +213,16 @@ public class CommandGameTests {
         helper.succeed();
     }
 
-    /**
-     * CG-027 (Fabric call-site leg): /lsslod diag against a service whose generation
-     * service is null (enableChunkGeneration=false). The command call site passes
-     * {@code genService != null ? getDiagnostics() : null} — removing that guard NPEs here
-     * and the diag lines never render. The generation-less service is swapped in for one
-     * synchronous execution window and restored.
-     */
+    /** Diagnostics remain available with the persistent generation controller. */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
-    public void lsslodDiagRendersGenerationDisabledWithoutNpe(GameTestHelper helper) {
+    public void lsslodDiagRendersWithPersistentGenerationController(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
-        var config = LSSServerConfig.CONFIG;
-        boolean prevGenEnabled = config.enableChunkGeneration;
-        RequestProcessingService genless;
-        try {
-            config.enableChunkGeneration = false;
-            genless = new RequestProcessingService(server);
-        } finally {
-            config.enableChunkGeneration = prevGenEnabled;
-        }
+        RequestProcessingService genless = new RequestProcessingService(server);
         var lines = new ArrayList<String>();
         try {
-            Gt.assertTrue(helper, genless.getGenerationService() == null,
-                    "premise: enableChunkGeneration=false must leave the generation service null");
+            Gt.assertTrue(helper, genless.getGenerationService() != null,
+                    "the controller exists so generation can be enabled during reload");
             var source = server.createCommandSourceStack().withSource(recorder(lines));
             var previous = LSSServerNetworking.swapServiceForTesting(genless);
             try {
@@ -411,8 +236,8 @@ public class CommandGameTests {
         Gt.assertTrue(helper, anyLineContains(lines, "=== LSS LOD Diagnostics ==="),
                 "diag must render against a generation-less service (an NPE at the call site "
                         + "surfaces as a missing header), got: " + lines);
-        Gt.assertTrue(helper, anyLineContains(lines, "Generation: disabled"),
-                "the null generation service must render as 'Generation: disabled', got: " + lines);
+        Gt.assertTrue(helper, anyLineContains(lines, "Generation:"),
+                "the generation controller must render its diagnostics, got: " + lines);
         Gt.assertTrue(helper, anyLineContains(lines, "Xray: active="),
                 "the diag ladder must carry the always-present xray masking line "
                         + "(pins LSSServerCommands' withXrayLine attach), got: " + lines);
@@ -491,9 +316,9 @@ public class CommandGameTests {
             var config = LSSServerConfig.CONFIG;
             var genService = service.getGenerationService();
             var data = DiagnosticsFormatter.collectDiagData(
-                    config.enabled, config.lodDistanceChunks,
+                    config.enabled(), config.lodDistanceChunks(),
                     config.bytesPerSecondPerPlayer(), config.bytesPerSecondGlobal(),
-                    config.sendQueueLimitPerPlayer,
+                    config.sendQueueLimitPerPlayer(),
                     service.getUptimeSeconds(), service.getTickDiagnostics(),
                     service.getWindowBandwidthRate(),
                     service.getTickDiag().getTotalSectionsSent(),
@@ -502,7 +327,7 @@ public class CommandGameTests {
                     service.getOffThreadProcessor().getDiagnostics(), service.getDiskReader(),
                     service.getBandwidthLimiter(),
                     genService != null ? genService.getDiagnostics() : null,
-                    dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore)
+                    dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
                         == dev.vox.lss.common.store.LodStoreMode.OFF
                         ? dev.vox.lss.common.store.LodStoreMode.OFF
                         : (service.getLodStore() != null ? service.getLodStore().mode() : null),

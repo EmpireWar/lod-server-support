@@ -88,7 +88,73 @@ public final class StoreBackfill {
     private final ColumnReader columnReader;
     private final BooleanSupplier readerHeadroom;
     private final BooleanSupplier tickHealthy;
-    private final int columnsPerSecond;
+    /** Worker-owned window. A policy edit never replaces this charged-work ledger. */
+    static final class RateWindow {
+        private long started;
+        private int charged;
+        private long completed;
+        RateWindow(long now) { started = now; }
+        boolean tryAcquire(long now, int ceiling) {
+            if (now - started >= 1_000_000_000L) {
+                if (charged > 0) completed++;
+                started = now;
+                charged = 0;
+            }
+            if (charged >= ceiling) return false;
+            charged++;
+            return true;
+        }
+        long remainingNanos(long now) { return Math.max(0, 1_000_000_000L - (now - started)); }
+        long completedWindows() { return completed; }
+    }
+
+    private record Policy(boolean enabled, int columnsPerSecond, long revision) {}
+    private volatile Policy policy;
+    private volatile Policy desiredPolicy;
+    private java.util.concurrent.CompletableFuture<Void> policyReceipt;
+    private boolean manualPause;
+    private boolean successorRequested;
+    private boolean closed;
+
+    /** Control intent is serialized without joining or interrupting an active read. */
+    public synchronized java.util.concurrent.CompletableFuture<Void> updatePolicy(boolean enabled, int rate, long revision) {
+        if (closed) return java.util.concurrent.CompletableFuture.failedFuture(
+                new IllegalStateException("Backfill owner stopped"));
+        if (revision < desiredPolicy.revision()) return java.util.concurrent.CompletableFuture.failedFuture(
+                new java.util.concurrent.CancellationException("Superseded backfill policy"));
+        boolean enabling = !desiredPolicy.enabled() && enabled;
+        desiredPolicy = new Policy(enabled, Math.max(1, rate), revision);
+        if (policyReceipt != null) policyReceipt.completeExceptionally(
+                new java.util.concurrent.CancellationException("Superseded backfill policy"));
+        var receipt = policyReceipt = new java.util.concurrent.CompletableFuture<Void>();
+        if (!enabled) { successorRequested = false; stopRequested.set(true); }
+        if (enabling) { manualPause = false; successorRequested = true; }
+        if (!running.get()) {
+            if (successorRequested) {
+                successorRequested = false;
+                try {
+                    if (!start()) receipt.completeExceptionally(new IllegalStateException("Backfill store is not healthy"));
+                } catch (RuntimeException | Error failure) {
+                    receipt.completeExceptionally(failure);
+                }
+            }
+            adoptPolicyAtBoundary();
+        }
+        return receipt;
+    }
+
+    private synchronized void adoptPolicyAtBoundary() {
+        policy = desiredPolicy;
+        if (policyReceipt != null) { policyReceipt.complete(null); policyReceipt = null; }
+    }
+
+    /** Called only after the store batcher acknowledges a raised/removed cap. */
+    public synchronized void resumeAfterCapIncrease() {
+        if (!closed && desiredPolicy.enabled() && !manualPause && statusLine.startsWith("capped:")) {
+            if (running.get()) successorRequested = true;
+            else start();
+        }
+    }
 
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicBoolean stopRequested = new AtomicBoolean();
@@ -136,36 +202,44 @@ public final class StoreBackfill {
         this.columnReader = columnReader;
         this.readerHeadroom = readerHeadroom;
         this.tickHealthy = tickHealthy;
-        this.columnsPerSecond = Math.max(1, columnsPerSecond);
+        this.policy = this.desiredPolicy = new Policy(true, Math.max(1, columnsPerSecond), 0);
     }
 
     /** Idempotent start; returns false if already running. */
-    public boolean start() {
-        // Clear stop-intent BEFORE the running CAS publishes (review B14): a stop()
-        // landing between the CAS and the clear was acknowledged to the operator and
-        // then silently discarded. The pre-check keeps a failed concurrent start from
-        // clearing a stop aimed at the live run.
-        if (this.running.get()) return false;
-        this.stopRequested.set(false);
-        if (!this.running.compareAndSet(false, true)) return false;
-        this.rateWindows = 0; // per-run counter — a stop/start cycle must not accumulate
-        this.statusLine = "starting"; // not last run's terminal line (review B10)
+    public synchronized boolean start() { return startRun(false); }
+
+    /** Startup may wait for the existing store's startup sweep; operator start requires health. */
+    public synchronized boolean startWhenReady() { return startRun(true); }
+
+    private boolean startRun(boolean awaitStartup) {
+        if (closed || !desiredPolicy.enabled() || (!awaitStartup && !store.isHealthy()) || running.get()) return false;
+        manualPause = false;
+        stopRequested.set(false);
+        running.set(true);
+        this.rateWindows = 0;
+        this.statusLine = "starting";
         var t = new Thread(this::run, Brand.shortName() + " Store Backfill");
         t.setDaemon(true);
         t.setPriority(Thread.MIN_PRIORITY);
         this.worker = t;
-        t.start();
+        try { t.start(); }
+        catch (RuntimeException | Error failure) {
+            running.set(false);
+            statusLine = "failed: worker could not start";
+            throw failure;
+        }
         return true;
     }
 
-    /** Requests stop; the worker exits at the next column boundary. */
-    public boolean stop() {
-        if (!this.running.get()) return false;
-        this.stopRequested.set(true);
-        return true;
+    /** Operational pause survives unchanged and rate-only reloads. */
+    public synchronized boolean stop() {
+        manualPause = true;
+        successorRequested = false;
+        stopRequested.set(true);
+        return running.get();
     }
 
-    public boolean isRunning() {
+    public synchronized boolean isRunning() {
         return this.running.get();
     }
 
@@ -180,7 +254,13 @@ public final class StoreBackfill {
     }
 
     public void shutdown() {
-        stop();
+        synchronized (this) {
+            closed = true;
+            stop();
+            if (policyReceipt != null) policyReceipt.completeExceptionally(
+                    new java.util.concurrent.CancellationException("Backfill owner stopped"));
+            policyReceipt = null;
+        }
         var t = this.worker;
         if (t != null) {
             t.interrupt();
@@ -221,12 +301,12 @@ public final class StoreBackfill {
             this.planRegionsTotal = plan.size();
             this.planRegionsWalked = 0;
             this.presentChunksSeen = 0;
-            long capBytes = this.store.sizeCapBytes();
-            LSSLogger.info(describePlan(plan, capBytes));
-            long windowStartNanos = System.nanoTime();
-            int windowCols = 0;
+            LSSLogger.info(describePlan(plan, this.store.sizeCapBytes()));
+            var rateWindow = new RateWindow(System.nanoTime());
             for (int ri = 0; ri < plan.size(); ri++) {
                 RegionRef region = plan.get(ri);
+                adoptPolicyAtBoundary();
+                long capBytes = this.store.sizeCapBytes();
                 if (this.stopRequested.get()) break;
                 // Hard stop at an active cap (store-cap-behavior-plan §3) — never a
                 // pause: a full store does not un-fill itself, and each further
@@ -287,7 +367,14 @@ public final class StoreBackfill {
                 // restart).
                 boolean regionShed = false;
                 for (int idx = 0; idx < 1024; idx++) {
+                    adoptPolicyAtBoundary();
                     if (this.stopRequested.get()) break;
+                    long columnCap = this.store.sizeCapBytes();
+                    if (columnCap != Long.MAX_VALUE && this.store.approxSizeBytes()
+                            >= (long) (columnCap * CAP_STOP_FRACTION)) {
+                        this.statusLine = "capped: store at size cap";
+                        return;
+                    }
                     if (present[idx] == 0) continue;
                     // Restraint + rate cap cover EVERY visited column — the skip rung
                     // included (review: a warm region walk was 1024 unpaced full-row
@@ -300,6 +387,24 @@ public final class StoreBackfill {
                         // 1024 real disk reads whose results all evaporate.
                         this.statusLine = "aborted: store unhealthy (latched off?)";
                         LSSLogger.warn("Store backfill aborted — store no longer healthy");
+                        return;
+                    }
+                    // Charge before the read, including skips. A lowered ceiling retains
+                    // all work charged in this window; an increase only releases the
+                    // additional allowance. Polling lets a rate edit release a wait.
+                    while (!stopRequested.get()) {
+                        adoptPolicyAtBoundary();
+                        long now = System.nanoTime();
+                        if (rateWindow.tryAcquire(now, policy.columnsPerSecond())) break;
+                        Thread.sleep(Math.min(50, rateWindow.remainingNanos(now) / 1_000_000L + 1));
+                    }
+                    this.rateWindows = rateWindow.completedWindows();
+                    if (stopRequested.get()) break;
+                    // Cap adoption may have happened during the restraint/rate wait.
+                    columnCap = this.store.sizeCapBytes();
+                    if (columnCap != Long.MAX_VALUE && this.store.approxSizeBytes()
+                            >= (long) (columnCap * CAP_STOP_FRACTION)) {
+                        this.statusLine = "capped: store at size cap";
                         return;
                     }
                     int cx = (region.rx() << 5) + (idx & 31);
@@ -359,16 +464,6 @@ public final class StoreBackfill {
                             }
                         }
                     }
-                    // Rate cap: columnsPerSecond visited columns per 1 s window.
-                    windowCols++;
-                    if (windowCols >= this.columnsPerSecond) {
-                        this.rateWindows++;
-                        long elapsed = System.nanoTime() - windowStartNanos;
-                        long remain = 1_000_000_000L - elapsed;
-                        if (remain > 0) Thread.sleep(remain / 1_000_000L + 1);
-                        windowStartNanos = System.nanoTime();
-                        windowCols = 0;
-                    }
                     this.statusLine = "running: " + this.planRegionsWalked + "/"
                             + this.planRegionsTotal + " regions, "
                             + deposited + " deposited, " + skipped + " skipped, "
@@ -410,7 +505,14 @@ public final class StoreBackfill {
             // The summary must print on EVERY exit path (the interrupt path used to
             // swallow it, so the one line carrying the error count never appeared).
             LSSLogger.info("Store backfill " + this.statusLine);
-            this.running.set(false);
+            synchronized (this) {
+                this.running.set(false);
+                adoptPolicyAtBoundary();
+                if (successorRequested && !closed && !manualPause && desiredPolicy.enabled()) {
+                    successorRequested = false;
+                    start();
+                }
+            }
         }
     }
 
@@ -544,6 +646,7 @@ public final class StoreBackfill {
         long pauses = 0;
         while (!this.stopRequested.get()
                 && (!this.readerHeadroom.getAsBoolean() || !this.tickHealthy.getAsBoolean())) {
+            adoptPolicyAtBoundary();
             this.statusLine = "paused (yielding to players/tick)";
             Thread.sleep(PAUSE_POLL_MILLIS);
             pauses++;

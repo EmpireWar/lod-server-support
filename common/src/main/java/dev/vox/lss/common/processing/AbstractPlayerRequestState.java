@@ -56,7 +56,7 @@ public abstract class AbstractPlayerRequestState<T> {
     private final Long2ObjectOpenHashMap<PendingRequest> pendingByPosition = new Long2ObjectOpenHashMap<>();
     // Owned by main thread (drained from readyPayloads, flushed to the wire)
     private final PriorityQueue<QueuedPayload<T>> sendQueue = new PriorityQueue<>();
-    private final LongOpenHashSet diskReadDone = new LongOpenHashSet();
+    private LongOpenHashSet diskReadDone = new LongOpenHashSet();
     // Column positions with a payload somewhere in the send pipeline (readyPayloads or
     // sendQueue). Incremented at enqueue (processing thread), decremented on wire send or
     // send-failure drop (main thread), read by the router (processing thread) to answer
@@ -1467,6 +1467,14 @@ public abstract class AbstractPlayerRequestState<T> {
 
     public boolean hasDiskReadDone(int cx, int cz) {
         return this.diskReadDone.contains(PositionUtil.packPosition(cx, cz));
+    }
+
+    private volatile long terminalPolicyEpoch;
+    public long terminalPolicyEpoch() { return terminalPolicyEpoch; }
+    /** Processing-owner fence: old terminal responses cannot poison a refreshed session. */
+    public void resetGenerationPolicyTerminals() {
+        terminalPolicyEpoch++;
+        diskReadDone = new LongOpenHashSet();
     }
 
     public void markDiskReadDone(int cx, int cz) {

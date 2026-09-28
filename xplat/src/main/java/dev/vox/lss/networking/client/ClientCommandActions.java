@@ -194,21 +194,13 @@ public final class ClientCommandActions {
         }
     }
 
-    public static <S> LiteralArgumentBuilder<S> presetSubtree(
+    public static <S> LiteralArgumentBuilder<S> reloadSubtree(
             Function<String, LiteralArgumentBuilder<S>> literal,
             Function<S, Consumer<Component>> feedback) {
-        var root = literal.apply("preset");
-        for (String action : java.util.List.of("map-only", "map-only-xaero-writes", "apply", "undo")) {
-            root.then(literal.apply(action).executes(context -> {
-                try {
-                    ClientPresets.command(action).forEach(line -> feedback.apply(context.getSource()).accept(Component.literal(line)));
-                } catch (IllegalArgumentException | IllegalStateException failure) {
-                    feedback.apply(context.getSource()).accept(Component.literal(failure.getMessage()));
-                }
-                return Command.SINGLE_SUCCESS;
-            }));
-        }
-        return root;
+        return literal.apply("reload").executes(context -> {
+            LSSClientConfig.CONFIG.reload(feedback.apply(context.getSource()));
+            return Command.SINGLE_SUCCESS;
+        });
     }
 
     public static <S> LiteralArgumentBuilder<S> statusSubtree(

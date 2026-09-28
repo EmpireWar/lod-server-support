@@ -36,7 +36,7 @@ class ViaGuardWiringContractTest {
     /** The composition: probe consulted ONLY behind the config flag, ternary to
      *  NO_SIGNAL. Matches both platforms' shapes (`config.` / `this.lssConfig.`). */
     private static final Pattern GATED_PROBE = Pattern.compile(
-            "enableViaMismatchGuard \\? dev\\.vox\\.lss\\.common\\.compat\\.ViaProbe"
+            "enableViaMismatchGuard\\(\\) \\? dev\\.vox\\.lss\\.common\\.compat\\.ViaProbe"
                     + "\\.playerProtocol\\([A-Za-z.]*[Pp]layer\\.getUUID\\(\\)\\)"
                     + " : dev\\.vox\\.lss\\.common\\.compat\\.ViaProbe\\.NO_SIGNAL");
 

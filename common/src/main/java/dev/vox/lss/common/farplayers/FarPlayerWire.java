@@ -62,8 +62,7 @@ public final class FarPlayerWire {
     public static final double VEL_SCALE = 256.0;
     public static final double MAX_VELOCITY_BLOCKS_PER_SECOND = 64.0;
 
-    /** C2S prefs — the SeeU hello fields minus the version (LSS's handshake owns
-     *  versioning). Distances in blocks. */
+    /** C2S preferences. The LSS handshake owns versioning; distances are in blocks. */
     public record Prefs(boolean enabled, int maxDistanceBlocks, int minDistanceBlocks,
                         boolean shareSelf, int shareDistanceBlocks) {}
 
@@ -287,7 +286,7 @@ public final class FarPlayerWire {
     }
 
     // ---- pose flag bits (UpdateEntry.poseFlags — shared by the snapshot builders
-    //      and the E2 renderer; the SeeU trio) ----
+    //      and the E2 renderer) ----
 
     public static final byte POSE_SNEAK = 1;
     public static final byte POSE_GLIDE = 2;

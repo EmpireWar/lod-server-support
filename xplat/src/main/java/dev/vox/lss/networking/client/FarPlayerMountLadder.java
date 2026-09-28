@@ -21,8 +21,7 @@ import java.util.function.Function;
  *   <li>Identity unresolvable on this client (modded / other-MC-version entity) →
  *       render the player UNMOUNTED at their own snapshot position. Resolution MUST
  *       use {@code getOptional}: {@code BuiltInRegistries.ENTITY_TYPE} is a
- *       DefaultedRegistry whose plain lookup returns PIG for unknown ids — SeeU has
- *       exactly this bug (their null-check is dead code). Pinned by a NON-injected
+ *       DefaultedRegistry whose plain lookup returns PIG for unknown ids. Pinned by a NON-injected
  *       Tier 1 test against the real registry, so injected-resolver tests cannot
  *       mask a regression to {@code getValue}.</li>
  *   <li>Type resolves but creation returns null (non-factory types, some modded) or

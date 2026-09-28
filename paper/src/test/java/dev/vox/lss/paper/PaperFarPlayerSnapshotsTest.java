@@ -223,8 +223,8 @@ class PaperFarPlayerSnapshotsTest {
         // The pre-fix shape: one raced cross-region read aborted the snapshot loop for
         // ALL players (far players dark for the interval). buildFarPlayerSnapshots
         // contains per player.
-        var config = new PaperConfig();
-        config.validate();
+        var config = new MutablePaperSettings();
+        MutablePaperSettings.normalize(config);
         var server = mock(net.minecraft.server.MinecraftServer.class);
         var players = new java.util.concurrent.ConcurrentHashMap<java.util.UUID,
                 PaperPlayerRequestState>();

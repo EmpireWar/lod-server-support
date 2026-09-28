@@ -97,7 +97,7 @@ class FarPlayerWireTest {
     @Test
     void dictionaryDeduplicatesSharedIdentities() {
         // Two riders on the same vehicle type + same helmet: the identity strings must
-        // appear ONCE in the frame (the dictionary is the wire-cost win over SeeU).
+        // appear ONCE in the frame (dictionary entries must not repeat per player).
         var updates = new FarPlayerWire.Updates(1, "minecraft:overworld", 10,
                 List.of(fullEntry(), fullEntry()));
         byte[] bytes = FarPlayerWire.encodeUpdates(updates);

@@ -11,7 +11,7 @@ import net.minecraft.world.level.Level;
  * (so a Multiverse world like {@code creative} or a vanilla {@code world_nether}
  * matches on the name an admin actually sees), then the dimension id
  * ({@code minecraft:the_nether}) as a fallback. First key present in the override map
- * wins; an unlisted world falls through to {@code config.lodDistanceChunks}.
+ * wins; an unlisted world falls through to {@code config.lodDistanceChunks()}.
  *
  * <p>Resolution is LEVEL-keyed at the core ({@link #distance(PaperConfig, ServerLevel)});
  * the player and dimension-key entry points funnel into it. Every read is guarded — a
@@ -22,12 +22,12 @@ final class PaperWorldLod {
     /** A player resolves through its own level, so the Bukkit-name / dim-id extraction
      *  lives in ONE place ({@link #distance(PaperConfig, ServerLevel)}). */
     static int distance(PaperConfig config, ServerPlayer player) {
-        return player == null ? config.lodDistanceChunks : distance(config, levelOf(player));
+        return player == null ? config.lodDistanceChunks() : distance(config, levelOf(player));
     }
 
     /** The core resolver: Bukkit world name, then dimension id, then the default. */
     static int distance(PaperConfig config, ServerLevel level) {
-        if (level == null) return config.lodDistanceChunks;
+        if (level == null) return config.lodDistanceChunks();
         return config.lodDistanceForWorld(worldName(level), dimensionId(level));
     }
 
@@ -39,7 +39,7 @@ final class PaperWorldLod {
      *  name-keyed override would miss; the only cost is a skipped re-push that self-heals
      *  on the client's next rejoin (safe direction — never wrong terrain). */
     static int distanceForDimKey(PaperConfig config, MinecraftServer server, ResourceKey<Level> key) {
-        if (key == null) return config.lodDistanceChunks;
+        if (key == null) return config.lodDistanceChunks();
         ServerLevel level = null;
         try {
             if (server != null) level = server.getLevel(key);

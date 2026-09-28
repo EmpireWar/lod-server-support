@@ -43,6 +43,13 @@ public interface LoaderServices {
      */
     void sendToServer(CustomPacketPayload payload);
 
+    enum EnqueueOutcome { SENT, NO_CHANNEL, FAILED }
+
+    /** A privacy preference must distinguish a negotiated enqueue from a silent skip. */
+    default EnqueueOutcome enqueueToServer(CustomPacketPayload payload) {
+        return EnqueueOutcome.NO_CHANNEL;
+    }
+
     /**
      * Whether {@code player} holds {@code node}
      * (service-permission-gate-plan.md §2.1). {@code defaultValue} is what an

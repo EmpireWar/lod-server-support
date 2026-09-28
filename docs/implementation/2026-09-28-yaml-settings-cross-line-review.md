@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `153daf443655efa187292262c67d10556f307e9a`
-- MC 26.1: `821091b27d9a939e05b27f8e4152486271eff8b3`
-- MC 1.21.11: `ea525c1eb765e434703a1694edce72bb1562c00c`
-- MC 1.21.10: `4bb82f79ae78cfff27a08bf0aa3245a737be7a47`
-- MC 1.21.1: `3370ab0012ecdc7356bb2bc2b7a555be0c1eb4bb`
+- MC 26.2: `a173d929c409bdc57a6c681b1e07526603495a89`
+- MC 26.1: `2911da0bc0d76dbb85a33a0bbbd2140ad52b7457`
+- MC 1.21.11: `362fbdc57ce0d256040113baa6c0e82785624be5`
+- MC 1.21.10: `fd7c212636b3d1db09924cc1c87bd9b85b3ec2ca`
+- MC 1.21.1: `88a07f572cccf89c307ecb171fb20b21ee34fa7d`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -46,12 +46,14 @@ Final fixture premise correction `45dc975b` filters inherited game-mode properti
 
 Final Fabric observer visibility correction `153daf44` adds the two owned observer jars through the supported `fabric.systemLibraries` property, retaining and deduplicating any inherited entries. Actual generated Fabric properties and the inherited-library preservation case were inspected; Paper/Folia receive no added property. A cached real Knot probe rejects the recorder without the allowlist and resolves the identical bootstrap class and evidence sink with it, including a callback from a child-loaded fixture object. This is fixture classloader evidence, not a native product acceptance claim.
 
+Native driver timing correction `a173d929` stages the inert generation-disable file before fixture movement, then requires a fresh enabled/active sample after both teleports and sends reload without another codec subprocess. The checker still requires active work at the actual disable callback and unchanged drain/conservation checks; a remaining timing miss fails the premise. No runtime behavior or acceptance threshold was weakened. The driver is identical on all five lines.
+
 ## Classification and verification
 
 Added 103 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Earlier focused checks passed eight rig receive tests and seven native YAML checker tests. The final diagnostic and numeric-preflight unit evidence is recorded in the progress ledger; this refresh performs only classification/catalog and whitespace checks. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final8-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final8-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final9-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final9-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

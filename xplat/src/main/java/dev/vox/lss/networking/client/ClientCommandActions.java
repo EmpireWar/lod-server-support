@@ -166,12 +166,12 @@ public final class ClientCommandActions {
     public static void exportDiagnostics(Consumer<Component> feedback) {
         var snapshot = ClientStatus.latest();
         if (snapshot == null) {
-            feedback.accept(Component.literal("Waiting for a current-session snapshot; retry after the next tick."));
+            feedback.accept(Component.translatable("lss.status.export_waiting"));
             return;
         }
         var ticket = ClientStatus.reserveExportFeedback(snapshot.lifecycle(), feedback);
         if (ticket == null) {
-            feedback.accept(Component.literal("Diagnostics exporter busy; retry after the current export."));
+            feedback.accept(Component.translatable("lss.status.export_busy"));
             return;
         }
         try {
@@ -180,14 +180,15 @@ public final class ClientCommandActions {
                     .whenComplete((path, error) -> {
                         // The worker and queued owner task retain only an immutable ticket
                         // and sanitized text, never the source, screen, world or exception.
-                        String message = error == null ? "Diagnostics exported: " + path
-                                : "Diagnostics export failed; check directory permissions and free space.";
+                        String exportedPath = error == null ? path.toString() : null;
                         net.minecraft.client.Minecraft.getInstance().execute(() ->
-                                ClientStatus.completeExportFeedback(ticket, message));
+                                ClientStatus.completeExportFeedback(ticket, (exportedPath == null
+                                        ? Component.translatable("lss.status.export_failed")
+                                        : Component.translatable("lss.status.export_success", exportedPath)).getString()));
                     });
         } catch (java.util.concurrent.RejectedExecutionException busy) {
             ClientStatus.releaseExportFeedback(ticket);
-            feedback.accept(Component.literal("Diagnostics exporter busy; retry after the current export."));
+            feedback.accept(Component.translatable("lss.status.export_busy"));
         } catch (RuntimeException | Error failure) {
             ClientStatus.releaseExportFeedback(ticket);
             throw failure;

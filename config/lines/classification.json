@@ -242,13 +242,7 @@
     "common/src/main/java/dev/vox/lss/common/diagnostics/ServerStatusSnapshot.java": {
       "kind": "identical"
     },
-    "common/src/main/java/dev/vox/lss/common/diagnostics/SettingsNoticeLayout.java": {
-      "kind": "identical"
-    },
     "common/src/main/java/dev/vox/lss/common/diagnostics/StatusCache.java": {
-      "kind": "identical"
-    },
-    "common/src/main/java/dev/vox/lss/common/diagnostics/StatusEntryLayout.java": {
       "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/farplayers/FarPlayerBroadcastService.java": {
@@ -575,13 +569,7 @@
     "common/src/test/java/dev/vox/lss/common/diagnostics/ServerStatusSnapshotTest.java": {
       "kind": "identical"
     },
-    "common/src/test/java/dev/vox/lss/common/diagnostics/SettingsNoticeLayoutTest.java": {
-      "kind": "identical"
-    },
     "common/src/test/java/dev/vox/lss/common/diagnostics/StatusCacheTest.java": {
-      "kind": "identical"
-    },
-    "common/src/test/java/dev/vox/lss/common/diagnostics/StatusEntryLayoutTest.java": {
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/diagnostics/StatusStateTest.java": {
@@ -1991,25 +1979,8 @@
         "Full platform build and existing version-surface/behavior contracts"
       ]
     },
-    "fabric/src/main/java/dev/vox/lss/mixin/SodiumStatusEntryHook.java": {
-      "axes": "Vanilla Screen hook uses render/GuiGraphics on 1.x, extractRenderState/GuiGraphicsExtractor on 26.x, and setScreenAndShow only on 26.2. Fabric/NeoForge twins are byte-identical within each line. Sodium class-name recognition, deferred collision-free layout and return-state capture are shared behavior.",
-      "kind": "adapted",
-      "review": "Independent Astra residual review through main 78bb513b and explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Legacy footer uses registered page identity and restores unrelated page viewport; only declared rendering/setScreen API flavors differ. Exact complete blobs bound.",
-      "reviewed_blobs": {
-        "26.2": "e20ba7a9673019415d49f38ed7a76432ba67bb6e",
-        "26.1": "3ebeea0cbcb3e16648776d0bedb413c3fd100d51",
-        "1.21.11": "a2101c78fd959f237188967e95c4abfe0847b3f4",
-        "1.21.10": "a2101c78fd959f237188967e95c4abfe0847b3f4",
-        "1.21.1": "a2101c78fd959f237188967e95c4abfe0847b3f4"
-      },
-      "surface": "sodium-generation",
-      "tests": [
-        "SodiumLegacyHookContractTest",
-        "SodiumConfigApiContractTest",
-        "P1 live UI matrix",
-        "StatusEntryLayoutTest",
-        "ClientSettingsStatusTest; ClientStatusTextTest; SettingsNoticeLayoutTest; ScreenEscapeReleaseTest; per-line client compilation and locale-key contracts"
-      ]
+    "fabric/src/main/java/dev/vox/lss/mixin/SodiumDraftHook.java": {
+      "kind": "identical"
     },
     "fabric/src/main/java/dev/vox/lss/mixin/sodium/SodiumLegacyOptionsHook.java": {
       "kind": "identical"
@@ -2130,13 +2101,13 @@
     "fabric/src/main/resources/assets/lss/lang/en_us.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "95fc5378a92408ec8fa5d5063a5a0fdf0b0f0844",
-        "26.1": "3f05ca2a6da254b03c46a2283a737e3841fad948",
-        "1.21.11": "3f05ca2a6da254b03c46a2283a737e3841fad948",
-        "1.21.10": "3f05ca2a6da254b03c46a2283a737e3841fad948",
-        "1.21.1": "3f05ca2a6da254b03c46a2283a737e3841fad948"
+        "26.2": "6bfa1f6a665c57d3c0b02e0b0d76070bb20895c3",
+        "26.1": "894da3ac12c0ba8ea05f5052ebc80418b267de7c",
+        "1.21.11": "894da3ac12c0ba8ea05f5052ebc80418b267de7c",
+        "1.21.10": "894da3ac12c0ba8ea05f5052ebc80418b267de7c",
+        "1.21.1": "894da3ac12c0ba8ea05f5052ebc80418b267de7c"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/en_us.json",
       "tests": [
@@ -2147,13 +2118,13 @@
     "fabric/src/main/resources/assets/lss/lang/zh_cn.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "bf28f1ae8cc4362201c92a0bb1c14a581da6d99d",
-        "26.1": "83529f32127ad7487676ae58ca72312fab1ca52a",
-        "1.21.11": "83529f32127ad7487676ae58ca72312fab1ca52a",
-        "1.21.10": "83529f32127ad7487676ae58ca72312fab1ca52a",
-        "1.21.1": "83529f32127ad7487676ae58ca72312fab1ca52a"
+        "26.2": "a0a5ef402c2e7f72a26de6c5480ba711a14a21ae",
+        "26.1": "1d6063eeac7179998e86152573f1f048c3ad6a1b",
+        "1.21.11": "1d6063eeac7179998e86152573f1f048c3ad6a1b",
+        "1.21.10": "1d6063eeac7179998e86152573f1f048c3ad6a1b",
+        "1.21.1": "1d6063eeac7179998e86152573f1f048c3ad6a1b"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/zh_cn.json",
       "tests": [
@@ -2164,13 +2135,13 @@
     "fabric/src/main/resources/assets/lss/lang/zh_tw.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
       "reviewed_blobs": {
-        "26.2": "1248c26def9b1064424f1bcbf869c0ecabfcbf42",
-        "26.1": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed",
-        "1.21.11": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed",
-        "1.21.10": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed",
-        "1.21.1": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed"
+        "26.2": "c34ef068102744c98473a5cf84ac2b19d8de6d65",
+        "26.1": "23023fb65f793f8d49356e2f12f064b00310a797",
+        "1.21.11": "23023fb65f793f8d49356e2f12f064b00310a797",
+        "1.21.10": "23023fb65f793f8d49356e2f12f064b00310a797",
+        "1.21.1": "23023fb65f793f8d49356e2f12f064b00310a797"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/zh_tw.json",
       "tests": [
@@ -2250,13 +2221,13 @@
     "fabric/src/main/resources/lss.mixins.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
       "reviewed_blobs": {
-        "1.21.1": "8bf1a87b779bf2b93e0aa6169a12fc420a1c68a3",
-        "1.21.10": "0a31fcda5fb86e9495d48c8c1916fd7cfa880d49",
-        "1.21.11": "0a31fcda5fb86e9495d48c8c1916fd7cfa880d49",
-        "26.1": "1188ef1c12269b656a20ac10ca859fb6bcf73317",
-        "26.2": "1188ef1c12269b656a20ac10ca859fb6bcf73317"
+        "1.21.1": "9c04461dfa16d9469a9936614e002528f89d5c42",
+        "1.21.10": "4704d35a6b31499cf9aa4a1166a7f57dd6e3b3c2",
+        "1.21.11": "4704d35a6b31499cf9aa4a1166a7f57dd6e3b3c2",
+        "26.1": "ccb160082852e32ffd2d9617577fcfaccf5f6a32",
+        "26.2": "ccb160082852e32ffd2d9617577fcfaccf5f6a32"
       },
       "surface": "line-adaptation:fabric/src/main/resources/lss.mixins.json",
       "tests": [
@@ -2777,9 +2748,6 @@
       "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/config/menu/SettingInventoryTest.java": {
-      "kind": "identical"
-    },
-    "fabric/src/test/java/dev/vox/lss/config/menu/SodiumDraftFooterTest.java": {
       "kind": "identical"
     },
     "fabric/src/test/java/dev/vox/lss/config/menu/SodiumGenerationTest.java": {
@@ -4756,25 +4724,8 @@
         "Full platform build and existing version-surface/behavior contracts"
       ]
     },
-    "neoforge/src/main/java/dev/vox/lss/mixin/SodiumStatusEntryHook.java": {
-      "axes": "Vanilla Screen hook uses render/GuiGraphics on 1.x, extractRenderState/GuiGraphicsExtractor on 26.x, and setScreenAndShow only on 26.2. Fabric/NeoForge twins are byte-identical within each line. Sodium class-name recognition, deferred collision-free layout and return-state capture are shared behavior.",
-      "kind": "adapted",
-      "review": "Independent Astra residual review through main 78bb513b and explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Legacy footer uses registered page identity and restores unrelated page viewport; only declared rendering/setScreen API flavors differ. Exact complete blobs bound.",
-      "reviewed_blobs": {
-        "26.2": "e20ba7a9673019415d49f38ed7a76432ba67bb6e",
-        "26.1": "3ebeea0cbcb3e16648776d0bedb413c3fd100d51",
-        "1.21.11": "a2101c78fd959f237188967e95c4abfe0847b3f4",
-        "1.21.10": "a2101c78fd959f237188967e95c4abfe0847b3f4",
-        "1.21.1": "a2101c78fd959f237188967e95c4abfe0847b3f4"
-      },
-      "surface": "sodium-generation",
-      "tests": [
-        "SodiumLegacyHookContractTest",
-        "SodiumConfigApiContractTest",
-        "P1 live UI matrix",
-        "StatusEntryLayoutTest",
-        "ClientSettingsStatusTest; ClientStatusTextTest; SettingsNoticeLayoutTest; ScreenEscapeReleaseTest; per-line client compilation and locale-key contracts"
-      ]
+    "neoforge/src/main/java/dev/vox/lss/mixin/SodiumDraftHook.java": {
+      "kind": "identical"
     },
     "neoforge/src/main/java/dev/vox/lss/mixin/sodium/SodiumLegacyOptionsHook.java": {
       "kind": "identical"
@@ -5145,13 +5096,13 @@
     "neoforge/src/main/resources/lss.neoforge.mixins.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. 2026-09-28 Sodium cleanup reviewed across all five lines: only obsolete footer locale keys removed and the manifest hook renamed to the shared invisible draft-refresh hook. Existing line adaptations unchanged; focused menu/locale tests, both loader builds and artifact checks passed.",
       "reviewed_blobs": {
-        "1.21.1": "8bf1a87b779bf2b93e0aa6169a12fc420a1c68a3",
-        "1.21.10": "0a31fcda5fb86e9495d48c8c1916fd7cfa880d49",
-        "1.21.11": "0a31fcda5fb86e9495d48c8c1916fd7cfa880d49",
-        "26.1": "1188ef1c12269b656a20ac10ca859fb6bcf73317",
-        "26.2": "1188ef1c12269b656a20ac10ca859fb6bcf73317"
+        "1.21.1": "9c04461dfa16d9469a9936614e002528f89d5c42",
+        "1.21.10": "4704d35a6b31499cf9aa4a1166a7f57dd6e3b3c2",
+        "1.21.11": "4704d35a6b31499cf9aa4a1166a7f57dd6e3b3c2",
+        "26.1": "ccb160082852e32ffd2d9617577fcfaccf5f6a32",
+        "26.2": "ccb160082852e32ffd2d9617577fcfaccf5f6a32"
       },
       "surface": "line-adaptation:neoforge/src/main/resources/lss.neoforge.mixins.json",
       "tests": [
@@ -8812,9 +8763,6 @@
       "kind": "identical"
     },
     "xplat/src/main/java/dev/vox/lss/config/menu/SaveHook.java": {
-      "kind": "identical"
-    },
-    "xplat/src/main/java/dev/vox/lss/config/menu/SodiumSettingsNotice.java": {
       "kind": "identical"
     },
     "xplat/src/main/java/dev/vox/lss/config/menu/Tooltip.java": {

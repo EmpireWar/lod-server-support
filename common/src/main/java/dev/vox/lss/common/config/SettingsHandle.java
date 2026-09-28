@@ -16,6 +16,12 @@ public final class SettingsHandle<T> implements AutoCloseable {
         public Commit {changedPaths=Set.copyOf(changedPaths);pendingRestart=Set.copyOf(pendingRestart);pendingReconnect=Set.copyOf(pendingReconnect);normalizations=List.copyOf(normalizations);inactivePaths=List.copyOf(inactivePaths);}
         public Set<String> pendingPaths(){var p=new LinkedHashSet<>(pendingRestart);p.addAll(pendingReconnect);return Set.copyOf(p);}
     }
+    /** Published policy still awaiting subsystem receipts. Identity prevents late lifecycle acknowledgements. */
+    public record Adoption<T>(T previous, T effective, long revision, Set<String> paths) {
+        public Adoption { paths = Set.copyOf(paths); }
+    }
+    private volatile Adoption<T> pendingAdoption;
+    private volatile long adoptedRevision;
     private final SettingsStore<T> store;
     private final SettingsSchema<T> schema;
     private volatile State<T> state;
@@ -29,6 +35,14 @@ public final class SettingsHandle<T> implements AutoCloseable {
     public SettingsStore<T> store(){return store;}
     public SettingsSchema<T> schema(){return schema;}
     public State<T> state(){return state;}
+    public Adoption<T> pendingAdoption(){return pendingAdoption;}
+    public long adoptedRevision(){return adoptedRevision;}
+    public synchronized void acknowledge(Adoption<T> adoption) {
+        if (!closed && adoption != null && pendingAdoption == adoption) {
+            adoptedRevision = adoption.revision();
+            pendingAdoption = null;
+        }
+    }
     public synchronized boolean busy(){return activeRequest!=0;}
     /** Blocking bounded IO, intended for the caller's bounded settings worker. */
     public Prepared<T> prepareReload()throws IOException {
@@ -59,7 +73,14 @@ public final class SettingsHandle<T> implements AutoCloseable {
             T next=merged.normalized();var changed=diff(schema.values(old.effective()),schema.values(next));
             boolean unchanged=Objects.equals(old.configured(),requested)&&changed.isEmpty()&&old.pendingRestart().equals(restart)&&old.pendingReconnect().equals(reconnect);
             if(!unchanged)state=new State<>(requested,next,old.boot(),connection==null?next:old.session(),old.revision()+1,restart,reconnect);
-            return new Commit<>(old.effective(),unchanged?old.effective():next,changed,restart,reconnect,prepared.document().normalizations(),prepared.document().inactivePaths(),unchanged);
+            // Publication is not an acknowledgement. Keep failed/partial owner work even when
+            // the file is identical, or a newer candidate reverts some already-adopted values.
+            T previous = pendingAdoption == null ? old.effective() : pendingAdoption.previous();
+            var reconcile = new LinkedHashSet<>(changed);
+            if (pendingAdoption != null) reconcile.addAll(pendingAdoption.paths());
+            if (!reconcile.isEmpty()) pendingAdoption = new Adoption<>(previous, state.effective(), state.revision(), reconcile);
+            else adoptedRevision = state.revision();
+            return new Commit<>(previous,state.effective(),reconcile,restart,reconnect,prepared.document().normalizations(),prepared.document().inactivePaths(),unchanged);
         }finally{cancelPrepared(prepared);}
     }
     /** Same physical connection means no adoption (including play/configuration listener replacement). */
@@ -80,9 +101,11 @@ public final class SettingsHandle<T> implements AutoCloseable {
         for(var d:schema.descriptors())if(d.timing()==SettingsSchema.Timing.S)values.put(d.path(),wanted.get(d.path()));
         T next=schema.fromValues(values).normalized();
         state=new State<>(old.configured(),next,old.boot(),next,old.revision(),old.pendingRestart(),Set.of());
+        if (pendingAdoption != null)
+            pendingAdoption = new Adoption<>(pendingAdoption.previous(), next, state.revision(), pendingAdoption.paths());
     }
     private Set<String> diff(Map<String,Object> before,Map<String,Object> after){var out=new LinkedHashSet<String>();for(String key:after.keySet())if(!Objects.equals(before.get(key),after.get(key)))out.add(key);return out;}
     private void checkOpen(){if(closed)throw new SettingsException("Settings lifecycle has stopped");}
     private void checkCurrent(long revision,long life,long request){checkOpen();if(state.revision()!=revision||lifecycle!=life||activeRequest!=request)throw new SettingsException("Settings reload was cancelled or superseded by a lifecycle change");}
-    @Override public synchronized void close(){closed=true;lifecycle++;activeRequest=0;}
+    @Override public synchronized void close(){closed=true;lifecycle++;activeRequest=0;pendingAdoption=null;}
 }

@@ -22,7 +22,13 @@ public final class YamlSettingsCodec<T> {
     private static final DumpSettings DUMP = DumpSettings.builder().setDumpComments(true)
             .setSchema(new JsonSchema()).setIndent(2).setDefaultFlowStyle(FlowStyle.BLOCK).build();
     private final SettingsSchema<T> schema;
-    public YamlSettingsCodec(SettingsSchema<T> schema) { this.schema = Objects.requireNonNull(schema); }
+    private final String brandPrefix;
+    public YamlSettingsCodec(SettingsSchema<T> schema) { this(schema, "lss"); }
+    public YamlSettingsCodec(SettingsSchema<T> schema, String brandPrefix) {
+        this.schema = Objects.requireNonNull(schema);
+        if (!Set.of("lss", "vss").contains(brandPrefix)) throw new IllegalArgumentException("Unknown settings brand");
+        this.brandPrefix = brandPrefix;
+    }
 
     public record Document<T>(T configured, T normalized, List<SettingsSchema.Normalization> normalizations,
                               List<String> inactivePaths, String hash, byte[] bytes) {
@@ -34,7 +40,13 @@ public final class YamlSettingsCodec<T> {
         SettingsSchema.Decoded<T> result = schema.decode(tree);
         return new Document<>(result.configured(), result.normalized(), result.normalizations(), result.inactivePaths(), hash(bytes), bytes);
     }
-    public byte[] defaults() { return schema.template().getBytes(StandardCharsets.UTF_8); }
+    public byte[] defaults() {
+        String template = schema.template();
+        if (brandPrefix.equals("vss")) template = template.replace("/lsslod", "/vsslod")
+                .replace("/lss", "/vss").replace("LSS", "VSS")
+                .replace("lss-lod/", "vss-lod/").replace(".lss/", ".vss/");
+        return template.getBytes(StandardCharsets.UTF_8);
+    }
 
     /** Only explicit changed paths are replaced; untouched scalar styles and comments survive. */
     public byte[] edit(Document<T> document, Map<String,Object> changes) {

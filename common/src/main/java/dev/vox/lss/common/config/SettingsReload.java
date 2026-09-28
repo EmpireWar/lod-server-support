@@ -97,7 +97,8 @@ public final class SettingsReload<T> implements AutoCloseable {
                                 validator.accept(prepared.document().normalized());
                                 op.commit = handle.commit(prepared);
                                 op.revision = handle.state().revision();
-                                if (op.commit.changedPaths().isEmpty()) {
+                                op.adoption = handle.pendingAdoption();
+                                if (op.adoption == null) {
                                     op.finish();
                                     op.result.complete(new Outcome<>(op.commit, op.revision, Status.UNCHANGED, "No settings changed"));
                                     return;
@@ -105,6 +106,7 @@ public final class SettingsReload<T> implements AutoCloseable {
                                 reconciler.apply(op.commit.previous(), op.commit.effective(), op.revision)
                                         .whenComplete((ignored, error) -> {
                                             synchronized (op) {
+                                                if (error == null && !op.cancelled) handle.acknowledge(op.adoption);
                                                 op.finish();
                                                 if (!op.cancelled) {
                                                     op.result.complete(new Outcome<>(op.commit, op.revision,
@@ -141,6 +143,7 @@ public final class SettingsReload<T> implements AutoCloseable {
         final CompletableFuture<Outcome<T>> result = new CompletableFuture<>();
         SettingsHandle.Prepared<T> prepared;
         SettingsHandle.Commit<T> commit;
+        SettingsHandle.Adoption<T> adoption;
         long revision;
         boolean cancelled;
         ScheduledFuture<?> timer;

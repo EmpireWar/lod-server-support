@@ -105,6 +105,10 @@ public final class SettingsSchema<T> {
     public boolean applicable(Descriptor d) { return client || d.platform()==Platform.ALL || (paper?d.platform()==Platform.PAPER:d.platform()==Platform.MOD); }
     private void flatten(Map<String,Object> tree,String prefix,Map<String,Object> out) {
         for (var e:tree.entrySet()) {
+            // Dots belong to the programmatic path API, not YAML group keys.
+            // Dynamic maps are descriptor leaves and never recurse through this method.
+            if(e.getKey().contains(".")) throw new SettingsException("Use nested YAML mappings instead of dotted keys at "
+                    +(prefix.isEmpty()?e.getKey():prefix+"."+e.getKey()));
             String p=prefix.isEmpty()?e.getKey():prefix+"."+e.getKey();
             if (p.equals("config_version")||descriptors.containsKey(p)) out.put(p,e.getValue());
             else {
@@ -143,7 +147,10 @@ public final class SettingsSchema<T> {
                 for(var e:map.entrySet()) {
                     if (!(e.getKey() instanceof String key)||key.isBlank()||key.length()>256) throw type(p,"nonblank mapping keys up to 256 characters");
                     if(p.endsWith("by_dimension")&&!canonicalIdentifier(key)) throw type(p,"fully qualified dimension identifiers");
-                    if(d.kind()==Kind.INTEGER_MAP) result.put(key,integer(e.getValue(),p+"[entry]"));
+                    if(d.kind()==Kind.INTEGER_MAP) {
+                        if(e.getValue() instanceof BigDecimal||e.getValue() instanceof Double||e.getValue() instanceof Float)throw type(p+"[entry]","integer");
+                        result.put(key,integer(e.getValue(),p+"[entry]"));
+                    }
                     else { if (!(e.getValue() instanceof String s)||s.isBlank()) throw type(p,"nonblank string mapping values"); result.put(key,s); }
                 }
                 yield Collections.unmodifiableMap(result);

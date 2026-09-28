@@ -12,7 +12,7 @@ class LegacySettingsMigrationTest {
     private static byte[] bytes(String s){return s.getBytes(StandardCharsets.UTF_8);}
     private static ServerSettings server(String json){return LegacySettingsMigration.migrate(bytes(json),SettingsSchema.server(false)).settings();}
     private static ClientSettings client(String json){return LegacySettingsMigration.migrate(bytes(json),SettingsSchema.client()).settings();}
-    @Test void upgradeNeverArmsStoreOrNewNetherRadius(){var s=server("{}");assertFalse(s.storage().lodStore().enabled());assertTrue(s.lod().distance().byDimension().isEmpty());assertEquals(512,s.lod().distance().defaultChunks());assertTrue(SettingsSchema.server(false).defaults().storage().lodStore().enabled());}
+    @Test void upgradeNeverArmsStoreOrNewNetherRadius(){var s=server("{}");assertFalse(s.storage().lodStore().enabled());assertEquals(vanilla(512),s.lod().distance().byDimension());assertEquals(512,s.lod().distance().defaultChunks());assertTrue(SettingsSchema.server(false).defaults().storage().lodStore().enabled());}
     @ParameterizedTest @CsvSource({"1,20","60,1200","600,12000","0,20","-3,20","999,12000"})
     void generationSecondsBecomeTicksAfterOldClamp(int old,int ticks){assertEquals(ticks,server("{\"generationTimeoutSeconds\":"+old+"}").generation().timeoutTicks());}
     @ParameterizedTest @CsvSource({"0,0","1,20","10,200","300,6000","-9,0","999,6000"})
@@ -29,7 +29,7 @@ class LegacySettingsMigrationTest {
     @Test void oldScalarAndExactWorldNamesKeepTheirOldMeaning(){
         String json="{\"lodDistanceChunks\":777,\"lodDistanceChunksByWorld\":{\"the_nether\":81,\"minecraft:the_nether\":99,\" Minecraft:BAD \":70,\" 世界 空間 \":40,\" custom:space \":44}}";
         var mod=server(json);assertEquals(777,mod.lod().distance().defaultChunks());
-        assertEquals(Map.of("minecraft:the_nether",99,"custom:space",44),mod.lod().distance().byDimension());assertTrue(mod.lod().distance().byWorld().isEmpty());
+        assertEquals(Map.of("minecraft:overworld",777,"minecraft:the_end",777,"minecraft:the_nether",99,"custom:space",44),mod.lod().distance().byDimension());assertTrue(mod.lod().distance().byWorld().isEmpty());
         var paper=LegacySettingsMigration.migrate(bytes(json),SettingsSchema.server(true)).settings();
         assertEquals(81,paper.lod().distance().byWorld().get("the_nether"));assertEquals(99,paper.lod().distance().byWorld().get("minecraft:the_nether"));
         assertEquals(40,paper.lod().distance().byWorld().get("世界 空間"));assertEquals(mod.lod().distance().byDimension(),paper.lod().distance().byDimension());
@@ -78,6 +78,7 @@ class LegacySettingsMigrationTest {
                 if(path.equals("generation.timeout_ticks")){oldValue=75;expected=1500;}
                 if(path.equals("updates.dirty_broadcast_interval_ticks")){oldValue=25;expected=500;}
                 if(path.equals("lod.distance.by_world")&&!schema.isPaper())expected=Map.of();
+                if(path.equals("lod.distance.by_dimension")){var dimensions=new LinkedHashMap<>(vanilla(512));dimensions.put("custom:planet",700);expected=dimensions;}
                 var result=LegacySettingsMigration.migrate(gson.toJson(Map.of(descriptor.legacyKey(),oldValue)).getBytes(StandardCharsets.UTF_8),schema);
                 assertEquals(expected,result.values().get(path),schema.side()+" "+schema.isPaper()+" "+path);
             }
@@ -89,6 +90,36 @@ class LegacySettingsMigrationTest {
         assertTrue(result.normalizations().stream().anyMatch(n->n.path().equals("far_players.mode")));
         var exclusion=result.normalizations().stream().filter(n->n.path().equals("far_players.excluded_players")).findFirst().orElseThrow();
         assertEquals("<private>",exclusion.requested());assertEquals("<private>",exclusion.effective());
+    }
+    private static Map<String,Integer> vanilla(int radius){return Map.of("minecraft:overworld",radius,"minecraft:the_nether",radius,"minecraft:the_end",radius);}
+    @Test void scalarMigrationPinsVanillaRadiiBeforeLaterFallbackChanges() {
+        var schema=SettingsSchema.server(false);
+        var migrated=server("{\"lodDistanceChunks\":128}");
+        assertEquals(vanilla(128),migrated.lod().distance().byDimension());
+        var changed=new LinkedHashMap<>(migrated.values());changed.put("lod.distance.default_chunks",256);
+        assertEquals(vanilla(128),schema.fromValues(changed).normalized().lod().distance().byDimension());
+        assertEquals(vanilla(2048),server("{\"lodDistanceChunks\":9999}").lod().distance().byDimension());
+    }
+    @Test void legacyStringListsMatchGsonPrimitiveCoercionAndRejectStructures() {
+        String list="[12345,true,1e3,1.0,-0,null,\"Alice\"]";
+        List<String> historical=new com.google.gson.Gson().fromJson(list,new com.google.gson.reflect.TypeToken<List<String>>(){}.getType());
+        historical.removeIf(Objects::isNull);
+        for(var schema:List.of(SettingsSchema.server(false),SettingsSchema.server(true))) {
+            for(var d:schema.descriptors())if(d.kind()==SettingsSchema.Kind.STRING_LIST) {
+                var migrated=LegacySettingsMigration.migrate(bytes("{\""+d.legacyKey()+"\":"+list+"}"),schema);
+                assertEquals(historical,migrated.values().get(d.path()),d.path());
+                for(String structural:List.of("{}","[]"))assertThrows(SettingsException.class,()->LegacySettingsMigration.migrate(bytes("{\""+d.legacyKey()+"\":["+structural+"]}"),schema));
+            }
+        }
+        assertEquals("1e3",client("{\"unknownBlockFallback\":1e3}").compatibility().blockFallbacks().defaultBlock());
+        assertEquals(List.of(List.of("12345","true","1e3")),client("{\"cacheAddressAliases\":[[12345,true,1e3]]}").cache().addressAliases());
+    }
+    @Test void strictJsonLexemesRemainStrictOnOlderBundledGson() {
+        for(String value:List.of("TRUE","False","NULL","+1","01",".5","1.","NaN","Infinity"))
+            assertThrows(SettingsException.class,()->server("{\"enabled\":"+value+"}"),value);
+        for(String value:List.of("raw\nline","bad\\'escape","bad\\x20","bad\\u１２３４"))
+            assertThrows(SettingsException.class,()->server("{\"farPlayersExclude\":[\""+value+"\"]}"),value);
+        assertEquals(List.of("line\nnext","\"\\/"),server("{\"farPlayersExclude\":[\"line\\nnext\",\"\\\"\\\\\\/\"]}").farPlayers().excludedPlayers());
     }
     @Test void curatedMapPreservesLegacyPrimitiveStringCoercionButRejectsStructures() {
         var c=client("{\"crossVersionBlockFallbacks\":{\"numeric\":5,\"boolean\":true}}");

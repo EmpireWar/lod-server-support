@@ -6,23 +6,31 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 /** Stable platform facade: files publish only at startup or through explicit reload. */
 public class YamlServerConfig extends ServerConfigBase implements AutoCloseable {
     private record Context(SettingsHandle<ServerSettings> handle, SettingsReload<ServerSettings> reload,
                            String startupError, Path path) {}
     private final Path directory;
+    private final Consumer<String> report;
     private volatile Context context;
 
     protected YamlServerConfig(Path directory, boolean paper) {
+        this(directory, paper, LSSLogger::info);
+    }
+    /** Diagnostic sink seam also verifies platform facades retain startup notices. */
+    protected YamlServerConfig(Path directory, boolean paper, Consumer<String> report) {
         super(disabledDefaults(paper), paper);
         this.directory = directory;
+        this.report = java.util.Objects.requireNonNull(report);
         restartSettingsLifecycle();
     }
     /** Detached immutable view for callers constructing platform services in tests. */
     protected YamlServerConfig(ServerSettings settings, boolean paper) {
         super(settings, paper);
         this.directory = null;
+        this.report = LSSLogger::info;
         this.context = new Context(null, null, null, null);
     }
     /** Called by platform server-start lifecycle, never by an interactive settings control. */
@@ -30,7 +38,7 @@ public class YamlServerConfig extends ServerConfigBase implements AutoCloseable 
         var old = context;
         if (old != null && old.reload() != null) old.reload().close();
         if (directory == null) return;
-        var store = new SettingsStore<>(directory, Brand.lowerShortName(), SettingsSchema.server(paperPlatform));
+        var store = new SettingsStore<>(directory, Brand.lowerShortName(), SettingsSchema.server(paperPlatform), report);
         try {
             var handle = new SettingsHandle<>(store);
             context = new Context(handle, new SettingsReload<>(handle), null, store.path());

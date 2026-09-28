@@ -240,8 +240,8 @@ public abstract class AbstractChunkDiskReader {
                     + ", park full): the request router is deferring cold-region reads to the"
                     + " next client declaration (running total: gate_stops= in /"
                     + Brand.serverCommand() + " diag). This is the gate working; raise"
-                    + " maxConcurrentDiskReads in " + dev.vox.lss.common.Brand.lowerShortName()
-                    + "-server-config.json if server CPU"
+                    + " storage.disk.max_concurrent_reads in " + dev.vox.lss.common.Brand.lowerShortName()
+                    + "-server-config.yaml and reload if server CPU"
                     + " headroom allows and you want faster cold backfill. (Logged once per"
                     + " session.)");
         }
@@ -406,8 +406,8 @@ public abstract class AbstractChunkDiskReader {
             if (rejected > 0) {
                 LSSLogger.warn("Disk reader saturated: " + rejected + " chunk read(s) dropped"
                         + " since the last warning — clients re-request automatically; raise"
-                        + " diskReaderThreads in " + dev.vox.lss.common.Brand.lowerShortName()
-                        + "-server-config.json if this persists");
+                        + " storage.disk.reader_threads in " + dev.vox.lss.common.Brand.lowerShortName()
+                        + "-server-config.yaml and restart if this persists");
             }
             // The bounce never consulted the store or storage: submitted+saturated+completed
             // recorded together so the at-rest identity (completed == outcomes) holds.

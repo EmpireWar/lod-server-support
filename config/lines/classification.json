@@ -2111,13 +2111,13 @@
     "fabric/src/main/resources/assets/lss/lang/en_us.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "48d2d9bbd3e60e36952b7e505eab09d3f9c53a77",
-        "26.1": "354db7c8e80be43eee5ac77b561ae73a0d2925e0",
-        "1.21.11": "354db7c8e80be43eee5ac77b561ae73a0d2925e0",
-        "1.21.10": "354db7c8e80be43eee5ac77b561ae73a0d2925e0",
-        "1.21.1": "354db7c8e80be43eee5ac77b561ae73a0d2925e0"
+        "26.2": "95fc5378a92408ec8fa5d5063a5a0fdf0b0f0844",
+        "26.1": "3f05ca2a6da254b03c46a2283a737e3841fad948",
+        "1.21.11": "3f05ca2a6da254b03c46a2283a737e3841fad948",
+        "1.21.10": "3f05ca2a6da254b03c46a2283a737e3841fad948",
+        "1.21.1": "3f05ca2a6da254b03c46a2283a737e3841fad948"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/en_us.json",
       "tests": [
@@ -2128,13 +2128,13 @@
     "fabric/src/main/resources/assets/lss/lang/zh_cn.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "d2120fc685c384b5e1fb79e588491058fdc10c63",
-        "26.1": "ac7936ee3f965829b4490bc619c4054237eeeac4",
-        "1.21.11": "ac7936ee3f965829b4490bc619c4054237eeeac4",
-        "1.21.10": "ac7936ee3f965829b4490bc619c4054237eeeac4",
-        "1.21.1": "ac7936ee3f965829b4490bc619c4054237eeeac4"
+        "26.2": "bf28f1ae8cc4362201c92a0bb1c14a581da6d99d",
+        "26.1": "83529f32127ad7487676ae58ca72312fab1ca52a",
+        "1.21.11": "83529f32127ad7487676ae58ca72312fab1ca52a",
+        "1.21.10": "83529f32127ad7487676ae58ca72312fab1ca52a",
+        "1.21.1": "83529f32127ad7487676ae58ca72312fab1ca52a"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/zh_cn.json",
       "tests": [
@@ -2145,13 +2145,13 @@
     "fabric/src/main/resources/assets/lss/lang/zh_tw.json": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound.",
+      "review": "Independent Astra residual review through main 9c594de4 and four explicit support refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. Client outcomes distinguish failed/pending adoption, startup has one publisher, footer action row stays accessible. Only declared Screen/GuiGraphics/locale API flavors differ; exact full blobs bound. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "88baed0972d4ce38d456e57c811c9afafb949c28",
-        "26.1": "ba80261330c61fd321f2fd9700aac84e33440699",
-        "1.21.11": "ba80261330c61fd321f2fd9700aac84e33440699",
-        "1.21.10": "ba80261330c61fd321f2fd9700aac84e33440699",
-        "1.21.1": "ba80261330c61fd321f2fd9700aac84e33440699"
+        "26.2": "1248c26def9b1064424f1bcbf869c0ecabfcbf42",
+        "26.1": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed",
+        "1.21.11": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed",
+        "1.21.10": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed",
+        "1.21.1": "7f63e1bd73ece1418fed3bb1cd882e135852a3ed"
       },
       "surface": "line-adaptation:fabric/src/main/resources/assets/lss/lang/zh_tw.json",
       "tests": [
@@ -4602,9 +4602,9 @@
     "neoforge/build.gradle": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "1.21.1": "ff0099a4ca6887693f0bd19a56172e4f9e36871d",
+        "1.21.1": "19ff90e7cfb602fa03da809235a7bc7269c91655",
         "1.21.10": "f294e80bdd5727bc9f86cd111b98e7a2306ca773",
         "1.21.11": "24a6311f36e6da2cbaacc65dd5c38ff0c02b032f",
         "26.1": "c75b4e56dd4ceb99851bc15c4a3a6ec2b106b9d6",
@@ -7482,6 +7482,15 @@
         "Fixture toolchain Python controls"
       ]
     },
+    "test-fixtures/settings-observer/build.py": {
+      "kind": "identical"
+    },
+    "test-fixtures/settings-observer/src/dev/vox/lssfixture/settings/SettingsAgent.java": {
+      "kind": "identical"
+    },
+    "test-fixtures/settings-observer/src/dev/vox/lssfixture/settings/SettingsRecorder.java": {
+      "kind": "identical"
+    },
     "test-fixtures/wi5-live-fixture/build.gradle": {
       "kind": "identical"
     },
@@ -7916,6 +7925,9 @@
     "tools/rig/check_xaero_progress.py": {
       "kind": "identical"
     },
+    "tools/rig/check_yaml_reload.py": {
+      "kind": "identical"
+    },
     "tools/rig/client-runtime.init.gradle": {
       "kind": "identical"
     },
@@ -7944,6 +7956,9 @@
       "kind": "identical"
     },
     "tools/rig/drive_xaero_map.py": {
+      "kind": "identical"
+    },
+    "tools/rig/drive_yaml_reload.py": {
       "kind": "identical"
     },
     "tools/rig/elytra-runtime.init.gradle": {
@@ -8096,6 +8111,9 @@
       "kind": "identical"
     },
     "tools/rig/prepare_xaero_recipe.py": {
+      "kind": "identical"
+    },
+    "tools/rig/prepare_yaml_reload.py": {
       "kind": "identical"
     },
     "tools/rig/private_input.py": {
@@ -8520,6 +8538,9 @@
     "tools/rig/test_xaero_recipe.py": {
       "kind": "identical"
     },
+    "tools/rig/test_yaml_reload.py": {
+      "kind": "identical"
+    },
     "tools/rig/toolchain.py": {
       "kind": "identical"
     },
@@ -8719,13 +8740,13 @@
       "kind": "adapted",
       "surface": "yaml-settings:client-save-recovery-screen",
       "axes": "26.2 uses gui.screen/setScreenAndShow; 26.1 uses screen/setScreen. 1.21.x uses GuiGraphics/render/drawString instead of extractRenderState/text, and 1.21.1 uses integer key event arguments instead of KeyEvent. Save/conflict/discard actions and paired Escape consumption remain shared.",
-      "review": "2026-09-28 read exact final five-line residuals against 03469b99 and compared key ownership with existing ClientStatusScreen.",
+      "review": "2026-09-28 read exact final five-line residuals against 03469b99 and compared key ownership with existing ClientStatusScreen. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "641252af282d03b7a6598847934f6fd8043ecbcd",
-        "26.1": "dc2aea3d30b09a911d9899d4ad7117d410974c7b",
-        "1.21.11": "d6baab8d2c96d034ae86834e744b093d6a83f66b",
-        "1.21.10": "d6baab8d2c96d034ae86834e744b093d6a83f66b",
-        "1.21.1": "a2886bfaa8a1faf2554e1e5a684bee74688a4c85"
+        "26.2": "f3a1d8bd5971826431bfacb10d2e257c5b2fada4",
+        "26.1": "251f196572746a847e3dd1e3e313f055744bdbfd",
+        "1.21.11": "edbc0d249bdcb9d5bce2f04aae297c5390b61c2f",
+        "1.21.10": "edbc0d249bdcb9d5bce2f04aae297c5390b61c2f",
+        "1.21.1": "32b0fcdc81643b52c979e23932db86875e5d7886"
       },
       "tests": [
         "ClientSettingsEditSessionTest; ScreenEscapeReleaseTest; per-line client compilation; native Sodium recovery smoke remains separate acceptance"
@@ -8909,13 +8930,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/client/ClientCommandActions.java": {
       "axes": "Only command-factory Javadoc differs between 1.x and 26.x; Sodium-independent status/preset/export behavior is shared.",
       "kind": "adapted",
-      "review": "2026-09-28 final YAML client cross-line residual review at 03469b99/4ac9d976/30e6cf9a/934c9832/ae293834: notice reservation, translation-ready status and settings export logic shared; per-line render/text/screen/chat/key APIs and inherited name-tag-distance locale wording inspected. Modern Sodium rebuild bytecode confirms clearWidgets precedes layout calculation. Source/API review, not live UI acceptance.",
+      "review": "2026-09-28 final YAML client cross-line residual review at 03469b99/4ac9d976/30e6cf9a/934c9832/ae293834: notice reservation, translation-ready status and settings export logic shared; per-line render/text/screen/chat/key APIs and inherited name-tag-distance locale wording inspected. Modern Sodium rebuild bytecode confirms clearWidgets precedes layout calculation. Source/API review, not live UI acceptance. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "7281f0b70a857f6c29d9b303b56a2067f3ee6e51",
-        "26.1": "7281f0b70a857f6c29d9b303b56a2067f3ee6e51",
-        "1.21.11": "68d84c8b5d08cf125ab4bf7254272b228a9b991b",
-        "1.21.10": "68d84c8b5d08cf125ab4bf7254272b228a9b991b",
-        "1.21.1": "68d84c8b5d08cf125ab4bf7254272b228a9b991b"
+        "26.2": "a221c8b4aa6bd41f388c59ff43e1ce9edf7897fa",
+        "26.1": "a221c8b4aa6bd41f388c59ff43e1ce9edf7897fa",
+        "1.21.11": "78df5988f20f32a0337146ae9161eb098f7313da",
+        "1.21.10": "78df5988f20f32a0337146ae9161eb098f7313da",
+        "1.21.1": "78df5988f20f32a0337146ae9161eb098f7313da"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/client/ClientCommandActions.java",
       "tests": [
@@ -9483,13 +9504,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": {
       "axes": "Preserved MC line APIs: ResourceKey identifier/location, ChunkPos fields/accessors, section bounds, registry and spawn access, ticket and background IO calls; Paper 1.21.x split world directories, payload buffer/priority APIs; Fabric chunk-event arity; plugin.yml retains each line\u2019s Folia declaration. Only axes present in this exact file apply.",
       "kind": "adapted",
-      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
+      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "1b263dcaa078786e8450624765026b51b115cd5e",
-        "26.1": "1b263dcaa078786e8450624765026b51b115cd5e",
-        "1.21.11": "1b263dcaa078786e8450624765026b51b115cd5e",
-        "1.21.10": "0d56686dc54176d0926e232b4ccbd5bdbcbbd991",
-        "1.21.1": "a4b696a52c4c5b309447d1ce4b372563a498cf87"
+        "26.2": "f4ebed4023bf62ea7d948d7fe01dc0762455a661",
+        "26.1": "f4ebed4023bf62ea7d948d7fe01dc0762455a661",
+        "1.21.11": "f4ebed4023bf62ea7d948d7fe01dc0762455a661",
+        "1.21.10": "342116bf3dcf89c5e1eee394062d2c5c01cba168",
+        "1.21.1": "c9856a6ae5b80655f6afb50580b0a2a9a9d80471"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
       "tests": [

@@ -32,7 +32,12 @@ public final class ClientStatusScreen extends Screen {
     }
     private void feedback(Component message) {
         lastActionFeedback = message;
-        if (minecraft.player != null) minecraft.gui.getChat().addClientSystemMessage(message);
+        sendChatFeedback(message);
+    }
+    /** Local action feedback, shared with automatic Sodium reloads across screen API generations. */
+    public static void sendChatFeedback(Component message) {
+        var client = net.minecraft.client.Minecraft.getInstance();
+        if (client.player != null) client.gui.getChat().addClientSystemMessage(message);
     }
     @Override public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         graphics.fill(0, 0, width, height, 0xe0101010);

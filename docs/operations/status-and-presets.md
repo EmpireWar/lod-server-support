@@ -37,15 +37,17 @@ server log for completion or a sanitized write failure; the queued message does
 not mean the files have been written. Client completion feedback is shown only
 while its originating session remains current.
 
-Settings are activated only at startup or by `/lss reload` on the client and
-`/lsslod reload` on the server. VSS uses `/vss reload` and `/vsslod reload`.
+Settings activate at startup, through Sodium Apply on the client, or through
+`/lss reload` on the client and `/lsslod reload` on the server. VSS uses `/vss reload` and `/vsslod reload`.
 The old `set`, preset preview/apply/undo and reception-toggle paths are removed.
 
-Sodium edits a draft. Apply validates and atomically saves YAML while keeping live
-settings unchanged. Run `/lss reload` after saving to activate changes. Sodium
-uses its normal layout, without an LSS banner or status button. The standalone
-status screen shows pending sharing separately from active privacy. A failed save retains the draft
-for retry. If the file changed elsewhere, reload/rebase or discard the draft
+Sodium edits a draft. Apply validates and atomically saves YAML, then automatically
+runs the same reload used by `/lss reload`. Hot settings activate after reload
+completes; session settings such as Xaero enabling wait for reconnect. Direct YAML
+edits still need `/lss reload`. Sodium uses its normal layout, without an LSS banner
+or status button. The standalone status screen shows accepted and effective values.
+A failed save retains the draft without activation; a successful Retry or Rebase
+also requests reload. If the file changed elsewhere, reload/rebase or discard the draft
 explicitly before retrying; unrelated file edits must not be overwritten.
 
 For an already generated world, set `generation.enabled: false`, then reload the

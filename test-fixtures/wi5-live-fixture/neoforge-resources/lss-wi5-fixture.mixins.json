@@ -6,7 +6,8 @@
   "client": [
     "ClientTickMixin",
     "ReplacementMixin",
-    "RetirementMixin"
+    "RetirementMixin",
+    "SettingsReloadMixin"
   ],
   "injectors": {
     "defaultRequire": 1

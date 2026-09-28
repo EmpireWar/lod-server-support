@@ -47,14 +47,14 @@ class PaperConfigLoadTest {
     }
 
     @Test
-    void partialLegacyFileMigratesWithoutArmingStoreOrInventingDimensionOverrides(@TempDir Path directory) throws Exception {
+    void partialLegacyFileMigratesWithoutArmingStoreAndPinsOldVanillaRadii(@TempDir Path directory) throws Exception {
         String original = "{\"lodDistanceChunks\": 64}";
         Files.writeString(directory.resolve(JSON), original);
         try (var config = PaperConfig.load(directory)) {
             assertNull(config.startupError());
             assertEquals(64, config.lodDistanceChunks());
             assertEquals("off", config.lodStore());
-            assertTrue(config.snapshot().lod().distance().byDimension().isEmpty());
+            assertEquals(java.util.Map.of("minecraft:overworld",64,"minecraft:the_nether",64,"minecraft:the_end",64),config.snapshot().lod().distance().byDimension());
             assertEquals(DEFAULT_EVENTS, config.updateEvents());
             assertTrue(config.enabled());
             assertEquals(25.0, config.mbPerSecondLimitPerPlayer());

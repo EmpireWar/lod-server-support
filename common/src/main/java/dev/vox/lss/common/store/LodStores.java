@@ -95,14 +95,14 @@ public final class LodStores {
      * the one place the feature and its disk tradeoff reach the admin at all. Returns the
      * message rather than logging so the decision is pinnable; callers log INFO. Null when
      * LSS is disabled (nothing to recommend into) and on Folia — the store is unvalidated
-     * there and {@code PaperConfig.validate()} WARNS on an armed store; recommending what
+     * there and Folia remains experimental; recommending what
      * we warn about is incoherent.
      */
     public static String offRecommendationOrNull(boolean lssEnabled, boolean isFolia) {
         if (!lssEnabled || isFolia) return null;
-        return "LOD store is off. Recommended: set \"lodStore\": \"on\" in"
-                + " " + Brand.lowerShortName() + "-server-config.json for much faster LOD"
+        return "LOD store is off. Recommended: set storage.lod_store.enabled to true in"
+                + " " + Brand.lowerShortName() + "-server-config.yaml and restart for faster LOD"
                 + " serving; the tradeoff is it"
-                + " roughly doubles the size of your world directory.";
+                + " can require additional disk space comparable to the world directory.";
     }
 }

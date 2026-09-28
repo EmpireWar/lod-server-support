@@ -18,12 +18,12 @@ class LodStoresAdviceTest {
     @Test
     void enabledNonFoliaServerWithoutTheStoreGetsTheRecommendation() {
         String advice = LodStores.offRecommendationOrNull(true, false);
-        assertTrue(advice != null && advice.contains("\"lodStore\": \"on\""),
+        assertTrue(advice != null && advice.contains("storage.lod_store.enabled to true"),
                 "the one-key enable must be quoted verbatim (canonical spelling since the"
                         + " 2026-08-08 rework): " + advice);
-        assertTrue(advice.contains("lss-server-config.json"),
+        assertTrue(advice.contains("lss-server-config.yaml"),
                 "the admin must be told WHERE: " + advice);
-        assertTrue(advice.contains("doubles the size of your world directory"),
+        assertTrue(advice.contains("disk space comparable to the world directory"),
                 "the disk tradeoff must be stated: " + advice);
     }
 

@@ -14,7 +14,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
 import java.nio.file.Path;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -27,11 +26,6 @@ public final class LSSClientConfig {
     private volatile SettingsReload<ClientSettings> reload;
     private final ClientSettings inactive;
     private final AtomicBoolean reloadBusy = new AtomicBoolean();
-    private final java.util.concurrent.ExecutorService reads = Executors.newSingleThreadExecutor(task -> {
-        Thread thread = new Thread(task, "LSS-ClientSettings");
-        thread.setDaemon(true);
-        return thread;
-    });
     private volatile String error;
     private Object physicalConnection;
     private long lifecycle;
@@ -62,11 +56,12 @@ public final class LSSClientConfig {
     public dev.vox.lss.common.diagnostics.ClientSettingsStatus diagnosticSettings() {
         var current = handle;
         if (current == null) return dev.vox.lss.common.diagnostics.ClientSettingsStatus.capture(
-                false, inactive, inactive, inactive, java.util.Set.of());
+                false, inactive, inactive, inactive, java.util.Set.of(), 0, 0, java.util.Set.of());
         var state = current.state();
         return dev.vox.lss.common.diagnostics.ClientSettingsStatus.capture(true,
                 edits == null ? state.configured() : edits.savedSnapshot(), state.configured(), state.effective(),
-                state.pendingReconnect());
+                state.pendingReconnect(), state.revision(), current.adoptedRevision(),
+                current.pendingAdoption() == null ? java.util.Set.of() : current.pendingAdoption().paths());
     }
     public SettingsStore<ClientSettings> store() { return store; }
     public String error() { return error; }
@@ -102,32 +97,8 @@ public final class LSSClientConfig {
         var owner = Minecraft.getInstance();
         var current = handle;
         if (current == null) {
-            reads.execute(() -> {
-                try {
-                    // Repairing an existing YAML can recover here. A missing file or failed
-                    // JSON migration needs startup selection again; reload never creates files.
-                    store.read();
-                    var recovered = new SettingsHandle<>(store);
-                    owner.execute(() -> {
-                        try {
-                            if (expectedLifecycle != lifecycle) throw new IllegalStateException("connection changed; retry reload");
-                            ClientNetGlue.validateClientSettings(recovered.state().effective());
-                            if (physicalConnection != null) recovered.beginSession(physicalConnection);
-                            handle = recovered;
-                            reload = new SettingsReload<>(recovered);
-                            error = null;
-                            reconcile();
-                            afterReload(feedback, false);
-                        } catch (Exception failure) { feedback.accept(Component.translatable("lss.settings.reload_failed", failure.getMessage())); }
-                        finally { reloadBusy.set(false); }
-                    });
-                } catch (Exception failure) {
-                    owner.execute(() -> {
-                        reloadBusy.set(false);
-                        feedback.accept(Component.translatable("lss.settings.reload_failed", failure.getMessage()));
-                    });
-                }
-            });
+            reloadBusy.set(false);
+            feedback.accept(Component.translatable("lss.settings.inactive", error));
             return;
         }
         reload.reload(owner::execute, candidate -> {
@@ -143,12 +114,11 @@ public final class LSSClientConfig {
                 return;
             }
             error = null;
-            for (var normalization : result.commit().normalizations())
-                feedback.accept(Component.literal(normalization.toString()));
-            if (result.status() == SettingsReload.Status.RECONCILIATION_FAILED
-                    || result.status() == SettingsReload.Status.ADOPTION_PENDING)
-                feedback.accept(Component.literal(result.detail()));
-            afterReload(feedback, result.status() == SettingsReload.Status.UNCHANGED);
+            for (var normalization : result.commit().normalizations()) {
+                var notice = dev.vox.lss.common.diagnostics.ClientReloadText.normalization(normalization);
+                feedback.accept(Component.translatable(notice.key(), notice.arguments().toArray()));
+            }
+            afterReload(feedback, result.status());
         }));
     }
 
@@ -158,14 +128,14 @@ public final class LSSClientConfig {
         ClientNetGlue.reconcileClientConfig();
     }
 
-    private void afterReload(Consumer<Component> feedback, boolean unchanged) {
+    private void afterReload(Consumer<Component> feedback, SettingsReload.Status status) {
         if (edits != null) {
-            var screen = Minecraft.getInstance().gui.screen();
+            var screen = dev.vox.lss.networking.client.ClientStatusScreen.currentScreen();
             if (screen != null) dev.vox.lss.config.menu.SodiumDraftRefresh.retainDirtyBeforeReloadRefresh(screen);
             edits.onReload();
             if (screen != null) dev.vox.lss.config.menu.SodiumDraftRefresh.open(screen);
         }
-        feedback.accept(Component.translatable(unchanged ? "lss.settings.reload_unchanged" : "lss.settings.reloaded"));
+        feedback.accept(Component.translatable(dev.vox.lss.common.diagnostics.ClientReloadText.outcomeKey(status)));
         if (!pendingReconnect().isEmpty())
             feedback.accept(Component.translatable("lss.settings.pending_reconnect", String.join(", ", pendingReconnect())));
         var outcome = FarPlayerClientSupport.preferenceOutcome();

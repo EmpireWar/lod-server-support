@@ -19,11 +19,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class SodiumStatusEntryHook {
     @Shadow public int width;
     @Shadow public int height;
-    @Shadow public abstract java.util.List<? extends GuiEventListener> children();
     @org.spongepowered.asm.mixin.Unique private Button lss$statusButton;
-    @org.spongepowered.asm.mixin.Unique private boolean lss$statusModern;
-    @org.spongepowered.asm.mixin.Unique private boolean lss$statusLayoutPending;
-    @org.spongepowered.asm.mixin.Unique private int lss$physicalHeight;
+    @org.spongepowered.asm.mixin.Unique private dev.vox.lss.common.diagnostics.SettingsNoticeLayout.Bounds lss$noticeBounds;
     @Shadow protected abstract <T extends GuiEventListener & Renderable & NarratableEntry> T addRenderableWidget(T widget);
 
     @Inject(method = "clearWidgets", at = @At("RETURN"))
@@ -37,17 +34,17 @@ public abstract class SodiumStatusEntryHook {
                     || name.equals("me.jellysquid.mods.sodium.client.gui.SodiumOptionsGUI")
                     || name.equals("net.caffeinemc.mods.sodium.client.gui.VideoSettingsScreen")) {
                 sodium = true;
-                lss$statusModern = name.endsWith("VideoSettingsScreen");
                 break;
             }
         }
         if (!sodium) return;
         // Sodium rebuilds its controls after clearWidgets. Give it an explicitly
         // smaller viewport and keep the remaining strip for wrapped settings notices.
-        lss$physicalHeight = net.minecraft.client.Minecraft.getInstance().getWindow().getGuiScaledHeight();
-        height = dev.vox.lss.common.diagnostics.SettingsNoticeLayout.fit(lss$physicalHeight,
+        lss$noticeBounds = dev.vox.lss.common.diagnostics.SettingsNoticeLayout.fit(
+                net.minecraft.client.Minecraft.getInstance().getWindow().getGuiScaledHeight(),
                 dev.vox.lss.config.menu.SodiumSettingsNotice.reservedHeight(
-                        net.minecraft.client.Minecraft.getInstance().font, width)).usableHeight();
+                        net.minecraft.client.Minecraft.getInstance().font, width));
+        height = lss$noticeBounds.usableHeight();
         Screen parent = (Screen) (Object) this;
         dev.vox.lss.config.menu.SodiumDraftRefresh.open(parent);
 
@@ -58,9 +55,8 @@ public abstract class SodiumStatusEntryHook {
                     else net.minecraft.client.Minecraft.getInstance().setScreenAndShow(
                             new dev.vox.lss.networking.client.ClientStatusScreen(parent));
                 })
-                .bounds(0, 0, 105, 20).build());
-        lss$statusButton.visible = false;
-        lss$statusLayoutPending = true;
+                .bounds(Math.max(0, (width - 105) / 2), lss$noticeBounds.buttonY(),
+                        Math.min(105, width), lss$noticeBounds.buttonHeight()).build());
     }
     @Inject(method = "extractRenderState", at = @At("HEAD"))
     private void lss$placeStatusEntry(net.minecraft.client.gui.GuiGraphicsExtractor graphics,
@@ -69,19 +65,8 @@ public abstract class SodiumStatusEntryHook {
         var draft = dev.vox.lss.config.LSSClientConfig.CONFIG.edits();
         if (draft.hasRetainedEdits()) lss$statusButton.setMessage(Component.translatable("lss.settings.recovery"));
         else lss$statusButton.setMessage(Component.translatable("lss.status.open"));
-        if (!lss$statusLayoutPending) return;
-        lss$statusLayoutPending = false;
-        var bounds = dev.vox.lss.common.diagnostics.StatusEntryLayout.find(width, height, lss$statusModern,
-                (x, y) -> {
-                    for (var child : children())
-                        if (child != lss$statusButton && child.isMouseOver(x, y)) return true;
-                    return false;
-                });
-        if (bounds == null) return;
-        lss$statusButton.setX(bounds.x());
-        lss$statusButton.setY(bounds.y());
-        lss$statusButton.setWidth(bounds.width());
-        lss$statusButton.visible = true;
+        // Paint before Screen renders its widgets, including our footer button.
+        graphics.fill(0, height, width, lss$noticeBounds.physicalHeight(), 0xf0101010);
     }
 
 
@@ -90,8 +75,7 @@ public abstract class SodiumStatusEntryHook {
             int mouseX, int mouseY, float delta, CallbackInfo callback) {
         if (lss$statusButton == null) return;
         var font = net.minecraft.client.Minecraft.getInstance().font;
-        graphics.enableScissor(0, height, width, lss$physicalHeight);
-        graphics.fill(0, height, width, lss$physicalHeight, 0xf0101010);
+        graphics.enableScissor(0, height, width, lss$noticeBounds.noticeBottom());
         int y = height + 4;
         for (var component : dev.vox.lss.config.menu.SodiumSettingsNotice.lines(this)) {
             for (var line : font.split(component, dev.vox.lss.config.menu.SodiumSettingsNotice.textWidth(width))) {

@@ -55,7 +55,7 @@
   "lss.settings.recovery": "Recover draft",
   "lss.settings.conflict_detail": "The YAML file changed or could not be read. Your edits are retained. Rebase and save rereads the file and applies only your selected edits to it. Discard keeps the disk file. Nothing has been activated.",
   "lss.settings.failure_detail": "The save failed. Your edits are retained even if Sodium shows no changes. Retry without re-entering values, keep the draft for later, or discard it. Live settings are unchanged.",
-  "lss.settings.inactive": "Settings inactive: %s. Repair YAML and run client reload; failed migration or creation requires a restart.",
+  "lss.settings.inactive": "Settings inactive: %s. Repair the settings file and restart the client.",
   "lss.status.waiting": "Waiting for a current-session snapshot…",
   "lss.status.on": "ON",
   "lss.status.off": "OFF",
@@ -107,5 +107,9 @@
   "lss.status.reason.ingest_queue_pending": "consumer work queued",
   "lss.status.reason.xaero_unavailable": "Xaero unavailable",
   "lss.status.reason.xaero_failed": "Xaero failed",
-  "lss.status.reason.xaero_rebuilds": "Xaero rebuilds queued"
+  "lss.status.reason.xaero_rebuilds": "Xaero rebuilds queued",
+  "lss.settings.adoption_pending": "Settings accepted; subsystem activation is still pending. Run the client reload command again to retry.",
+  "lss.settings.adoption_failed": "Settings accepted, but subsystem activation failed. Check the log and run the client reload command again to retry.",
+  "lss.settings.normalized": "Normalized %s: requested %s; effective %s. YAML was left unchanged.",
+  "lss.status.settings.adoption": "Subsystem revision: %s/%s; awaiting activation: %s"
 }

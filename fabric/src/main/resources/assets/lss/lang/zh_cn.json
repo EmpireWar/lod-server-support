@@ -55,7 +55,7 @@
   "lss.settings.recovery": "恢复草稿",
   "lss.settings.conflict_detail": "YAML 文件已更改或无法读取。您的编辑已保留。“合并并保存”会重新读取文件，仅合并您选择的编辑。“丢弃草稿”会保留磁盘文件。任何编辑均未生效。",
   "lss.settings.failure_detail": "保存失败。即使 Sodium 显示没有更改，您的编辑仍已保留。您可直接重试、保留草稿以便稍后处理，或丢弃草稿。运行中的设置未更改。",
-  "lss.settings.inactive": "设置未启用：%s。修复 YAML 后运行客户端重载命令；迁移或创建失败需要重启。",
+  "lss.settings.inactive": "设置未启用：%s。请修复设置文件并重启客户端。",
   "lss.status.waiting": "正在等待当前连接的状态快照…",
   "lss.status.on": "开",
   "lss.status.off": "关",
@@ -107,5 +107,9 @@
   "lss.status.reason.ingest_queue_pending": "等待接收模组处理",
   "lss.status.reason.xaero_unavailable": "Xaero 不可用",
   "lss.status.reason.xaero_failed": "Xaero 失败",
-  "lss.status.reason.xaero_rebuilds": "等待 Xaero 重建"
+  "lss.status.reason.xaero_rebuilds": "等待 Xaero 重建",
+  "lss.settings.adoption_pending": "设置已接受；部分功能仍在等待启用。可再次运行客户端重载命令以重试。",
+  "lss.settings.adoption_failed": "设置已接受，但部分功能启用失败。请检查日志并再次运行客户端重载命令以重试。",
+  "lss.settings.normalized": "已调整 %s：请求值 %s；生效值 %s。YAML 未更改。",
+  "lss.status.settings.adoption": "功能应用版本：%s/%s；等待启用：%s"
 }

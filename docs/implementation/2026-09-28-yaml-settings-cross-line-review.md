@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `88028b3aceedf2d9aaca128a8628fddda89ee3f3`
-- MC 26.1: `965cbffe090f5939e4313b351bf70aabd88feb97`
-- MC 1.21.11: `3e87a5f97a4bbf89cd19d108722c8be07a70e9fb`
-- MC 1.21.10: `7f2cc016a33559d6b3cdb5146f286b6960086349`
-- MC 1.21.1: `4c2c2221b7bd1147ebcae239b4443f6a59633e6d`
+- MC 26.2: `b46fa99259ee0be9e304f6ff0db84d7cff699d47`
+- MC 26.1: `fd038692da1def0d7790229519ff6879e06f56be`
+- MC 1.21.11: `d58fdc56bd92f102a7e369dc1040cd2e62d3c10f`
+- MC 1.21.10: `aba73a3c1bbd68e36906f74ac9887eb3e63df7d1`
+- MC 1.21.1: `f66f067c8f611633cf44a25cfd2dee136d3cefcd`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -32,7 +32,7 @@ Runtime failure/retry findings and their fixes are detailed in the [runtime revi
 - Reviewed modern/legacy Sodium draft save, explicit reload, recovery, translated status, adoption feedback and footer changes. Screen, render/text/chat and 1.21.1 integer-key adaptations remain inside existing seams. Modern Sodium bytecode confirms clearWidgets precedes layout; legacy selected-page bytecode contract confirms selection precedes rebuild. Inherited name-tag-distance locale wording is the only locale residual.
 - Reviewed YAML staging, historical JSON-only comparisons, platform soak inputs, retained launch guards, parser relocation/resource/license checks and all six branded loader discovery calls. Rig values cache immutable document content, reread paths and return independent maps. Native fixture observers sample the actual owner adoption boundary; ordered evidence requires Save-inert and successful reload receipts.
 
-The external native YAML observer and recipes were reviewed through `4ee7e545`: exact class hashes/descriptors, actual owner-return callbacks, bounded evidence writer, owned command receipts and Folia overlap inside the reload window. Reproduced checker gaps were closed for platform downgrade, frozen-input drift, reused/out-of-order phases, enabled quiet state, unchanged high-rate pacing and new admissions during disable drain. The checker requires unchanged submitted count and disabled revision across off/drained/quiet. Final pacing uses legal 10→40 columns/second targets, measures actual deposits above the old-rate carry bound and below the new-rate carry bound, and preserves worker identity. Numeric driver edits first pass through the real codec normalization; clamped or group-capped intent fails before file writes or console commands. This is source/checker validation, not a claim that the native scenario has run.
+The external native YAML observer and recipes were reviewed through `4ee7e545`: exact class hashes/descriptors, actual owner-return callbacks, bounded evidence writer, owned command receipts and Folia overlap inside the reload window. Reproduced checker gaps were closed for platform downgrade, frozen-input drift, reused/out-of-order phases, enabled quiet state, unchanged high-rate pacing and new admissions during disable drain. The checker requires unchanged submitted count and disabled revision across off/drained/quiet. Final pacing uses legal 10→40 columns/second targets, measures actual deposits above the old-rate carry bound and below the new-rate carry bound, and preserves worker identity. Numeric driver edits first pass through the real codec normalization; clamped or group-capped intent fails before file writes or console commands. This paragraph describes source/checker validation; the recorded native evidence is summarized separately below and in the progress ledger.
 
 Final localization followup `c91c3a65` translates export feedback on the client owner without changing ticket capture or method signatures; retained recovery failures log technical detail once and display translated guidance. The 1.21.1 parser classpath followup is development-only and leaves packaged relocation unchanged.
 
@@ -52,12 +52,16 @@ Paper observer followup `88028b3a` accounts for the actual PluginClassLoader cal
 
 The companion WI5 correction `585a1d71` observes the instance `LSSClientConfig.reconcile()V` reload-adoption boundary instead of ordinary client tick reconciliation, retaining required HEAD/RETURN hooks. All six changed/new fixture files are identical across the five reviewed snapshots; no product rebuild is implied by these fixture changes.
 
+Final Folia fixture correction `b46fa992` allows four pending login reservations while continuing to launch and require exactly two clients. Fabric/Paper retain capacity two. Actual generated recipes were checked for those exact values, and the strict two-client acceptance rules are unchanged. The preparer remains shared across all five lines.
+
+Recorded native evidence was independently read and rechecked without launching a process: Fabric `20260928T205549Z-1f31c617e04d` and Paper `20260928T210854Z-f7bba9dfbd7d` each pass three assertion groups; Folia `20260928T211608Z-dfd94d889df1` passes four. All strict generation phase checks pass with positive work at disable, drain conservation, no new disabled admissions and resumed progress. Fabric backfill records positive deposits, rate-change progress, stop quiescence and a new worker. Folia's separate region checker passes and 205 owning-region samples inside the disable-to-serving window include distinct-region overlap. Every recorded cleanup is complete with zero remaining children. These bounded scenario results do not broaden the supported or experimental platform claims; exact artifacts, earlier failed premises and other acceptance gates remain in the progress ledger.
+
 ## Classification and verification
 
 Added 104 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 77 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Earlier focused checks passed eight rig receive tests and seven native YAML checker tests. The final diagnostic and numeric-preflight unit evidence is recorded in the progress ledger; this refresh performs only classification/catalog and whitespace checks. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final10-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final10-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final11-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final11-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

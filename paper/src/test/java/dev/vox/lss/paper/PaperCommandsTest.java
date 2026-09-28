@@ -61,6 +61,37 @@ class PaperCommandsTest {
         return cmd.onCommand(sender, null, "lsslod", args);
     }
 
+    @Test void diagnosticCaptureUsesTheOwnerGateAndWholeServiceGate() {
+        var service = mock(PaperRequestProcessingService.class);
+        var generation = mock(PaperChunkGenerationService.class);
+        when(service.getGenerationService()).thenReturn(generation);
+        when(service.getTickDiag()).thenReturn(mock(dev.vox.lss.common.processing.TickDiagnostics.class));
+        var config = new MutablePaperSettings();
+        MutablePaperSettings.set(config, "generation.enabled", true);
+        var cmd = commands(service, config);
+
+        var pending = cmd.captureDiagnostics(service);
+        assertTrue(pending.serviceAvailable());
+        assertFalse(pending.generationEnabled(), "published true must not replace the owner's false gate");
+        assertTrue(pending.generationConfiguredForRestart(), "legacy JSON value remains configured");
+
+        when(generation.isAdmissionEnabled()).thenReturn(true);
+        assertTrue(cmd.captureDiagnostics(service).generationEnabled());
+        MutablePaperSettings.set(config, "service.enabled", false);
+        var disabled = cmd.captureDiagnostics(service);
+        assertTrue(disabled.serviceAvailable(), "Paper retains its dormant service instance");
+        assertFalse(disabled.enabled());
+        assertFalse(disabled.generationEnabled(), "whole-service disable closes admission");
+        assertTrue(disabled.generationConfiguredForRestart());
+
+        MutablePaperSettings.set(config, "service.enabled", true);
+        MutablePaperSettings.set(config, "generation.enabled", false);
+        var pendingDisable = cmd.captureDiagnostics(service);
+        assertTrue(pendingDisable.generationEnabled(), "an owner not yet disabled still reports its actual gate");
+        assertFalse(pendingDisable.generationConfiguredForRestart());
+        assertFalse(cmd.captureDiagnostics(null).generationEnabled(), "absent owner cannot admit");
+    }
+
     @Test
     void noArgsShowsHelp() {
         // v0.11.0 stage C: bare /lsslod = help (was a usage line), served BEFORE the

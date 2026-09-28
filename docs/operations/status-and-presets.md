@@ -25,6 +25,14 @@ accepted by the exporter. The command displays the local output path; the report
 does not contain that path. Nothing uploads automatically. The exporter retains
 at most ten reports and admits one active plus one queued export.
 
+Client JSON reports use schema version 2. Their `settings` section separates the
+last successfully read or saved values (`saved`), the values accepted at startup or
+reload (`configured`), and current effective values (`effective`). It includes
+pending reload/reconnect/adoption paths, published/adopted revisions, and a small scalar allowlist: reception, distance,
+manual column rate, Xaero enablement and sharing. Unsaved menu edits are excluded.
+The saved observation does not watch the file: an external edit becomes known at
+an explicit read, reload or menu open. Sensitive collection values stay private.
+
 The server command acknowledges the queued target path after admission. Check the
 server log for completion or a sanitized write failure; the queued message does
 not mean the files have been written. Client completion feedback is shown only

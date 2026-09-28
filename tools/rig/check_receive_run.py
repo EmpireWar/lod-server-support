@@ -3,7 +3,7 @@ import json,re
 from pathlib import Path
 from check_receive_lifecycle import check
 
-TOKENS=frozenset('sameNativeWorld=true sameXaeroWorld=true sameConnection=true freshManager=true nativeRebuildsDrained=true preparedTile=true originOpen=true pendingRebuildsPositive=true realCallbackHeld=true pendingRebuilds=0 nativeWorldCleared=true generationChanged=true newNativeWorld=true newConnection=true newManager=true sameDimension=true realOldCallbackReturned=true oldReceiptClosed=true oldTileAbsent=true nativeWorldRetired=true realTransport=true disconnectPacket=false enabled=true sessionConfig=true version=20'.split())
+TOKENS=frozenset('sameNativeWorld=true sameXaeroWorld=true sameConnection=true freshManager=true nativeRebuildsDrained=true preparedTile=true originOpen=true pendingRebuildsPositive=true realCallbackHeld=true pendingRebuilds=0 nativeWorldCleared=true generationChanged=true newNativeWorld=true newConnection=true newManager=true sameDimension=true realOldCallbackReturned=true oldReceiptClosed=true oldTileAbsent=true nativeWorldRetired=true realTransport=true disconnectPacket=false enabled=true sessionConfig=true version=20 requested=false requested=true receive=false receive=true'.split())
 
 def observations(client,server):
     output=[]

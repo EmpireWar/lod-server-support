@@ -1,8 +1,8 @@
 """Validate ordered maintained WI5 observations; logs are bound by the owning run."""
 import re
 
-SAME_WORLD = ('PRECONDITION', 'AFTER_OFF', 'OFF_NATIVE_REBUILDS_DRAINED',
-              'BEFORE_ON', 'AFTER_ON', 'PASS_SAME_WORLD_OFF_ON')
+SAME_WORLD = ('PRECONDITION', 'SAVED_OFF_INERT', 'AFTER_OFF', 'RELOAD_OFF_ACK', 'OFF_NATIVE_REBUILDS_DRAINED',
+              'BEFORE_ON', 'SAVED_ON_INERT', 'AFTER_ON', 'RELOAD_ON_ACK', 'PASS_SAME_WORLD_OFF_ON')
 REPLACEMENT = ('ARMED', 'REAL_CALLBACK_HELD', 'NATIVE_RETIRE_PREMISE',
                'NATIVE_RETIRED', 'REPLACEMENT_READY', 'PASS_REPLACEMENT')
 
@@ -29,6 +29,8 @@ def check(text):
     ordered(transport,('CLOSED',),'actual transport')
     ordered(same,SAME_WORLD,'same-world');ordered(replacement,REPLACEMENT,'replacement')
     required={
+        'SAVED_OFF_INERT':('requested=false','receive=true'),
+        'SAVED_ON_INERT':('requested=true','receive=false'),
         'CLOSED':('realTransport=true','disconnectPacket=false'),
         'PASS_SAME_WORLD_OFF_ON':('sameNativeWorld=true','sameXaeroWorld=true','sameConnection=true','freshManager=true','nativeRebuildsDrained=true'),
         'REAL_CALLBACK_HELD':('preparedTile=true','originOpen=true'),

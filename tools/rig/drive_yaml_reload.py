@@ -3,7 +3,7 @@
 import argparse,json,time
 from pathlib import Path
 from rig import write,regular
-from rig_settings import render,values
+from rig_settings import edit,render,values
 from server_control_smoke import Driver,exercise
 from check_yaml_reload import deposits,BACKFILL_LOW_RATE,BACKFILL_HIGH_RATE
 
@@ -55,11 +55,16 @@ class ReloadDriver(Driver):
     def execute(self):
         original=self.config.read_bytes()
         try:
-            self.sample('initial',lambda r:r['players']==2 and r['sent']>0 and r['active']>0,timeout=120)
-            # Teleports affect only the two disposable fixture clients in this fresh world.
+            self.sample('connected',lambda r:r['players']==2 and r['sent']>0,timeout=120)
+            # Stage the inert file before waiting for work; CLI startup must not
+            # consume the short interval between an active sample and reload.
+            edit(self.config,{'generation.enabled':False},platform=self.platform)
+            # Place both disposable clients before the observation boundary.
             for subject,x in [('A',0),('B',4096)]:self.raw(f'tp RigSubject{subject} {x} 100 0','Teleported')
             self.observe();at=len(self.rows)-1
-            self.reload({'generation.enabled':False})
+            self.sample('initial',lambda r:r['players']==2 and r['sent']>0 and r['enabled'] and r['active']>0,after=at,timeout=120)
+            at=self.phases['initial']
+            self.reload()
             self.wait('off',lambda r:r.get('event')=='generation_policy' and not r['enabled'] and r['active']>0,at)
             off=self.phase('off')
             drained=self.sample('drained',lambda r:not r['enabled'] and r['active']==0 and r['revision']==off['revision'],self.phases['off'],timeout=90)

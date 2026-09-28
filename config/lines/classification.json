@@ -572,6 +572,9 @@
     "common/src/test/java/dev/vox/lss/common/diagnostics/ServerExportJobTest.java": {
       "kind": "identical"
     },
+    "common/src/test/java/dev/vox/lss/common/diagnostics/ServerStatusSnapshotTest.java": {
+      "kind": "identical"
+    },
     "common/src/test/java/dev/vox/lss/common/diagnostics/SettingsNoticeLayoutTest.java": {
       "kind": "identical"
     },
@@ -5274,13 +5277,13 @@
     "paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java": {
       "axes": "Preserved MC line APIs: ResourceKey identifier/location, ChunkPos fields/accessors, section bounds, registry and spawn access, ticket and background IO calls; Paper 1.21.x split world directories, payload buffer/priority APIs; Fabric chunk-event arity; plugin.yml retains each line\u2019s Folia declaration. Only axes present in this exact file apply.",
       "kind": "adapted",
-      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
+      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
       "reviewed_blobs": {
-        "26.2": "d8b679e7716ab1a7199e75e02d7476153d73c810",
-        "26.1": "d8b679e7716ab1a7199e75e02d7476153d73c810",
-        "1.21.11": "d8b679e7716ab1a7199e75e02d7476153d73c810",
-        "1.21.10": "de495dad23c6cabbe367032d8bf1e2b9417bc0b5",
-        "1.21.1": "c7cc3a887bb8b4ed93506e7465612a527051ded4"
+        "26.2": "22f253cdeaab30da513688277686f0c49b5ae334",
+        "26.1": "22f253cdeaab30da513688277686f0c49b5ae334",
+        "1.21.11": "22f253cdeaab30da513688277686f0c49b5ae334",
+        "1.21.10": "827c3f0ec51c494d7fb8db7a2de2731ecc4971f9",
+        "1.21.1": "bbad11cb023dc55f50c917cbecf3d0a2af00cb13"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
       "tests": [
@@ -5601,13 +5604,13 @@
     "paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. Compared each line\u2019s changes against its previously reviewed blob; reviewed immutable fixture migration, explicit reload tests, registration and generation/disk-policy assertions. Residual variants are existing annotation/assertion/MC API seams and the 1.21.1 Tier3 absence. Corrected direct ChunkPos accessor errors on 1.21.10/11; TestPositions record access remains correct on 1.21.1 and 26.2. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 cross-line YAML residual review. Compared each line\u2019s changes against its previously reviewed blob; reviewed immutable fixture migration, explicit reload tests, registration and generation/disk-policy assertions. Residual variants are existing annotation/assertion/MC API seams and the 1.21.1 Tier3 absence. Corrected direct ChunkPos accessor errors on 1.21.10/11; TestPositions record access remains correct on 1.21.1 and 26.2. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
       "reviewed_blobs": {
-        "1.21.1": "302e59f7f29614be38b7107ce8bc00b1bc3c1e93",
-        "1.21.10": "a5019c5de87a7b0c9a9096c2fd0807fa71e3448c",
-        "1.21.11": "a5019c5de87a7b0c9a9096c2fd0807fa71e3448c",
-        "26.1": "a5019c5de87a7b0c9a9096c2fd0807fa71e3448c",
-        "26.2": "a5019c5de87a7b0c9a9096c2fd0807fa71e3448c"
+        "1.21.1": "789c4467e5f28b5ccbe9db757efa89f7d7312230",
+        "1.21.10": "3f9e879629d68bb6dac3a9bb837927057ccc2213",
+        "1.21.11": "3f9e879629d68bb6dac3a9bb837927057ccc2213",
+        "26.1": "3f9e879629d68bb6dac3a9bb837927057ccc2213",
+        "26.2": "3f9e879629d68bb6dac3a9bb837927057ccc2213"
       },
       "surface": "line-adaptation:paper/src/test/java/dev/vox/lss/paper/PaperChunkGenerationServiceTest.java",
       "tests": [
@@ -9410,13 +9413,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java": {
       "axes": "Preserved MC line APIs: ResourceKey identifier/location, ChunkPos fields/accessors, section bounds, registry and spawn access, ticket and background IO calls; Paper 1.21.x split world directories, payload buffer/priority APIs; Fabric chunk-event arity; plugin.yml retains each line\u2019s Folia declaration. Only axes present in this exact file apply.",
       "kind": "adapted",
-      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
+      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
       "reviewed_blobs": {
-        "26.2": "88593a2f1b0438357f03983e42079389293a5cef",
-        "26.1": "88593a2f1b0438357f03983e42079389293a5cef",
-        "1.21.11": "7bca9ff026d9e2e4b0f50e2ff9e1b8b7d1a0db34",
-        "1.21.10": "d7e5d231e4205e1ccbb99c699e61a6d0ffcaf14e",
-        "1.21.1": "5ee177d7a8fd1ca34f744a7f052c0ebcd8d7c74f"
+        "26.2": "88f90114300d1085fb26a8274127106f32d050b0",
+        "26.1": "88f90114300d1085fb26a8274127106f32d050b0",
+        "1.21.11": "82ef01519cc37f5dedbca4e4cbf2d37770822c46",
+        "1.21.10": "fd44909dbf8f9c8fe571689256e017a2515476fb",
+        "1.21.1": "ee199073d9570393cb1a2167c852280c8c4cc7d7"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
       "tests": [
@@ -9504,13 +9507,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": {
       "axes": "Preserved MC line APIs: ResourceKey identifier/location, ChunkPos fields/accessors, section bounds, registry and spawn access, ticket and background IO calls; Paper 1.21.x split world directories, payload buffer/priority APIs; Fabric chunk-event arity; plugin.yml retains each line\u2019s Folia declaration. Only axes present in this exact file apply.",
       "kind": "adapted",
-      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
+      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
       "reviewed_blobs": {
-        "26.2": "f4ebed4023bf62ea7d948d7fe01dc0762455a661",
-        "26.1": "f4ebed4023bf62ea7d948d7fe01dc0762455a661",
-        "1.21.11": "f4ebed4023bf62ea7d948d7fe01dc0762455a661",
-        "1.21.10": "342116bf3dcf89c5e1eee394062d2c5c01cba168",
-        "1.21.1": "c9856a6ae5b80655f6afb50580b0a2a9a9d80471"
+        "26.2": "09c2288cc368da08d6a647b2ae0044a2ce55e2c6",
+        "26.1": "09c2288cc368da08d6a647b2ae0044a2ce55e2c6",
+        "1.21.11": "09c2288cc368da08d6a647b2ae0044a2ce55e2c6",
+        "1.21.10": "1b4272d035019b0e23d1d454a5521bda2deeecc0",
+        "1.21.1": "9568f4ec404f793039ee267519aadc324af8f41b"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
       "tests": [

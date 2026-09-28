@@ -97,7 +97,7 @@ public final class ClientStatus {
                 : "unavailable".equals(xaero.resolution()) ? ClientStatusSnapshot.Availability.UNAVAILABLE
                 : !cfg.enableXaeroMapBridge() ? ClientStatusSnapshot.Availability.DISABLED
                 : ClientStatusSnapshot.Availability.AVAILABLE;
-        var snapshot = new ClientStatusSnapshot(1, lifecycle, System.currentTimeMillis(),
+        var snapshot = new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, lifecycle, System.currentTimeMillis(),
                 mc.getConnection() != null, ClientNetGlue.hasReceivedSessionConfig(),
                 cfg.receiveServerLods(), ClientNetGlue.isServerEnabled(), LSSApi.hasVoxelConsumers(),
                 FarPlayerRenderer.RENDER_AVAILABLE, ClientNetGlue.getSessionVersion(),
@@ -110,7 +110,7 @@ public final class ClientStatus {
                 cfg.lodColumnsPerSecondLimit(), Math.max(0, rateGated - lastRateGated),
                 xaero.pendingRebuilds(), ClientNetGlue.discoveryStatus(), availability,
                 active ? captureDetails(manager) : null,
-                dev.vox.lss.platform.LoaderServices.get().diagnosticVersions());
+                dev.vox.lss.platform.LoaderServices.get().diagnosticVersions(), cfg.diagnosticSettings());
         lastRateGated = rateGated;
         CACHE.publish(lifecycle, snapshot);
     }

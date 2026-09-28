@@ -50,7 +50,8 @@ public class RegionFaultGameTests {
         return helper.makeMockServerPlayerInLevel();
     }
 
-    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
+    // Own batch: unrelated generation/save traffic must not consume the disk-read deadline.
+    @GameTest(batch = "lss_region_fault", template = "fabric-gametest-api-v1:empty", timeoutTicks = 1200)
     public void corruptRegionChunkResolvesAsContainedErrorAndReaderSurvives(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();

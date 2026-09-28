@@ -53,9 +53,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The far-player proxy renderer (E2, FARP §3.3/§7-B — the SeeU
+ * The far-player proxy renderer (E2, FARP §3.3/§7-B — the
  * {@code RemotePlayer}-proxy + {@code WorldRenderContext} immediate-render approach, proven
- * on 26.2, reimplemented in LSS idiom). Differences from SeeU that are DECISIONS, not
+ * on 26.2, reimplemented in LSS idiom). Behavioral choices that are DECISIONS, not
  * drift (all review-pinned in the FARP plan):
  *
  * <ul>

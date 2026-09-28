@@ -70,10 +70,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code endBatch()}, which would drain the deferred glint/translucent buffers early (the
  * 2026-09-04 hardening plan superseded the earlier "no explicit flush" decision on exactly
  * this distinction). The E2, FARP §3.3/§7-B {@code RemotePlayer}-proxy immediate-render approach.
- * Differences from SeeU that are DECISIONS, not drift (all review-pinned in the FARP plan):
+ * Behavioral choices that are DECISIONS, not drift (all review-pinned in the FARP plan):
  *
  * <ul>
- *   <li><b>No glow, ever, by default</b> — SeeU's {@code setGlowingTag(true)} is a
+ *   <li><b>No glow, ever, by default</b> — {@code setGlowingTag(true)} is a
  *       through-wall outline that contradicts the privacy stance.</li>
  *   <li><b>No fog mixin</b> — a proxy beyond fog-end fades like terrain would;
  *       {@code farPlayersMaxRenderDistanceBlocks} is the alignment knob.</li>
@@ -127,7 +127,7 @@ public final class FarPlayerRenderer {
     public static final boolean RENDER_AVAILABLE = true;
 
     /** Proxy entity-id base: far above vanilla's server-assigned counter AND disjoint
-     *  from SeeU's 1_000_000_000 block (both installed must never collide). Each id is
+     *  from the 1_000_000_000 block used by other proxy renderers. Each id is
      *  additionally probed against the live level before use. */
     private static final int PROXY_ID_BASE = 1_900_000_000;
 
@@ -290,8 +290,8 @@ public final class FarPlayerRenderer {
 
     private void renderContained(RenderLevelStageEvent event) {
         var config = LSSClientConfig.CONFIG.snapshot().farPlayers();
-        // The bit gate covers arm + the soak/benchmark properties; the EFFECTIVE
-        // enabled term (config AND the SeeU-coexist gate, E3) is checked HERE because
+        // The bit gate covers arm + the soak/benchmark properties; the effective
+        // local enabled setting is checked here because
         // the bit deliberately no longer carries it (the subscription is the prefs
         // carrier — E2 review M2): a disabled viewer still delivers its shareSelf
         // opt-out, it just renders nothing.
@@ -424,7 +424,7 @@ public final class FarPlayerRenderer {
             // R-10 v1.3 mounts: the rider renders at its OWN wire position (the
             // server-side seated position already encodes the seat offset); the ride
             // link exists ONLY to make isPassenger() true at render-state extraction
-            // (the one vanilla path to seated legs). Edge-triggered — never SeeU's
+            // (the one vanilla path to seated legs). Edge-triggered, without
             // per-frame eject/re-seat.
             var wireVehicle = tracked.latest().vehicle();
             if (wireVehicle != null) {
@@ -750,7 +750,7 @@ public final class FarPlayerRenderer {
         entity.setXRot(s.pitch());
         entity.xRotO = s.pitch();
         if (entity instanceof net.minecraft.world.entity.LivingEntity living) {
-            // E3 review MAJOR (a deliberate SeeU deviation — theirs omits this): body
+            // E3 review MAJOR: body
             // rot is only ever written by tick logic render-only entities never run,
             // and 26.2's solveBodyRot reads yBodyRot for BOTH the living mount AND
             // (via the passenger branch) its rider — unset, a horse renders locked
@@ -1278,7 +1278,7 @@ public final class FarPlayerRenderer {
 
         @Override
         protected PlayerInfo getPlayerInfo() {
-            // TAB-listed players carry skins; the proxy borrows them (SeeU's approach).
+            // TAB-listed players carry skins; the proxy borrows them (without a separate skin lookup).
             var connection = Minecraft.getInstance().getConnection();
             if (connection != null) {
                 PlayerInfo info = connection.getPlayerInfo(trackedUuid);

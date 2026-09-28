@@ -17,7 +17,7 @@ now byte-verbatim with the shipping Fabric renderer.
   alone).
 - **Out of scope (recorded follow-up — see §10 doc sweep):** NeoForge rendering on **26.1 / 26.2**.
   Those lines' Fabric renderer uses the 26.x **submit/extract pipeline** (`dispatcher.extractEntity`
-  + `dispatcher.submit` + `SubmitNodeCollector`, see `research/seeu/neoforge/.../FarPlayerRenderer.java`),
+  + `dispatcher.submit` + `SubmitNodeCollector`),
   a materially different render port, and their NeoForge client is the Foxy fork. The options
   catalog already hides the renderer-only options where `RENDER_AVAILABLE` is false, so those lines
   degrade cleanly and unchanged.
@@ -237,7 +237,7 @@ cache) and the `neoforge-21.1.248` sources jar:
   `FarPlayerClientSupport.java`'s javadoc.
 - **Confirmed no gaps (all three):** issue-#160 mount containment carried verbatim (ladder is shared
   xplat — zero divergence), hostile-input caps preserved, session/dimension lifecycle resets correct,
-  SeeU-coexist + prefs-carrier preserved, NeoForge registry semantics identical, scope call correct.
+  Historical coexistence gate + prefs-carrier preserved, NeoForge registry semantics identical, scope call correct.
 
 ## 11. Implementation review fold (1 Fable + 4 Opus, all on commit cad206b8)
 

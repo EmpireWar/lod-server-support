@@ -13,6 +13,7 @@ and await its receipt. JSON on --set is argument transport, not a second config 
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import pathlib
 import shutil
@@ -36,6 +37,36 @@ def _classpath() -> str:
                        cwd=ROOT, check=True, stdout=sys.stderr)
         CLASSPATH_FILE.touch()
     return CLASSPATH_FILE.read_text(encoding="utf-8").strip()
+
+
+def codec_identity() -> dict:
+    """Hash the prepared codec bytes without starting Gradle under a harness lock.
+
+    The harness may freeze an owned classpath with LSS_SETTINGS_CLASSPATH. Its
+    location is not identity: every class/resource/JAR byte is bound instead.
+    """
+    classpath = os.environ.get("LSS_SETTINGS_CLASSPATH")
+    if not classpath:
+        if not CLASSPATH_FILE.is_file():
+            raise ValueError("Prepare :common:settingsCliClasspath before creating a YAML rig run")
+        classpath = CLASSPATH_FILE.read_text(encoding="utf-8").strip()
+    entries = []
+    for raw in classpath.split(os.pathsep):
+        path = pathlib.Path(raw)
+        if not raw or not path.exists():
+            raise ValueError("Prepared settings codec classpath entry is missing")
+        digest = hashlib.sha256()
+        if path.is_dir():
+            for member in sorted(path.rglob("*")):
+                if member.is_symlink(): raise ValueError("Settings codec contains a symlink")
+                if not member.is_file(): continue
+                digest.update(member.relative_to(path).as_posix().encode("utf-8") + b"\0")
+                digest.update(hashlib.sha256(member.read_bytes()).digest())
+        else:
+            if path.is_symlink(): raise ValueError("Settings codec contains a symlink")
+            digest.update(path.read_bytes())
+        entries.append(digest.hexdigest())
+    return {"format": 1, "entries": entries}
 
 
 def invoke(*arguments: str) -> dict:

@@ -15,7 +15,7 @@ def jar_mod_ids(data,depth=0):
 
 def allowed_change(before,after,patch):
  expected=dict(before,**patch)
- if after!=expected:raise ValueError('preset changed unrelated or wrong fields')
+ if after!=expected:raise ValueError('settings changed unrelated or wrong fields')
 def fresh_feedback(text,expected):
  return any(re.search(r'\[CHAT\]\s*'+re.escape(expected)+r'\s*$',line) for line in text.splitlines())
 def verify_exports(snapshot,receive,writes=None):
@@ -35,13 +35,16 @@ def verify_tool_identity(root, repo, active_files):
  if digest(bound)!=manifest['run_hash'] or digest(runtime)!=bound['runtime_hash'] or bound['runtime_hash']!=manifest['runtime_hash']:raise ValueError('run input identity changed')
  staged={row['target']:row['sha256'] for row in bound['staged_inputs']}
  for name in ('drive.py','checks.py','verify.py','finalize.py'):
-  target='preset-tools/'+name;expected=staged.get(target)
-  if expected is None or sha(root/target)!=expected:raise ValueError('staged preset tool changed: '+name)
+  target='settings-tools/'+name;expected=staged.get(target)
+  if expected is None or sha(root/target)!=expected:raise ValueError('staged settings tool changed: '+name)
   active=Path(active_files.get(name, Path(active_files['entrypoint']).resolve().parent/name)).resolve()
-  if sha(active)!=expected:raise ValueError('active preset tool differs: '+name)
+  if sha(active)!=expected:raise ValueError('active settings tool differs: '+name)
+ from toolchain import verify_settings_codec
+ verify_settings_codec(runtime, bound.get('settings_codec'))
  tools=bound['runtime_tools']
- for required in ('rig.py','native_window.py','private_input.py','ui_snapshot_wait.py'):
+ for required in ('rig.py','native_window.py','private_input.py','ui_snapshot_wait.py','rig_settings.py'):
   if 'tools/rig/'+required not in tools:raise ValueError('required owned rig dependency unbound: '+required)
+ if 'tools/settings/settings_file.py' not in tools:raise ValueError('required shared settings helper unbound')
  for name,expected in tools.items():
   if not name.startswith('tools/'):continue
   active=(repo/name).resolve()

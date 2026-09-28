@@ -40,7 +40,7 @@ class PreparePrismTests(unittest.TestCase):
    self.assertIn('server/cache/mojang.jar',targets)
    self.assertEqual(result['immutable_trees']['server/cache'],{'mojang.jar':sha(server/'cache/mojang.jar')})
    self.assertEqual(result['immutable_trees']['server/libraries'],{})
-   self.assertIn('server/plugins/LodServerSupport/lss-server-config.json',result['generated_files'])
+   self.assertIn('server/plugins/LodServerSupport/lss-server-config.yaml',result['generated_files'])
    self.assertIn('paper.jar',result['launches'][0]['argv'])
    with self.assertRaisesRegex(ValueError,'does not match'):
     build(profile,{},None,server,candidate,context,'/usr/bin/java','prism','[::1]:25572',server_candidate=candidate,server_profile=server_profile,server_profile_path=profile_path)

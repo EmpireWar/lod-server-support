@@ -1,3 +1,5 @@
+import os
+from unittest.mock import patch
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,3 +27,33 @@ class ToolchainTests(unittest.TestCase):
         verify(destination,self.identity)
         (destination/'tools/rig/rig.py').write_text('tampered evidence')
         with self.assertRaises(ValueError):verify(destination,self.identity)
+
+
+class SettingsIdentityTests(unittest.TestCase):
+    def test_actual_manifest_snapshot_retains_settings_launcher_and_product_sources(self):
+        repo=Path(__file__).resolve().parents[2]
+        frozen=snapshot(repo)
+        for name in ('tools/settings/settings_file.py', 'tools/rig/rig_settings.py',
+                     'common/src/main/java/dev/vox/lss/common/config/SettingsCli.java',
+                     'common/src/main/resources/dev/vox/lss/settings/client.yaml',
+                     'common/build.gradle', 'tools/verify/run-gradle.sh'):
+            self.assertIn(name, frozen)
+        with tempfile.TemporaryDirectory() as temp:
+            retained=Path(temp)/'tool-sources'
+            retain(repo, retained, frozen)
+            verify(retained, frozen)
+            (retained/'common/src/main/resources/dev/vox/lss/settings/client.yaml').write_text('changed codec schema')
+            with self.assertRaisesRegex(ValueError,'sources changed'): verify(retained, frozen)
+
+    def test_prepared_codec_bytes_are_bound_even_when_classpath_location_is_unchanged(self):
+        from toolchain import settings_codec, verify_settings_codec
+        runtime={'generated_files':{'config/lss-client-config.yaml':'config_version: 1'}}
+        with tempfile.TemporaryDirectory() as temp:
+            classes=Path(temp)/'classes';classes.mkdir()
+            member=classes/'SettingsCli.class';member.write_bytes(b'first codec')
+            with patch.dict(os.environ, {'LSS_SETTINGS_CLASSPATH':str(classes)}):
+                frozen=settings_codec(runtime)
+                verify_settings_codec(runtime, frozen)
+                member.write_bytes(b'changed codec')
+                with self.assertRaisesRegex(ValueError,'codec bytes changed'):
+                    verify_settings_codec(runtime, frozen)

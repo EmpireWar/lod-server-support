@@ -11,6 +11,27 @@ import java.util.stream.Stream;
 /** Screen-open boundary for registration-time modern bindings and legacy reopen. */
 public final class SodiumDraftRefresh {
     private SodiumDraftRefresh() {}
+    private static final java.util.List<java.lang.ref.WeakReference<Object>> LEGACY_PAGES = new java.util.ArrayList<>();
+
+    /** Identity is independent of brand, language and Sodium's translated tab title. */
+    static void rememberLegacyPages(java.util.List<Object> pages) {
+        LEGACY_PAGES.removeIf(reference -> reference.get() == null);
+        for (Object page : pages) LEGACY_PAGES.add(new java.lang.ref.WeakReference<>(page));
+    }
+    public static boolean usesNoticeFooter(Object screen) {
+        if (modern(screen)) return true;
+        try {
+            for (Class<?> type = screen.getClass(); type != null; type = type.getSuperclass()) {
+                try {
+                    var field = type.getDeclaredField("currentPage");
+                    if (!field.trySetAccessible()) return false;
+                    Object selected = field.get(screen);
+                    return selected != null && LEGACY_PAGES.stream().anyMatch(reference -> reference.get() == selected);
+                } catch (NoSuchFieldException ignored) { }
+            }
+        } catch (ReflectiveOperationException | RuntimeException failure) { noteFailure(failure); }
+        return false;
+    }
 
     public static void open(Object screen) {
         var draft = LSSClientConfig.CONFIG.edits();

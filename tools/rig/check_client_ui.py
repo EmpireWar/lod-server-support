@@ -5,16 +5,19 @@ and forbids substituting generic assertion booleans for it. No map/render claim.
 """
 from pathlib import Path
 import json,zlib
+from rig_settings import values
 
 ASSERTIONS = ('real_ui_opened', 'setting_applied', 'effective_value_observed',
               'failed_save_feedback', 'parent_binding_refreshed',
               'pending_edit_preserved', 'escape_parent_preserved')
 EXPORTS = {'preserved-draft-applied-export.json': False,
-           'reception-applied-export.json': True, 'save-failure-export.json': False,
+           'reception-applied-export.json': True, 'save-failure-export.json': True,
+           'saved-before-reload-export.json': True, 'retry-before-reload-export.json': True,
+           'retry-reloaded-export.json': False,
            'final-restored-export.json': True}
-CONFIGS = ('parent-return-before-apply-config.json', 'preserved-draft-applied-config.json',
-           'canonical-restored-baseline.json', 'save-failure-before.json',
-           'save-failure-after.json', 'final-restored-config.json')
+CONFIGS = ('parent-return-before-apply-config.yaml', 'preserved-draft-applied-config.yaml',
+           'canonical-restored-baseline.yaml', 'save-failure-before.yaml',
+           'save-failure-after.yaml', 'final-restored-config.yaml', 'retry-saved-config.yaml')
 SCREENS = ('status-command-readable.png', 'status-entry-open.png',
            'parent-refreshed-draft-preserved.png', 'applied-unsaved-readable.png',
            'final-restored-saved.png', 'escape-parent-return.png')
@@ -103,9 +106,20 @@ def check_report(proof, manifest, scenario, root):
         for name, enabled in EXPORTS.items():
             data = json.loads(raw[name])
             expected_renderer = profile['line']=='1.21.1' or profile['platform']=='fabric'
-            common_ok = (type(data.get('schemaVersion')) is int and data['schemaVersion']==1
+            common_ok = (type(data.get('schemaVersion')) is int and data['schemaVersion']==2
                          and data.get('connected') is True and data.get('receptionEnabled') is enabled
                          and data.get('rendererAvailable') is expected_renderer)
+            settings=data.get('settings', {})
+            before_reload=name in ('saved-before-reload-export.json', 'retry-before-reload-export.json')
+            expected_pending=(['lod.download.slow_start_on_join', 'lod.receive']
+                              if name=='saved-before-reload-export.json' else ['lod.receive'] if before_reload else [])
+            settings_ok=(settings.get('available') is True
+                         and settings.get('saved', {}).get('receptionEnabled') is (False if before_reload else enabled)
+                         and settings.get('configured', {}).get('receptionEnabled') is enabled
+                         and settings.get('effective', {}).get('receptionEnabled') is enabled
+                         and settings.get('pendingReload')==expected_pending
+                         and settings.get('pendingReconnect')==[])
+            common_ok = common_ok and settings_ok
             if no_consumer:
                 connection_ok = (data.get('consumerAvailable') is False and data.get('negotiated') is False
                                  and type(data.get('protocol')) is int and data['protocol']==0
@@ -123,18 +137,20 @@ def check_report(proof, manifest, scenario, root):
             if (type(captured) is not int or captured < start * 1000
                     or isinstance(finish, (int, float)) and captured > finish * 1000):
                 raise ValueError('export is outside the owned run lifetime: ' + name)
-        configs = {name: json.loads(raw[name]) for name in CONFIGS}
-        baseline = configs['canonical-restored-baseline.json']
-        if baseline.get('receiveServerLods') is not True or baseline.get('enableJoinSlowStart') is not True:
+        configs = {name: values(raw[name].decode(),side='client') for name in CONFIGS}
+        baseline = configs['canonical-restored-baseline.yaml']
+        if baseline.get('lod.receive') is not True or baseline.get('lod.download.slow_start_on_join') is not True:
             raise ValueError('original restored settings missing')
-        before = dict(baseline, receiveServerLods=False)
-        if configs['parent-return-before-apply-config.json'] != before:
+        before = dict(baseline)
+        if configs['parent-return-before-apply-config.yaml'] != before:
             raise ValueError('status return changed the pending draft or unrelated settings')
-        if configs['preserved-draft-applied-config.json'] != dict(before, enableJoinSlowStart=False):
+        if configs['preserved-draft-applied-config.yaml'] != {**before,'lod.receive':False,'lod.download.slow_start_on_join':False}:
             raise ValueError('real Apply did not save the preserved draft alone')
-        if not (raw['canonical-restored-baseline.json'] == raw['save-failure-before.json']
-                == raw['save-failure-after.json'] == raw['final-restored-config.json']):
+        if configs['retry-saved-config.yaml']!={**baseline,'lod.receive':False}:
+            raise ValueError('retained failed draft did not save on retry')
+        if not (raw['canonical-restored-baseline.yaml'] == raw['save-failure-before.yaml']
+                == raw['save-failure-after.yaml'] == raw['final-restored-config.yaml']):
             raise ValueError('save failure or restoration changed original config bytes')
-    except (ValueError, OSError, TypeError, KeyError, AttributeError, zlib.error) as error:
+    except (ValueError, OSError, TypeError, KeyError, AttributeError, RuntimeError, zlib.error) as error:
         return ['client UI evidence invalid: ' + str(error)]
     return []

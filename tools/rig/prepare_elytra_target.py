@@ -2,6 +2,7 @@
 """Extend an owned Prism observer recipe with an independent, directly launched target."""
 import argparse,json,hashlib,zipfile,shutil,sys
 from pathlib import Path
+from rig_settings import render, values
 p=argparse.ArgumentParser()
 for flag in ('source-worktree','capture','runtime','candidate','fixture','output'):p.add_argument('--'+flag,required=True)
 a=p.parse_args();source=Path(a.source_worktree).resolve();capture=Path(a.capture).resolve();out=Path(a.output).resolve()
@@ -72,7 +73,7 @@ for value in json.loads(index.read_text())['objects'].values():
  stage(asset,'target-assets/'+relative);asset_hashes[relative]=hashfile(asset)
 d.setdefault('immutable_trees',{})['target-assets']=asset_hashes
 d['generated_files']['elytra-target/options.txt']='maxFps:30\nrenderDistance:6\nsimulationDistance:5\npauseOnLostFocus:false\nenableVsync:false\nonboardAccessibility:false\ntoggleCrouch:false\n'
-d['generated_files']['elytra-target/config/lss-client-config.json']=json.dumps(dict(receiveServerLods=True,enableXaeroMapBridge=False,lodDistanceChunks=32,farPlayersEnabled=True,farPlayersShareSelf=True))+'\n'
+d['generated_files']['elytra-target/config/lss-client-config.yaml']=render({'lod.receive':True,'integrations.xaero_map.enabled':False,'lod.distance_chunks':32,'far_players.enabled':True,'far_players.sharing.enabled':True},side='client')
 java=d['java']
 components={c['uid']:c['version'] for c in json.loads((capture/'target-components.json').read_text())};mc=components['net.minecraft']
 if mc not in ('1.21.10','1.21.11') or components.get('net.fabricmc.fabric-loader')!='0.19.3' or components.get('java')!='21':raise ValueError('target requires captured supported MC/Fabric0.19.3/Java21 closure')
@@ -98,8 +99,8 @@ validate_profile(profile,allow_unresolved_ranges=True);profile_path=out/'target-
 d.setdefault('client_profiles',[]).append(dict(role='elytra-target',path=str(profile_path),id=profile['id'],profile_hash=digest(profile),candidate_artifacts=candidates))
 for name,value in list(d['generated_files'].items()):
  if name.endswith('/instance.cfg'):d['generated_files'][name]=value.replace('JvmArgs=','JvmArgs=-Dlss.rig.initialEndpoint={endpoint} ')
- if name.endswith('/config/lss-client-config.json'):
-  cfg=json.loads(value);cfg.update(farPlayersEnabled=True,farPlayersShareSelf=True,receiveServerLods=True);d['generated_files'][name]=json.dumps(cfg)+'\n'
+ if name.endswith('/config/lss-client-config.yaml'):
+  d['generated_files'][name]=render({'far_players.enabled': True, 'far_players.sharing.enabled': True, 'lod.receive': True},side='client',document=value)
  if name.endswith('/options.txt') and name.startswith('instances/'):
   values=[line for line in value.splitlines() if not line.startswith(('renderDistance:','fov:'))];d['generated_files'][name]='\n'.join(values+['renderDistance:16','fov:0.0'])+'\n'
 scenario=json.loads((source/'tools/rig/scenarios/elytra.json').read_text());scenario.update(version=2,checker='elytra',requires_handshake=True)

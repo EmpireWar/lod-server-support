@@ -2,6 +2,7 @@
 """Derive an exact direct-client Xaero recipe; no game launch or dependency guesses."""
 import argparse,copy,json,sys
 from pathlib import Path
+from rig_settings import render, values
 from rig import digest,sha,write,require_lock
 
 def prepare(recipe,locked,cache,output):
@@ -26,11 +27,8 @@ def prepare(recipe,locked,cache,output):
         argv=launch['argv'];at=argv.index('-cp')+1
         argv[at]=':'.join([item for item in argv[at].split(':') if item not in removals]+['{run}/artifacts/'+a['file'] for a in selected])
         argv.insert(1,'-Dlss.rig.requireXaero=true')
-        config_path=launch['cwd']+'/config/lss-client-config.json'
-        config=json.loads(runtime['generated_files'].get(config_path,'{}'))
-        if not isinstance(config,dict):raise ValueError('existing client configuration must be an object')
-        config.update(enableXaeroMapBridge=True,enableXaeroMapBackpressure=True)
-        runtime['generated_files'][config_path]=json.dumps(config,sort_keys=True)+'\n'
+        config_path=launch['cwd']+'/config/lss-client-config.yaml'
+        runtime['generated_files'][config_path]=render({'integrations.xaero_map.enabled':True,'integrations.xaero_map.backpressure':True},side='client',document=runtime['generated_files'].get(config_path))
     runtime['require_gpu']=True
     for participant in runtime.get('client_profiles',[]):
         participant.update(path=str((output/'profile.json').resolve()),id=profile['id'],profile_hash=digest(profile))

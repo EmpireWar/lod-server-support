@@ -3,6 +3,10 @@ from pathlib import Path
 from rig import write,digest,sha
 from proof import check_proof
 from check_client_ui import ASSERTIONS,EXPORTS,SCREENS
+from rig_settings import render,values
+from functools import lru_cache
+@lru_cache(maxsize=32)
+def fixture_yaml(serialized):return render(json.loads(serialized),side="client")
 
 class ClientUiNoConsumerTests(unittest.TestCase):
     def setUp(self):
@@ -13,11 +17,19 @@ class ClientUiNoConsumerTests(unittest.TestCase):
         self.manifest={'run_id':'owned','run_hash':'run','backend':'isolated-linux-prism','started_at':100,'finished_at':110}
         self.proof={'run_id':'owned','run_hash':'run','ready':True,'handshake':False,'test_count':7,'assertions':dict.fromkeys(ASSERTIONS,True),'evidence':{}}
         self.bind()
-        for name,enabled in EXPORTS.items():self.save(name,{'schemaVersion':1,'connected':True,'negotiated':False,'protocol':0,'consumerAvailable':False,'rendererAvailable':False,'serverEnabled':False,'discovery':'DORMANT','receptionEnabled':enabled,'receivedColumns':0,'receivedBytes':0,'capturedAtMillis':105000,'versions':{'components':{'MINECRAFT':'1.21.10','LOADER':'21.10.64'}}})
-        baseline={'receiveServerLods':True,'enableJoinSlowStart':True,'unrelated':'preserved'}
-        for name in ['canonical-restored-baseline.json','save-failure-before.json','save-failure-after.json','final-restored-config.json']:self.save(name,baseline)
-        self.save('parent-return-before-apply-config.json',dict(baseline,receiveServerLods=False))
-        self.save('preserved-draft-applied-config.json',dict(baseline,receiveServerLods=False,enableJoinSlowStart=False))
+        for name,enabled in EXPORTS.items():self.save(name,{'schemaVersion':2,'connected':True,'negotiated':False,'protocol':0,'consumerAvailable':False,'rendererAvailable':False,'serverEnabled':False,'discovery':'DORMANT','receptionEnabled':enabled,'receivedColumns':0,'receivedBytes':0,'capturedAtMillis':105000,'versions':{'components':{'MINECRAFT':'1.21.10','LOADER':'21.10.64'}}})
+        for name, enabled in EXPORTS.items():
+            data=json.loads((self.e/name).read_text())
+            before_reload=name in ('saved-before-reload-export.json','retry-before-reload-export.json')
+            def state(receive):return dict(receptionEnabled=receive,distanceChunks=0,maxColumnsPerSecond=90000,xaeroMapEnabled=False,sharingEnabled=True)
+            pending=(['lod.download.slow_start_on_join','lod.receive'] if name=='saved-before-reload-export.json' else ['lod.receive'] if before_reload else [])
+            data['settings']=dict(available=True,saved=state(False if before_reload else enabled),configured=state(enabled),effective=state(enabled),pendingReload=pending,pendingReconnect=[])
+            self.save(name,data)
+        baseline={'lod.receive':True,'lod.download.slow_start_on_join':True,'lod.download.max_columns_per_second':90000}
+        for name in ['canonical-restored-baseline.yaml','save-failure-before.yaml','save-failure-after.yaml','final-restored-config.yaml']:self.save(name,baseline)
+        self.save('parent-return-before-apply-config.yaml',baseline)
+        self.save('preserved-draft-applied-config.yaml',{**baseline,'lod.receive':False,'lod.download.slow_start_on_join':False})
+        self.save('retry-saved-config.yaml',{**baseline,'lod.receive':False})
         for name in SCREENS:
             import struct,zlib
             def chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
@@ -28,7 +40,10 @@ class ClientUiNoConsumerTests(unittest.TestCase):
         for name,value in [('scenario',self.scenario),('profile',self.profile),('runtime',self.runtime)]:
             write(self.root/(name+'.json'),value);self.manifest[name+'_hash']=digest(value)
         self.proof.update({key:self.manifest[key] for key in ['profile_hash','scenario_hash']})
-    def save(self,name,data):write(self.e/name,data);self.proof['evidence'][name]=sha(self.e/name)
+    def save(self,name,data):
+        if name.endswith('.yaml'):(self.e/name).write_text(fixture_yaml(json.dumps(data,sort_keys=True)))
+        else:write(self.e/name,data)
+        self.proof['evidence'][name]=sha(self.e/name)
     def check(self):return check_proof(self.proof,self.manifest,self.scenario,self.root)
     def test_exact_connected_native_ui_evidence_passes_without_claiming_handshake(self):self.assertEqual([],self.check())
     def test_no_server_lifecycle_or_delivery_scenario_can_reuse_exemption(self):
@@ -49,10 +64,17 @@ class ClientUiNoConsumerTests(unittest.TestCase):
         for stamp in [99999,110001]:self.save(name,dict(original,capturedAtMillis=stamp));self.assertTrue(self.check())
         (self.e/name).unlink();self.assertTrue(self.check())
     def test_lost_draft_failed_save_bytes_and_incomplete_ui_cannot_pass(self):
-        name='preserved-draft-applied-config.json';data=json.loads((self.e/name).read_text());self.save(name,dict(data,enableJoinSlowStart=True));self.assertTrue(self.check())
-        self.save(name,data);self.save('save-failure-after.json',{'receiveServerLods':False});self.assertTrue(self.check())
-        self.save('save-failure-after.json',json.loads((self.e/'save-failure-before.json').read_text()));self.proof['assertions']['escape_parent_preserved']=False;self.assertTrue(self.check())
+        name='preserved-draft-applied-config.yaml';data=values(self.e/name,side='client');self.save(name,{**data,'lod.download.slow_start_on_join':True});self.assertTrue(self.check())
+        self.save(name,data);self.save('save-failure-after.yaml',{'lod.receive':False});self.assertTrue(self.check())
+        self.save('save-failure-after.yaml',values(self.e/'save-failure-before.yaml',side='client'));self.proof['assertions']['escape_parent_preserved']=False;self.assertTrue(self.check())
     def test_handshake_claim_or_reduced_count_and_assertions_are_rejected(self):
         self.proof['handshake']=True;self.assertTrue(self.check());self.proof['handshake']=False
         self.proof['test_count']=6;self.assertTrue(self.check());self.proof['test_count']=7
         self.scenario['assertions'].pop();self.bind();self.assertTrue(self.check())
+
+    def test_saved_and_active_states_cannot_be_conflated(self):
+        name='saved-before-reload-export.json';data=json.loads((self.e/name).read_text())
+        data['settings']['effective']['receptionEnabled']=False
+        self.save(name,data);self.assertTrue(self.check())
+        data['settings']['effective']['receptionEnabled']=True;data['settings']['pendingReload']=[]
+        self.save(name,data);self.assertTrue(self.check())

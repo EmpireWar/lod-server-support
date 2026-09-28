@@ -2,6 +2,7 @@
 """Extend an owned Prism observer recipe with an two independent, directly launched seated targets."""
 import argparse,json,hashlib,zipfile,shutil,sys
 from pathlib import Path
+from rig_settings import render, values
 p=argparse.ArgumentParser()
 for flag in ('source-worktree','capture','runtime','candidate','fixture','output'):p.add_argument('--'+flag,required=True)
 a=p.parse_args();source=Path(a.source_worktree).resolve();capture=Path(a.capture).resolve();out=Path(a.output).resolve()
@@ -67,7 +68,7 @@ for value in json.loads(index.read_text())['objects'].values():
  stage(asset,'target-assets/'+relative);asset_hashes[relative]=hashfile(asset)
 d.setdefault('immutable_trees',{})['target-assets']=asset_hashes
 d['generated_files']['seated-target-a/options.txt']='maxFps:30\nrenderDistance:6\nsimulationDistance:5\npauseOnLostFocus:false\nenableVsync:false\nonboardAccessibility:false\ntoggleCrouch:false\n'
-d['generated_files']['seated-target-a/config/lss-client-config.json']=json.dumps(dict(receiveServerLods=True,enableXaeroMapBridge=False,lodDistanceChunks=32,farPlayersEnabled=True,farPlayersShareSelf=True))+'\n'
+d['generated_files']['seated-target-a/config/lss-client-config.yaml']=render({'lod.receive':True,'integrations.xaero_map.enabled':False,'lod.distance_chunks':32,'far_players.enabled':True,'far_players.sharing.enabled':True},side='client')
 java=d['java']
 components={c['uid']:c['version'] for c in json.loads((capture/'target-components.json').read_text())};mc=components['net.minecraft']
 if mc != '1.21.1' or components.get('net.fabricmc.fabric-loader')!='0.19.3' or components.get('java')!='21':raise ValueError('target requires captured supported MC/Fabric0.19.3/Java21 closure')
@@ -114,8 +115,8 @@ for name,value in list(d['generated_files'].items()):
   d['generated_files'][name]=value.replace('JvmArgs=', 'JvmArgs=-Dlss.wi9.enabled=true -Dlss.wi9.captureGate={run}/evidence/seated-healthy-captured.txt -Dlss.wi9.subjectA=SeatedSubjectA -Dlss.wi9.subjectB=SeatedSubjectB ')
  if name.startswith('instances/') and name.endswith('/options.txt'):
   d['generated_files'][name]=value+'fov:-1.0\nfovEffectScale:1.0\n'
- if name.startswith('instances/') and name.endswith('/config/lss-client-config.json'):
-  cfg=json.loads(value);cfg.update(farPlayersEnabled=True,farPlayersShareSelf=True);d['generated_files'][name]=json.dumps(cfg)+'\n'
+ if name.startswith('instances/') and name.endswith('/config/lss-client-config.yaml'):
+  d['generated_files'][name]=render({'far_players.enabled': True, 'far_players.sharing.enabled': True},side='client',document=value)
 for name in ('runtime-classpath.json','launch-settings.json','target-components.json','dli-config.txt','jvm-argfile.txt'):stage(capture/name,'evidence/target-'+name)
 identity=dict(candidate_sha256=hashfile(a.candidate),fixture_sha256=hashfile(a.fixture),native_classpath=cp,mode='named native runtime; actual intermediary candidate and fixture are loader-remapped from private mods directory',subjects=['SeatedSubjectA','SeatedSubjectB'],test_consumer='explicit actual LSSApi callbacks; no terrain renderer claim')
 identityfile=out/'target-identity.json';identityfile.write_text(json.dumps(identity,indent=2)+'\n');stage(identityfile,'evidence/target-identity.json')

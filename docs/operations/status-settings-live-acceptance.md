@@ -54,10 +54,12 @@ Use observed widget coordinates for `click X Y`; do not reuse coordinates across
    Escape. Status is read-only; it cannot toggle reception.
 2. Stage reception, a rate and a sharing change. Before Apply neither YAML nor the
    effective values may change. Apply saves only edited paths, preserves comments
-   and unrelated high hand-authored rates, and shows translated reload guidance.
-   Verify this in English, Simplified Chinese and Traditional Chinese, including
-   active sharing versus the saved sharing choice.
-3. Run `/lss reload`. Reception off retires acceptance; reception on resumes fresh
+   and unrelated high hand-authored rates, then requests one automatic reload.
+   Verify automatic activation in English, Simplified Chinese and Traditional
+   Chinese, including sharing changes. Rapid Apply clicks during reload must
+   coalesce without losing the latest saved values.
+3. Wait for Apply's reload completion; repeat with a direct YAML edit followed by
+   `/lss reload`. Reception off retires acceptance; reception on resumes fresh
    work. Combined reception-off/sharing-off must still send the privacy preference
    when connected. Renderer-only changes must not rebuild the terrain session.
 4. Retain committed Xaero map debt while reception is off. Reject late callbacks
@@ -67,7 +69,7 @@ Use observed widget coordinates for `click X Y`; do not reuse coordinates across
 5. Open a menu, edit a value, then change YAML externally. Save must report a
    conflict and retain the draft. Rebase or discard explicitly. Save errors also
    retain edits; after correcting the failure, Retry must persist the intended
-   patch without silently overwriting unrelated values.
+   patch and automatically reload without silently overwriting unrelated values.
 6. Check malformed YAML, missing YAML, future config versions and repeated reloads.
    Rejected candidates preserve active settings. A no-op must not rewrite the file,
    rebuild sessions or send extra preference changes. Capture terminal receipts,

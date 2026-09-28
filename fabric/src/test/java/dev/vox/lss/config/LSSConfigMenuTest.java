@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code LegacySodiumPageTest} pins the legacy one: the catalog is walked in order into
  * two pages with the catalog's groups, every option carries the catalog's id/name/
  * tooltip/impact/default/range/binding/dependency, the value formatter renders the
- * catalog labels, and EXACTLY TWO storage handlers are installed across all options —
+ * catalog labels, and EXACTLY ONE storage handler are installed across all options —
  * Sodium fires each distinct handler once per Apply, so per-option lambdas would have
  * saved the file once per changed option (implementation review).
  */
@@ -162,7 +162,7 @@ class LSSConfigMenuTest {
         built.forEach(o -> distinct.add(o.storageHandler));
         assertEquals(1, distinct.size(), "one handler per SaveHook — Sodium fires each distinct handler"
                 + " once per Apply; per-option lambdas save the file once per changed option");
-        // and the split follows the catalog: main page = one handler, far-player page = the other
+        // Both pages share the same save-and-reload transaction.
         var main = built.stream().filter(o -> ClientOptionCatalog.pages().get(0).options().stream()
                 .anyMatch(s -> s.id().equals(o.id.toString()))).map(o -> o.storageHandler).distinct().toList();
         var far = built.stream().filter(o -> ClientOptionCatalog.pages().get(1).options().stream()
@@ -179,7 +179,12 @@ class LSSConfigMenuTest {
         var store = new dev.vox.lss.common.config.SettingsStore<>(temp, "lss", schema,
                 line -> {}, (temporary, destination) -> { if (fail.get()) throw new java.io.IOException("disk full"); });
         var live = new dev.vox.lss.common.config.SettingsHandle<>(store);
-        draft = new dev.vox.lss.config.menu.ClientSettingsEditSession(store, () -> live.state().effective());
+        var reloads = new java.util.concurrent.atomic.AtomicInteger();
+        draft = new dev.vox.lss.config.menu.ClientSettingsEditSession(store, () -> live.state().effective(),
+                () -> live.state().configured(), () -> {
+                    try { reloads.incrementAndGet(); live.commit(live.prepareReload()); }
+                    catch (Exception failure) { throw new AssertionError(failure); }
+                });
         var builder = new RecordingConfigBuilder();
         register(builder);
         @SuppressWarnings("unchecked") var option = (RecordedOption<Boolean>) find(builder, ClientOptionCatalog.ID_FAR_PLAYERS_SHARE_SELF);
@@ -195,11 +200,11 @@ class LSSConfigMenuTest {
         draft.open(new Object());
         option.resetFromBinding();
         assertEquals(false, option.getValidatedValue(), "reopen keeps the failed draft visible");
+        assertEquals(0, reloads.get(), "failed save must not request reload");
         fail.set(false);
-        assertTrue(draft.save());
+        assertTrue(draft.apply());
+        assertEquals(1, reloads.get(), "recovery must reload the saved draft");
         assertEquals(false, store.read().configured().farPlayers().sharing().enabled());
-        assertTrue(live.state().effective().farPlayers().sharing().enabled());
-        live.commit(live.prepareReload());
         assertEquals(false, live.state().effective().farPlayers().sharing().enabled());
     }
 

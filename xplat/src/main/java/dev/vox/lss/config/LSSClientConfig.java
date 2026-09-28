@@ -8,6 +8,7 @@ import dev.vox.lss.common.config.SettingsReload;
 import dev.vox.lss.common.config.SettingsSchema;
 import dev.vox.lss.common.config.SettingsStore;
 import dev.vox.lss.config.menu.ClientSettingsEditSession;
+import dev.vox.lss.config.menu.ClientMenuReload;
 import dev.vox.lss.networking.client.ClientNetGlue;
 import dev.vox.lss.networking.client.FarPlayerClientSupport;
 import net.minecraft.client.Minecraft;
@@ -17,7 +18,7 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-/** Stable owner of immutable accepted settings. Only startup and explicit reload publish. */
+/** Stable settings owner. Commands and Sodium Apply share one validated reload path. */
 public final class LSSClientConfig {
     public static final LSSClientConfig CONFIG = new LSSClientConfig(
             dev.vox.lss.platform.LoaderServices.get().configDir());
@@ -26,6 +27,8 @@ public final class LSSClientConfig {
     private volatile SettingsReload<ClientSettings> reload;
     private final ClientSettings inactive;
     private final AtomicBoolean reloadBusy = new AtomicBoolean();
+    private final ClientMenuReload menuReload = new ClientMenuReload(reloadBusy::get,
+            () -> reload(this::menuReloadFeedback));
     private volatile String error;
     private Object physicalConnection;
     private long lifecycle;
@@ -70,8 +73,14 @@ public final class LSSClientConfig {
         return current == null ? java.util.Set.of() : current.state().pendingReconnect();
     }
     public synchronized ClientSettingsEditSession edits() {
-        if (edits == null) edits = new ClientSettingsEditSession(store, this::snapshot, this::configured);
+        if (edits == null) edits = new ClientSettingsEditSession(store, this::snapshot, this::configured,
+                menuReload::request);
         return edits;
+    }
+
+    private void menuReloadFeedback(Component message) {
+        LSSLogger.info(message.getString());
+        dev.vox.lss.networking.client.ClientStatusScreen.sendChatFeedback(message);
     }
 
     /** Use the transport connection, never the replaceable play listener/world. */
@@ -108,18 +117,22 @@ public final class LSSClientConfig {
             reconcile();
             return java.util.concurrent.CompletableFuture.completedFuture(null);
         }).whenComplete((result, failure) -> owner.execute(() -> {
-            reloadBusy.set(false);
-            if (failure != null) {
-                LSSLogger.warn("Client settings reload failed: " + SettingsReload.message(failure));
-                feedback.accept(Component.translatable("lss.settings.reload_failed"));
-                return;
+            try {
+                if (failure != null) {
+                    LSSLogger.warn("Client settings reload failed: " + SettingsReload.message(failure));
+                    feedback.accept(Component.translatable("lss.settings.reload_failed"));
+                    return;
+                }
+                error = null;
+                for (var normalization : result.commit().normalizations()) {
+                    var notice = dev.vox.lss.common.diagnostics.ClientReloadText.normalization(normalization);
+                    feedback.accept(Component.translatable(notice.key(), notice.arguments().toArray()));
+                }
+                afterReload(feedback, result.status());
+            } finally {
+                reloadBusy.set(false);
+                menuReload.drain();
             }
-            error = null;
-            for (var normalization : result.commit().normalizations()) {
-                var notice = dev.vox.lss.common.diagnostics.ClientReloadText.normalization(normalization);
-                feedback.accept(Component.translatable(notice.key(), notice.arguments().toArray()));
-            }
-            afterReload(feedback, result.status());
         }));
     }
 

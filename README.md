@@ -71,8 +71,8 @@ choices are preserved; fresh servers use **512 chunks in the Overworld and End,
 64 in the Nether**.
 
 Edit the file and run `/lsslod reload` on the server or `/lss reload` on the client.
-Sodium Apply **saves to disk only**; run the client reload command to activate saved
-changes. The menus support English, Simplified Chinese and Traditional Chinese.
+Sodium Apply **saves and reloads automatically**. Direct YAML edits still need the
+reload command. The menus support English, Simplified Chinese and Traditional Chinese.
 Invalid files leave active settings unchanged. Reload reports values that require a
 restart or reconnect; it does not rewrite comments or normalized values.
 

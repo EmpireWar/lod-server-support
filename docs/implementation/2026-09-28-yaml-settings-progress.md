@@ -412,3 +412,27 @@ have exited, and the shared harness lock can be acquired. The final disk check
 reported approximately 398 GiB available in WSL and 100 GiB on C:, above the 50 GiB
 host reserve. The private `final-task-cleanup-check.json` records the check without
 authentication data or raw process arguments.
+
+## 2026-09-28 user-requested Sodium menu cleanup
+
+The user requested removal of the persistent Apply/reload/privacy footer and the
+LOD status button. This supersedes the earlier footer/status-entry acceptance
+requirements. All five maintained YAML branches now leave Sodium's layout intact:
+no LSS banner, extra button, shaded strip or reserved footer height. Both loader
+mixins retain only the invisible draft-refresh lifecycle hook. Ordinary options,
+explicit reload, automatic failed-save recovery and standalone `/lss status`
+remain available. English, Simplified Chinese and Traditional Chinese no longer
+ship the unused footer strings.
+
+Focused diagnostics/config/menu tests and NeoForge contracts reported 661 cases,
+with zero failures/errors and two expected modern-Sodium skips on the legacy-only
+1.21.10 line (659 passed). All five lines compiled and assembled both client
+loaders plus Paper and both brands. Release/artifact checks passed for all 30 jars;
+recursive inspection confirmed the deleted UI classes and strings are absent.
+Existing draft tests continue to cover saved-only Apply and retained edits. The
+new draft hook is identical across all ten loader/line combinations; the locale
+and manifest diff review preserved existing version-specific content.
+
+Evidence: `/tmp/lss-sodium-menu-cleanup-20260928/results.json`, per-line build logs
+and `source-review.json`. These are focused non-live checks; this change does not
+claim a new native UI run. The user will inspect the updated Windows Prism client.

@@ -4,6 +4,9 @@ import hashlib,json,re
 from pathlib import Path
 from rig import regular,digest
 
+BACKFILL_LOW_RATE=10
+BACKFILL_HIGH_RATE=40
+
 def bound_platform(receipt,scenario):
     platform=scenario.get('server_platform')
     if platform not in ('fabric','paper','folia') or receipt.get('platform')!=platform:
@@ -52,13 +55,13 @@ def check(rows,phases,platform):
     if platform=='fabric':
         require(drained.get('tracked_positions',0)>0 and drained.get('tracked_tickets')==0 and drained.get('deferred')==0,'observed native generation tickets did not drain')
         low,end,high,high_end,stopped,bquiet,restarted=(p[k] for k in ('backfill_low','backfill_low_end','backfill_high','backfill_high_end','backfill_stopped','backfill_quiet','backfill_resumed'))
-        require(low['backfill_running'] and low['backfill_rate']==1 and low['backfill_enabled'],'low backfill policy was not adopted')
+        require(low['backfill_running'] and low['backfill_rate']==BACKFILL_LOW_RATE and low['backfill_enabled'],'low backfill policy was not adopted')
         seconds=(end['time_ns']-low['time_ns'])/1e9
-        require(seconds>=3 and end['backfill_worker']==low['backfill_worker'] and 0<deposits(end)-deposits(low)<=seconds+2,'low-rate real deposit premise/bound failed')
-        require(high['backfill_rate']==16 and high['backfill_revision']>low['backfill_revision'] and high['backfill_worker']==low['backfill_worker'],'live worker rate update absent')
+        require(seconds>=3 and end['backfill_worker']==low['backfill_worker'] and 0<deposits(end)-deposits(low)<=BACKFILL_LOW_RATE*seconds+BACKFILL_LOW_RATE,'low-rate real deposit premise/bound failed')
+        require(high['backfill_rate']==BACKFILL_HIGH_RATE and high['backfill_revision']>low['backfill_revision'] and high['backfill_worker']==low['backfill_worker'],'live worker rate update absent')
         high_seconds=(high_end['time_ns']-high['time_ns'])/1e9
         high_deposits=deposits(high_end)-deposits(high)
-        require(high_end['backfill_worker']==high['backfill_worker'] and high_seconds>=3 and high_seconds+2<high_deposits<=16*high_seconds+16,'higher-rate actual pacing did not increase within its bound')
+        require(high_end['backfill_worker']==high['backfill_worker'] and high_seconds>=3 and BACKFILL_LOW_RATE*high_seconds+BACKFILL_LOW_RATE<high_deposits<=BACKFILL_HIGH_RATE*high_seconds+BACKFILL_HIGH_RATE,'higher-rate actual pacing did not increase within its bound')
         require(stopped['backfill_running'] is False and stopped['backfill_enabled'] is False,'backfill stop did not settle')
         require(bquiet['time_ns']-stopped['time_ns']>=2_000_000_000 and not bquiet['backfill_running'] and deposits(bquiet)==deposits(stopped),'backfill deposited after stop')
         require(restarted['backfill_running'] and restarted['backfill_enabled'] and restarted['backfill_worker']!=stopped['backfill_worker'] and deposits(restarted)>0,'new backfill worker did not resume progress')

@@ -360,7 +360,7 @@ public final class StoreBackfill {
                             + " MB free on the store volume (floor "
                             + (MIN_FREE_SPACE_BYTES >> 20) + " MB). " + (plan.size() - ri)
                             + " regions left unwalked; they resume once space is freed. "
-                            + "Set lodStoreMaxMB to bound the store, or lodStore=off.");
+                            + "Set storage.lod_store.max_size_mib and reload to bound the store, or disable storage.lod_store.enabled and restart.");
                     return;
                 }
                 int[] present = presentChunks(region.mca());
@@ -615,7 +615,7 @@ public final class StoreBackfill {
                 + (capBytes == Long.MAX_VALUE ? "uncapped" : "cap: " + formatSize(capBytes)) + ")";
         if (capBytes != Long.MAX_VALUE && estimate > capBytes) {
             line += " — the walk will STOP at the cap; nearest-spawn terrain is warmed "
-                    + "first, raise lodStoreMaxMB (0 = uncapped) for full coverage";
+                    + "first, raise storage.lod_store.max_size_mib (0 = uncapped) and reload for full coverage";
         }
         return line;
     }

@@ -4,11 +4,11 @@ Independent Astra review of the YAML implementation and all four support ports. 
 
 ## Exact reviewed refs
 
-- MC 26.2: `7c161ec0f1a91cb2a175abac7945cfbd5eba694a`
-- MC 26.1: `f573d12cba7eacc9d159ff3b3b418ce22a63dccf`
-- MC 1.21.11: `a938d75eefec875e07ef3abe78b9374bf69bf5c4`
-- MC 1.21.10: `9dc9ee0b96a9f1bd6a118394c41322ff157a9f9e`
-- MC 1.21.1: `96c435c3d86cd5ef07546991438e7ac29fef5bb9`
+- MC 26.2: `47efe746c85aa134668d877f3956432545460ccc`
+- MC 26.1: `eeededc963f2b64540ceff6600b89256c35810b9`
+- MC 1.21.11: `168e4ee65078824dd3156cbe9ae5ca62158e3133`
+- MC 1.21.10: `d72385f8a2819168db848e0e6b95e0cd9097a929`
+- MC 1.21.1: `4276dfaf5ca5c3f90d078f27fcca87aeecb937bb`
 
 These commits contain the runtime adoption fixes, final client feedback/recovery controls, typed CLI numeric transport, legacy page footer scoping, native fixture migration and ordered rig receipts. `classification.basis` retains the previous accepted comparison baseline. `config/compatibility/source-refs.json` names the reviewed candidates so default local compatibility CI compares coherent snapshots.
 
@@ -18,6 +18,7 @@ These commits contain the runtime adoption fixes, final client feedback/recovery
 | --- | --- | --- |
 | New generation reload gametests called native ChunkPos record accessors on the field-based 1.21.10/1.21.11 APIs; one 1.21.10 TwoPlayer path had the same error. | P2 | Corrected to fields on those lines. Verified mapped native API and declaration origins. TestPositions.ChunkAt remains a record on 26.2/1.21.1; 26.1 native record access remains intact. |
 | LSSClientConfig acquired a line-specific direct Screen getter while classified shared. | P2 cross-line contract | Moved the getter into the existing adapted ClientStatusScreen seam. LSSClientConfig is byte-identical; its classification was not weakened. |
+| 1.21.1 NeoForge renderer contract still named a removed enabled helper. | P2 validation | Updated the contract to require one settings snapshot capture and both capability/enabled checks; runtime gating remains unchanged. Renderer comments and historical references were cleaned without code changes. |
 | Fixture script printed nonexistent YAML path `compatibility.v16.allow_generation`. | P3 | Corrected to `compatibility.v16_generation` on all five lines. |
 
 Runtime failure/retry findings and their fixes are detailed in the [runtime review](2026-09-28-yaml-settings-astra-runtime-review.md). The subsequent CLI fix preserves schema-typed numeric nodes and requested unclamped values; client feedback distinguishes failed/pending adoption from success and retains one startup-created settings publisher. Legacy footer selection uses registered page identity and restores unrelated tabs to their full viewport. No unresolved source blocker was identified in the final reviewed delta.
@@ -33,10 +34,10 @@ Runtime failure/retry findings and their fixes are detailed in the [runtime revi
 
 ## Classification and verification
 
-Added 95 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 75 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
+Added 95 explicit identical entries and three precise adapted entries: SettingsReloadGameTests, its modern environment resource (absent on 1.21.1), and ClientSettingsSaveScreen. Updated 76 existing adapted bindings after residual review. No identical production source was reclassified to hide divergence; no wildcard was widened. All reviewed production and test edits are committed in the refs above.
 
 The explicit-ref classification check passed with zero issues at these five commits. Default `python3 tools/compat/ci.py` also passed locally without `--fetch` after updating source refs and regenerating the catalog. Eight focused rig receive checker tests passed; `bash -n test-server.sh` and `git diff --check` passed. The final legacy ordering test reader was reviewed to ensure it includes method bytecode and rejects an empty instruction list.
 
-Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-final-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-final.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
+Local machine-readable evidence: `/tmp/lss-yaml-validation/runtime-line-check-followup-reviewed.json` and `/tmp/lss-yaml-validation/runtime-default-compat-ci-followup-26.2.json`. Both record the exact source identities; the former is reproducible with `tools/lines/lines.py check` using the source-ref catalog.
 
 The catalog's generated compatibility table uses the same exact source commits. No fetch, push, publication or heavy build was performed as part of this final source audit.

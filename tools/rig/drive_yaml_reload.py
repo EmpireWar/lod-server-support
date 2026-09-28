@@ -3,14 +3,27 @@
 import argparse,json,time
 from pathlib import Path
 from rig import write,regular
-from rig_settings import edit
+from rig_settings import render,values
 from server_control_smoke import Driver,exercise
-from check_yaml_reload import deposits
+from check_yaml_reload import deposits,BACKFILL_LOW_RATE,BACKFILL_HIGH_RATE
+
+def preflight_numeric_edits(document,changes,platform):
+    """Reject clamped fixture assumptions before touching the run's adopted file."""
+    numeric={path:value for path,value in changes.items() if type(value) in (int,float)}
+    if not numeric:return
+    candidate=render(changes,document=document,platform=platform)
+    normalized=values(candidate,platform=platform,normalized=True)
+    for path,requested in numeric.items():
+        if normalized[path]!=requested:
+            raise ValueError('native fixture numeric edit would normalize: '+path)
 
 class ReloadDriver(Driver):
     def __init__(self,root,config,platform):
         super().__init__(root,config,'lss','yaml-live-transitions')
         self.rows=[];self.offset=0;self.phases={};self.native_platform=platform;self.control_receipt=None
+    def reload(self,changes=None,failure=False):
+        if changes:preflight_numeric_edits(self.config.read_text(encoding='utf-8'),changes,self.platform)
+        return super().reload(changes,failure)
     def observe(self):
         path=self.root/'evidence/settings-events.jsonl'
         if not path.exists():return
@@ -81,13 +94,13 @@ class ReloadDriver(Driver):
         self.sample('seed_wait',lambda r:r['time_ns']>=start+15_000_000_000,len(self.rows)-1,timeout=40)
         self.raw('save-all flush','Saved the game')
         self.raw('forceload remove all','Unmarked')
-        self.reload({'storage.lod_store.backfill.enabled':True,'storage.lod_store.backfill.columns_per_second':1})
+        self.reload({'storage.lod_store.backfill.enabled':True,'storage.lod_store.backfill.columns_per_second':BACKFILL_LOW_RATE})
         self.observe();at=len(self.rows)-1
-        low=self.sample('backfill_low',lambda r:r.get('backfill_running') and r['backfill_rate']==1 and deposits(r)>0,at,timeout=60)
+        low=self.sample('backfill_low',lambda r:r.get('backfill_running') and r['backfill_rate']==BACKFILL_LOW_RATE and deposits(r)>0,at,timeout=60)
         self.sample('backfill_low_end',lambda r:r['time_ns']>=low['time_ns']+3_000_000_000 and deposits(r)>deposits(low),self.phases['backfill_low'])
-        self.reload({'storage.lod_store.backfill.columns_per_second':16})
-        high=self.sample('backfill_high',lambda r:r.get('backfill_rate')==16,self.phases['backfill_low_end'])
-        self.sample('backfill_high_end',lambda r:r['time_ns']>=high['time_ns']+3_000_000_000 and deposits(r)-deposits(high)>(r['time_ns']-high['time_ns'])/1e9+2,self.phases['backfill_high'])
+        self.reload({'storage.lod_store.backfill.columns_per_second':BACKFILL_HIGH_RATE})
+        high=self.sample('backfill_high',lambda r:r.get('backfill_rate')==BACKFILL_HIGH_RATE,self.phases['backfill_low_end'])
+        self.sample('backfill_high_end',lambda r:r['time_ns']>=high['time_ns']+3_000_000_000 and deposits(r)-deposits(high)>BACKFILL_LOW_RATE*(r['time_ns']-high['time_ns'])/1e9+BACKFILL_LOW_RATE,self.phases['backfill_high'])
         self.reload({'storage.lod_store.backfill.enabled':False})
         stopped=self.sample('backfill_stopped',lambda r:r.get('backfill_enabled') is False and r.get('backfill_running') is False,self.phases['backfill_high_end'])
         self.sample('backfill_quiet',lambda r:r['time_ns']>=stopped['time_ns']+2_000_000_000,self.phases['backfill_stopped'])

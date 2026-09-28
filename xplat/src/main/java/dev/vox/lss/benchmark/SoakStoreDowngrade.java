@@ -35,8 +35,8 @@ final class SoakStoreDowngrade {
     private SoakStoreDowngrade() {}
 
     static void run(MinecraftServer server) {
-        Path db = server.getWorldPath(LevelResource.ROOT).normalize()
-                .resolve(dev.vox.lss.common.Brand.lowerShortName() + "-lod").resolve("store.db");
+        Path db = dev.vox.lss.common.store.LodStores.brandedStoreDir(
+                server.getWorldPath(LevelResource.ROOT).normalize()).resolve("store.db");
         if (!Files.isRegularFile(db)) {
             throw new IllegalStateException("[Soak] downgradeStoreToV19: no store at " + db
                     + " — stage a warmed store (SOAK_WORLD_FROM) before arming the flag");
@@ -61,10 +61,10 @@ final class SoakStoreDowngrade {
 
         int rows = 0;
         int allAir = 0;
-        // DriverManager, not SQLiteDataSource: sqlite-jdbc is a runtime dependency of
-        // common (present in every dev run), not on fabric's compile classpath — and
-        // this dev-only tool must not add it there.
-        try (Connection c = java.sql.DriverManager.getConnection("jdbc:sqlite:" + db)) {
+        // Offline tool, before the service owns this path; use its engine and guard.
+        try (var lease = dev.vox.lss.common.store.StoreDirectoryLease.acquire(db.getParent());
+             Connection c = dev.vox.lss.common.store.SqliteDriverRuntime
+                     .dataSource("jdbc:sqlite:" + db).getConnection()) {
             c.setAutoCommit(false);
             var dimIds = new ArrayList<Integer>();
             try (Statement st = c.createStatement();

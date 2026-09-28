@@ -1,0 +1,63 @@
+// SQLite is an opaque resource, never a host dependency or discoverable nested mod.
+import java.security.MessageDigest
+import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+def pins = new Properties()
+rootProject.file('gradle/sqlite-runtime.properties').withInputStream { pins.load(it) }
+configurations {
+    privateSqlite { canBeConsumed = false; transitive = false }
+}
+sourceSets {
+    sqliteBridge { java.srcDir 'src/sqliteBridge/java' }
+}
+dependencies {
+    privateSqlite "org.xerial:sqlite-jdbc:${pins.version}"
+    sqliteBridgeCompileOnly "org.xerial:sqlite-jdbc:${pins.version}"
+}
+def capsuleDir = layout.buildDirectory.dir('generated/sqlite-runtime')
+def resourcePrefix = 'dev/vox/lss/internal/jdbc'
+tasks.register('generateSqliteRuntime') {
+    dependsOn tasks.named('compileSqliteBridgeJava')
+    inputs.files(configurations.privateSqlite, sourceSets.sqliteBridge.output.classesDirs)
+    inputs.file(rootProject.file('gradle/sqlite-runtime.properties'))
+    outputs.dir(capsuleDir)
+    doLast {
+        def hash = { byte[] bytes -> MessageDigest.getInstance('SHA-256').digest(bytes).encodeHex().toString() }
+        def stock = configurations.privateSqlite.singleFile
+        if (hash(stock.bytes) != pins.stockSha256) throw new GradleException('SQLite upstream digest mismatch')
+        def out = capsuleDir.get().dir(resourcePrefix).asFile
+        out.mkdirs()
+        def capsule = new File(out, 'sqlite-jdbc.jar.bin')
+        def keep = ['Linux', 'Linux-Musl', 'Windows', 'Mac'].collectMany { os ->
+            ['x86_64', 'aarch64'].collect { cpu -> "org/sqlite/native/${os}/${cpu}/".toString() }
+        }
+        new ZipFile(stock).withCloseable { zip ->
+            new ZipOutputStream(new FileOutputStream(capsule)).withCloseable { dest ->
+                zip.entries().toList().sort { it.name }.each { entry ->
+                    if (entry.directory) return
+                    if (entry.name.startsWith('org/sqlite/native/') && !keep.any { entry.name.startsWith(it) }) return
+                    def e = new ZipEntry(entry.name)
+                    e.setTimeLocal(java.time.LocalDateTime.of(1980, 1, 1, 0, 0, 2))
+                    dest.putNextEntry(e)
+                    zip.getInputStream(entry).withCloseable { dest << it }
+                    dest.closeEntry()
+                }
+            }
+        }
+        def digest = hash(capsule.bytes)
+        if (digest != pins.capsuleSha256) throw new GradleException("SQLite capsule digest mismatch: ${digest}")
+        def bridgeName = 'dev/vox/lss/jdbc/PrivateSqliteBridge.class'
+        def bridge = sourceSets.sqliteBridge.output.classesDirs.files.collect { new File(it, bridgeName) }.find { it.isFile() }
+        new File(out, 'bridge.class.bin').bytes = bridge.bytes
+        // Deliberately deterministic, with no Properties.store timestamp.
+        new File(out, 'driver.properties').text = "version=${pins.version}\nstockSha256=${pins.stockSha256}\nsize=${capsule.length()}\nsha256=${digest}\nbridgeSha256=${hash(bridge.bytes)}\n"
+    }
+}
+sourceSets.main.resources.srcDir(capsuleDir)
+tasks.named('processResources') { dependsOn tasks.named('generateSqliteRuntime') }
+tasks.named('test') {
+    // Only the dedicated fork receives this jar; the ordinary test JVM never does.
+    doFirst { systemProperty 'lss.test.ambientSqlite', configurations.privateSqlite.singleFile.absolutePath }
+}

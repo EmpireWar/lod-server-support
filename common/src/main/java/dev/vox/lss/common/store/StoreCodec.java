@@ -60,6 +60,11 @@ public final class StoreCodec {
      * decode-queue charge clamps into [0, MAX_SECTIONS_SIZE] and never charges below the
      * shipped length).
      */
+    /** Store reads must distinguish native failure from malformed row data. */
+    long declaredContentSizeForStore(byte[] frame) {
+        return Zstd.getFrameContentSize(frame);
+    }
+
     public long declaredContentSize(byte[] frame) {
         try {
             return Zstd.getFrameContentSize(frame);

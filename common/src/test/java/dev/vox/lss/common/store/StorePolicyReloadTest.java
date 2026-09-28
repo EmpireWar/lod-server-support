@@ -90,6 +90,84 @@ class StorePolicyReloadTest {
         } finally { release.countDown(); worker.shutdown(); store.shutdown(); }
         assertTrue(worker.updatePolicy(true, 100, 5).isCompletedExceptionally());
     }
+    @Test void failedBackfillEnableRetainsStartIntentForSameRevisionRetry() throws Exception {
+        region();
+        var store = store();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var worker = new StoreBackfill(store, dim -> directory.resolve("region"), dim -> new long[]{0, 0},
+                List.of("minecraft:overworld"), (dim, x, z) -> {
+                    entered.countDown();
+                    assertTrue(release.await(10, TimeUnit.SECONDS));
+                    return new byte[]{1, 2, 3};
+                }, () -> true, () -> true, 1000);
+        var serving = SqliteLodStore.class.getDeclaredField("serving");
+        serving.setAccessible(true);
+        try {
+            worker.updatePolicy(false, 1000, 1).get(10, TimeUnit.SECONDS);
+            // Reproduce the startup-sweep health boundary without timing a real sweep.
+            serving.setBoolean(store, false);
+            assertThrows(java.util.concurrent.ExecutionException.class,
+                    () -> worker.updatePolicy(true, 1000, 2).get(10, TimeUnit.SECONDS));
+            assertFalse(worker.isRunning());
+            serving.setBoolean(store, true);
+            worker.updatePolicy(true, 1000, 2).get(10, TimeUnit.SECONDS);
+            assertTrue(entered.await(10, TimeUnit.SECONDS), "retry must fulfill the failed start intent");
+            assertTrue(worker.isRunning());
+            worker.stop();
+            worker.updatePolicy(true, 500, 3);
+            release.countDown();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (worker.isRunning() && System.nanoTime() < deadline) Thread.sleep(10);
+            assertFalse(worker.isRunning(), "manual pause still cancels successor intent");
+            worker.updatePolicy(true, 500, 3).get(10, TimeUnit.SECONDS);
+            assertFalse(worker.isRunning(), "successful repeated policy must not restart a paused run");
+        } finally {
+            serving.setBoolean(store, true);
+            release.countDown();
+            worker.shutdown();
+            store.shutdown();
+        }
+    }
+
+    @Test void failedOffOnSuccessorIsReportedAndRetriedAfterHealthRecovers() throws Exception {
+        region();
+        var store = store();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var restarted = new CountDownLatch(1);
+        var reads = new AtomicInteger();
+        var worker = new StoreBackfill(store, dim -> directory.resolve("region"), dim -> new long[]{0, 0},
+                List.of("minecraft:overworld"), (dim, x, z) -> {
+                    if (reads.incrementAndGet() == 1) {
+                        entered.countDown();
+                        assertTrue(release.await(10, TimeUnit.SECONDS));
+                    } else restarted.countDown();
+                    return new byte[]{1, 2, 3};
+                }, () -> true, () -> true, 1000);
+        var serving = SqliteLodStore.class.getDeclaredField("serving");
+        serving.setAccessible(true);
+        try {
+            assertTrue(worker.start());
+            assertTrue(entered.await(10, TimeUnit.SECONDS));
+            worker.updatePolicy(false, 1000, 1);
+            var enabled = worker.updatePolicy(true, 1000, 2);
+            serving.setBoolean(store, false);
+            release.countDown();
+            assertThrows(java.util.concurrent.ExecutionException.class,
+                    () -> enabled.get(10, TimeUnit.SECONDS), "acknowledgment must include successor startup");
+            assertFalse(worker.isRunning());
+            serving.setBoolean(store, true);
+            worker.updatePolicy(true, 1000, 2).get(10, TimeUnit.SECONDS);
+            assertTrue(restarted.await(10, TimeUnit.SECONDS));
+        } finally {
+            serving.setBoolean(store, true);
+            release.countDown();
+            worker.shutdown();
+            store.shutdown();
+        }
+    }
+
     @Test void queuedStoreAdoptionGetsTerminalCancellationDuringShutdown() throws Exception {
         var store = store();
         var permit = store.pauseBatcherForTest();

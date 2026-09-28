@@ -220,8 +220,7 @@ public final class ClientCommandActions {
     /** /lss diag. */
     public static void showDiagnostics(Consumer<Component> feedback) {
         var snapshot = ClientStatus.latest();
-        if (snapshot != null) snapshot.lines().forEach(line -> feedback.accept(Component.literal(line)));
-        else feedback.accept(Component.literal("Waiting for a current-session status snapshot."));
+        ClientStatusComponents.lines(snapshot).forEach(feedback);
         var details = snapshot == null ? null : snapshot.details();
         if (details == null) return;
 

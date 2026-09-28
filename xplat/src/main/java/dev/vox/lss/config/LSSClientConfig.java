@@ -59,6 +59,15 @@ public final class LSSClientConfig {
         var current = handle;
         return current == null ? inactive : current.state().configured();
     }
+    public dev.vox.lss.common.diagnostics.ClientSettingsStatus diagnosticSettings() {
+        var current = handle;
+        if (current == null) return dev.vox.lss.common.diagnostics.ClientSettingsStatus.capture(
+                false, inactive, inactive, inactive, java.util.Set.of());
+        var state = current.state();
+        return dev.vox.lss.common.diagnostics.ClientSettingsStatus.capture(true,
+                edits == null ? state.configured() : edits.savedSnapshot(), state.configured(), state.effective(),
+                state.pendingReconnect());
+    }
     public SettingsStore<ClientSettings> store() { return store; }
     public String error() { return error; }
     public java.util.Set<String> pendingReconnect() {

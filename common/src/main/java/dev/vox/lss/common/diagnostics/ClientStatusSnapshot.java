@@ -9,7 +9,21 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
         int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
         int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
-        int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions) {
+        int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings) {
+    public static final int SCHEMA_VERSION = 2;
+    /** Compatibility constructor for callers that have no settings observation. */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions) {
+        this(schemaVersion, lifecycle, capturedAtMillis, connected, negotiated, receptionEnabled, serverEnabled,
+                consumerAvailable, rendererAvailable, protocol, serverDistance, effectiveDistance, receivedColumns,
+                receivedBytes, queuedColumns, ingestBacklog, ingestFailures, rateCap, rateGatedTicks,
+                xaeroPendingRebuilds, discovery, xaeroAvailability, details, versions, null);
+    }
     public enum Availability { UNKNOWN, ABSENT, UNAVAILABLE, AVAILABLE, DISABLED, FAILED }
     public enum Discovery { NOT_CONNECTED, DORMANT, AWAITING_NEGOTIATION, SEND_FAILED, PROTOCOL_REJECTED, NEGOTIATED }
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,

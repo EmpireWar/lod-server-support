@@ -39,7 +39,7 @@ public final class ClientStatusScreen extends Screen {
         super.render(graphics, mouseX, mouseY, delta);
         graphics.drawCenteredString(font, title, width / 2, 12, 0xffffff);
         var snapshot = ClientStatus.latest();
-        var lines = snapshot == null ? java.util.List.of("Waiting for a current-session snapshot…") : snapshot.lines();
+        var lines = ClientStatusComponents.lines(snapshot);
         var wrappedLines = new java.util.ArrayList<net.minecraft.util.FormattedCharSequence>();
         var config = dev.vox.lss.config.LSSClientConfig.CONFIG;
         if (config.error() != null) wrappedLines.addAll(font.split(
@@ -47,7 +47,7 @@ public final class ClientStatusScreen extends Screen {
         if (!config.pendingReconnect().isEmpty()) wrappedLines.addAll(font.split(
                 Component.translatable("lss.settings.pending_reconnect_notice"), Math.max(50, width - 30)));
         if (lastActionFeedback != null) wrappedLines.addAll(font.split(lastActionFeedback, Math.max(50, width - 30)));
-        for (String line : lines) wrappedLines.addAll(font.split(Component.literal(line), Math.max(50, width - 30)));
+        for (Component line : lines) wrappedLines.addAll(font.split(line, Math.max(50, width - 30)));
         int rows = Math.max(1, (height - 72) / 11);
         int pages = Math.max(1, (wrappedLines.size() + rows - 1) / rows);
         int first = Math.floorMod(textPage, pages) * rows;

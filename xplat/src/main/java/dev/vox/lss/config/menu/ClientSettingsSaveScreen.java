@@ -10,6 +10,8 @@ import net.minecraft.network.chat.Component;
 public final class ClientSettingsSaveScreen extends Screen {
     private final Screen parent;
     private final ClientSettingsEditSession draft;
+    private final dev.vox.lss.common.diagnostics.ScreenEscapeRelease escape =
+            new dev.vox.lss.common.diagnostics.ScreenEscapeRelease();
     private ClientSettingsSaveScreen(Screen parent, ClientSettingsEditSession draft) {
         super(Component.translatable("lss.settings.save_failed"));
         this.parent = parent;
@@ -53,6 +55,13 @@ public final class ClientSettingsSaveScreen extends Screen {
             graphics.drawString(font, line, 20, y, 0xffffaaaa);
             y += 12;
         }
+    }
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        return escape.press(keyCode == 256) || super.keyPressed(keyCode, scanCode, modifiers);
+    }
+    @Override public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (escape.release(keyCode == 256)) { onClose(); return true; }
+        return super.keyReleased(keyCode, scanCode, modifiers);
     }
     @Override public boolean isPauseScreen() { return false; }
     @Override public void onClose() { minecraft.setScreen(parent); }

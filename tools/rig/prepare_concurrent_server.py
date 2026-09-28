@@ -7,6 +7,7 @@ import argparse
 import copy
 import json
 from pathlib import Path
+from rig_settings import render, values
 import shutil
 import zipfile
 from rig import require_lock, sha, write, digest
@@ -92,7 +93,7 @@ def main(platform):
         snapshot(a.server_candidate,'server/plugins/lod-server-support-paper.jar',kind='plugin',candidate=True)
         snapshot(a.server_fixture,'server/plugins/lss-rig-paper-concurrent.jar',kind='plugin',candidate=True)
         argv=prefix+['-jar','paper.jar','--nogui']
-        config_path='server/plugins/LodServerSupport/lss-server-config.json'
+        config_path='server/plugins/LodServerSupport/lss-server-config.yaml'
     else:
         server_profile['components']=copy.deepcopy(profile['components'])
         lines=Path(a.server_classpath_file).read_text().splitlines()
@@ -106,7 +107,7 @@ def main(platform):
         entries.insert(0,snapshot(a.server_candidate,'server/libraries/lod-server-support-fabric.jar',kind='mod',candidate=True))
         entries.append(snapshot(a.server_fixture,'server/libraries/lss-rig-fabric-concurrent.jar',kind='mod',candidate=True))
         argv=prefix+['-Dfabric.development=true','-Dfabric.defaultModDistributionNamespace=official','-Dfabric.defaultMixinRemapType=static','-cp',':'.join(entries),'net.fabricmc.loader.impl.launch.knot.KnotServer','--nogui']
-        config_path='server/config/lss-server-config.json'
+        config_path='server/config/lss-server-config.yaml'
     world_digest,world_files=stages(a.world_snapshot)
     runtime['world_digest']=world_digest;runtime['stage_files'].extend(world_files)
     argv.insert(1,'-Dlss.rig.seedSnapshotDigest='+world_digest)
@@ -118,8 +119,8 @@ def main(platform):
     runtime['generated_files']['server/server.properties']='server-ip=127.0.0.1\nserver-port=25574\nonline-mode=false\nlevel-type=minecraft:flat\nlevel-seed=rig-source-correctness-1\nview-distance=3\nsimulation-distance=3\nspawn-protection=0\nmax-players=8\nallow-flight=true\nenforce-secure-profile=false\n'
     flat={'layers':[{'block':'minecraft:bedrock','height':1},{'block':'minecraft:dirt','height':2},{'block':'minecraft:grass_block','height':1}],'biome':'minecraft:plains','features':False,'lakes':False,'structure_overrides':[]}
     runtime['generated_files']['server/server.properties']+='generator-settings='+json.dumps(flat,separators=(',',':'))+'\n'
-    pins={'lodDistanceChunks':32,'enableChunkGeneration':True,'generationConcurrencyLimitGlobal':4,'generationConcurrencyLimitPerPlayer':1,'lodStore':'on','lodStoreBackfill':False}
-    runtime['generated_files'][config_path]=json.dumps(pins)+'\n'
+    pins={'lod.distance.default_chunks':32,'generation.enabled':True,'generation.concurrency.global':4,'generation.concurrency.per_player':1,'storage.lod_store.enabled':True,'storage.lod_store.backfill.enabled':False}
+    runtime['generated_files'][config_path]=render(pins,platform='paper' if platform=='paper' else 'mod')
     scenario={'schema_version':1,'id':platform+'-four-client-source-correctness','version':2,'target_schema':2,'measured_workload':a.measured,'server_platform':platform,'checker':'concurrent-sources','timeout_seconds':900,'observe_seconds':550,'required_test_count':3,'assertions':['independent_target_delivery','actual_payload_source','bounded_debt_drain'],'human_reviews':[]}
     if a.measured:
         next(item for item in runtime['launches'] if item['id']=='server')['argv'].insert(1,'-Dlss.rig.measuredWorkload=true')

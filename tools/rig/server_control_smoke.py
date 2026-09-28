@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run-owned console acceptance for qualitative server presets and typed exports.
+"""Run-owned console acceptance for explicit YAML reloads and typed exports.
 Uses only the existing supervisor command queue; never opens another process's stdin.
 Run in a disposable settings smoke attempt, separate from performance/source lanes.
 """
@@ -12,6 +12,7 @@ import shutil
 import time
 import uuid
 from rig import alive, inside, regular, write
+from rig_settings import edit, values
 
 FIELDS={'schemaVersion','capturedAtMillis','serviceAvailable','enabled','generationEnabled',
         'generationConfiguredForRestart','lodDistanceChunks','uptimeSeconds','sentSections',
@@ -36,7 +37,7 @@ def changed_keys(before,after):return {key for key in before.keys()|after.keys()
 
 def expect_config(before,after,allowed):
     extra=changed_keys(before,after)-set(allowed)
-    if extra:raise ValueError('preset changed unrelated configured keys: '+','.join(sorted(extra)))
+    if extra:raise ValueError('reload changed unrelated configured keys: '+','.join(sorted(extra)))
 
 class Driver:
     def __init__(self,root,config,brand,mode):
@@ -50,6 +51,7 @@ class Driver:
         self.server=inside(self.root,launch['cwd'])
         self.config=regular(config.resolve(strict=True))
         if not self.config.is_relative_to(self.server):raise ValueError('config must be the adopted file inside this owned server')
+        self.platform='paper' if 'plugins' in self.config.parts else 'mod'
         self.command='lsslod' if brand=='lss' else 'vsslod'
         self.exports=self.server/(brand+'-diagnostics')
         self.queue=inside(self.root,'commands')
@@ -61,13 +63,13 @@ class Driver:
                       'profile_hash':self.manifest['profile_hash'],'scenario_hash':self.manifest['scenario_hash'],
                       'mode':mode,'config_relative':str(self.config.relative_to(self.root)),
                       'steps':self.steps,'snapshots':self.snapshots,'status':'running'}
-        shutil.copyfile(self.config,self.output/'original-config.json')
-    def configured(self):return json.loads(self.config.read_text())
+        shutil.copyfile(self.config,self.output/'original-config.yaml')
+    def configured(self):return values(self.config,platform=self.platform)
     def send(self,suffix,response):
         request_id=self.id+'-'+str(len(self.steps)).zfill(2)
-        request={'launch_id':'server','command':self.command+' '+suffix,'timeout_seconds':15,'response_contains':response}
+        request={'launch_id':'server','command':self.command+' '+suffix,'timeout_seconds':45,'response_contains':response}
         write(self.queue/(request_id+'.json'),request)
-        result_path=self.queue/'results'/(request_id+'.json');deadline=time.monotonic()+17
+        result_path=self.queue/'results'/(request_id+'.json');deadline=time.monotonic()+47
         while not result_path.exists():
             if time.monotonic()>deadline:raise ValueError('owned command result timeout: '+suffix)
             time.sleep(.1)
@@ -94,12 +96,9 @@ class Driver:
         self.snapshots[label]={'json_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
             'summary_sha256':hashlib.sha256(summary_path.read_bytes()).hexdigest(),'running':running,'configured':configured}
         return snapshot
-    def preview(self):
-        before=self.config.read_bytes()
-        text=self.send('preset pregenerated-world','Use preset apply to persist, or leave the preview unapplied.')
-        if 'Preset preview: SERVER GLOBAL;' not in text or 'Requires server restart. Running generation stays true.' not in text:
-            raise ValueError('preview omitted global scope/restart/running behavior')
-        if self.config.read_bytes()!=before:raise ValueError('preview persisted a mutation')
+    def reload(self, changes=None, failure=False):
+        if changes:edit(self.config,changes,platform=self.platform)
+        return self.send('reload','Reload failed:' if failure else 'Reloaded '+self.config.name+':')
     def finish(self,error=None):
         if self.blocker is not None:
             try:self.blocker.rmdir();self.blocker=None
@@ -108,70 +107,39 @@ class Driver:
                 error=error or cleanup_error
         self.receipt['status']='failed' if error else 'passed'
         if error:self.receipt['error']=str(error)
-        shutil.copyfile(self.config,self.output/'final-config.json')
+        shutil.copyfile(self.config,self.output/'final-config.yaml')
         self.receipt['final_config_sha256']=hashlib.sha256(self.config.read_bytes()).hexdigest()
         write(self.output/'receipt.json',self.receipt)
         print(str(self.output/'receipt.json'),flush=True)
 
 
 def exercise(driver,mode,previous=None):
-    driver.send('diag','Throughput: sent=')
-    if mode=='after-restart':
-        if previous is None:raise ValueError('prior stage-restart receipt required')
-        prior=json.loads(regular(previous).read_text())
-        if prior.get('status')!='passed' or prior.get('mode')!='stage-restart' or prior.get('run_id')==driver.manifest['run_id']:
-            raise ValueError('successful staging in a distinct previous run required')
-        if hashlib.sha256(driver.config.read_bytes()).hexdigest()!=prior['final_config_sha256']:
-            raise ValueError('restarted server did not load the staged config bytes')
-        driver.capture('after-restart',False,False)
-        driver.send('preset undo','No preset application to undo.')
-        driver.receipt['previous_receipt_sha256']=hashlib.sha256(previous.read_bytes()).hexdigest()
-        return
-    initial=driver.capture('initial',True,True)
-    original_distance=initial['lodDistanceChunks']
-    # Canonicalize the already-running value once so later full JSON comparisons do
-    # not confuse newly serialized defaults with preset scope changes.
-    driver.send('set lodDistanceChunks '+str(original_distance),'lodDistanceChunks = '+str(original_distance))
-    baseline=driver.configured();baseline_bytes=driver.config.read_bytes()
-    shutil.copyfile(driver.config,driver.output/'baseline-config.json')
-    driver.preview()
-    driver.capture('preview',True,True)
-    failure=mode=='save-failure'
-    if failure:
-        blocker=driver.config.with_name(driver.config.name+'.tmp')
-        if blocker.exists() or blocker.is_symlink():raise ValueError('temporary-save blocker already exists')
-        blocker.mkdir();driver.blocker=blocker
-    driver.send('preset apply','not saved — check server log.' if failure else 'running settings unchanged; saved.')
-    driver.capture('applied',True,False)
-    if failure:
-        if driver.config.read_bytes()!=baseline_bytes:raise ValueError('failed preset save changed persisted bytes')
-    else:
-        applied=driver.configured();expect_config(baseline,applied,{'enableChunkGeneration'})
-        if applied.get('enableChunkGeneration') is not False:raise ValueError('restart choice not persisted')
-    alternate=original_distance+1 if original_distance<2048 else original_distance-1
-    driver.send('set lodDistanceChunks '+str(alternate),'lodDistanceChunks = '+str(alternate))
-    changed=driver.capture('unrelated-save',True,False)
-    if changed['lodDistanceChunks']!=alternate:raise ValueError('unrelated runtime setting did not apply')
-    if failure:
-        if driver.config.read_bytes()!=baseline_bytes:raise ValueError('failed unrelated save changed persisted bytes')
-    else:
-        expect_config(baseline,driver.configured(),{'enableChunkGeneration','lodDistanceChunks'})
-        if driver.configured().get('enableChunkGeneration') is not False:raise ValueError('unrelated save lost restart overlay')
-    if mode=='stage-restart':
-        driver.send('set lodDistanceChunks '+str(original_distance),'lodDistanceChunks = '+str(original_distance))
-        driver.capture('staged-for-restart',True,False)
-        expect_config(baseline,driver.configured(),{'enableChunkGeneration'})
-        if driver.configured().get('enableChunkGeneration') is not False:raise ValueError('final unrelated save lost restart overlay')
-        driver.receipt['restart_required']=True
-        return
-    driver.send('preset undo','Last preset settings restored; '+('not saved — check server log.' if failure else 'saved.'))
-    undone=driver.capture('undone',True,True)
-    if undone['lodDistanceChunks']!=alternate:raise ValueError('undo changed an unrelated setting')
-    if failure:
-        if driver.config.read_bytes()!=baseline_bytes:raise ValueError('failed undo changed persisted bytes')
-        driver.blocker.rmdir();driver.blocker=None
-    driver.send('set lodDistanceChunks '+str(original_distance),'lodDistanceChunks = '+str(original_distance))
-    driver.capture('restored',True,True)
+    original=driver.config.read_bytes();baseline=driver.configured()
+    generation=baseline['generation.enabled'];distance=baseline['lod.distance.default_chunks']
+    shutil.copyfile(driver.config,driver.output/'baseline-config.yaml')
+    driver.capture('initial',generation,generation)
+    try:
+        edit(driver.config,{'generation.enabled':not generation},platform=driver.platform)
+        driver.capture('saved-only',generation,generation)
+        driver.reload()
+        driver.capture('applied',not generation,not generation)
+        before=driver.config.read_bytes()
+        driver.reload()
+        driver.capture('unchanged',not generation,not generation)
+        if driver.config.read_bytes()!=before:raise ValueError('no-op reload rewrote disk')
+        if mode=='invalid-retry':
+            # Intentionally malformed operator edit; the product must reject it atomically.
+            driver.config.write_bytes(before+b'\ngeneration: [broken\n')
+            driver.reload(failure=True)
+            driver.capture('rejected',not generation,not generation)
+            driver.config.write_bytes(before)
+            driver.reload()
+            driver.capture('retried',not generation,not generation)
+    finally:
+        driver.config.write_bytes(original)
+        driver.reload()
+    restored=driver.capture('restored',generation,generation)
+    if restored['lodDistanceChunks']!=distance:raise ValueError('restored effective distance differs')
     expect_config(baseline,driver.configured(),set())
 
 def verify_receipt(root,path):
@@ -181,12 +149,13 @@ def verify_receipt(root,path):
     for key in ('run_id','run_hash','profile_hash','scenario_hash'):
         if receipt.get(key)!=manifest.get(key):raise ValueError('receipt identity mismatch: '+key)
     if receipt.get('status')!='passed':raise ValueError('attempt receipt did not pass')
-    expected={'initial':(True,True),'preview':(True,True),'applied':(True,False),'unrelated-save':(True,False)}
-    mode=receipt['mode']
-    if mode=='after-restart':expected={'after-restart':(False,False)}
-    elif mode=='stage-restart':expected['staged-for-restart']=(True,False)
-    elif mode in ('apply-undo','save-failure'):expected.update(undone=(True,True),restored=(True,True))
-    else:raise ValueError('unknown receipt mode')
+    baseline=values(regular(path.parent/'baseline-config.yaml'),platform='paper' if 'plugins' in Path(receipt['config_relative']).parts else 'mod')
+    generation=baseline['generation.enabled'];mode=receipt['mode']
+    expected={'initial':(generation,generation),'saved-only':(generation,generation),
+              'applied':(not generation,not generation),'unchanged':(not generation,not generation),
+              'restored':(generation,generation)}
+    if mode=='invalid-retry':expected.update(rejected=(not generation,not generation),retried=(not generation,not generation))
+    elif mode!='reload-restore':raise ValueError('unknown receipt mode')
     if set(receipt['snapshots'])!=set(expected):raise ValueError('required snapshot phase absent')
     for label,(running,configured) in expected.items():
         snapshot_path=regular(path.parent/(label+'.json'));summary_path=regular(path.parent/(label+'.txt'))
@@ -197,14 +166,9 @@ def verify_receipt(root,path):
     if not receipt['steps']:raise ValueError('required console steps absent')
     command_root=receipt['steps'][0]['command'].split(' ')[0]
     if command_root not in ('lsslod','vsslod'):raise ValueError('invalid server command root')
-    suffixes=['diag','diagnostics export']
-    if mode=='after-restart':suffixes.append('preset undo')
-    else:
-        initial=json.loads((path.parent/'initial.json').read_text())['lodDistanceChunks']
-        alternate=initial+1 if initial<2048 else initial-1
-        suffixes += ['set lodDistanceChunks '+str(initial),'preset pregenerated-world','diagnostics export','preset apply','diagnostics export','set lodDistanceChunks '+str(alternate),'diagnostics export']
-        if mode!='stage-restart':suffixes += ['preset undo','diagnostics export']
-        suffixes += ['set lodDistanceChunks '+str(initial),'diagnostics export']
+    suffixes=['diagnostics export','diagnostics export','reload','diagnostics export','reload','diagnostics export']
+    if mode=='invalid-retry':suffixes+=['reload','diagnostics export','reload','diagnostics export']
+    suffixes+=['reload','diagnostics export']
     if [step['command'] for step in receipt['steps']]!=[command_root+' '+suffix for suffix in suffixes]:
         raise ValueError('required console command sequence differs')
     for step in receipt['steps']:
@@ -213,18 +177,14 @@ def verify_receipt(root,path):
         with open(regular(root/'server.private.log'),'rb') as stream:
             stream.seek(actual['log_offset']);output=stream.read(256*1024).decode(errors='replace')
         if step['expected_response'] not in output:raise ValueError('console response absent from original log')
-    final=regular(path.parent/'final-config.json')
+    final=regular(path.parent/'final-config.yaml')
     if hashlib.sha256(final.read_bytes()).hexdigest()!=receipt['final_config_sha256']:raise ValueError('final config capture changed')
-    if mode in ('stage-restart','after-restart') and json.loads(final.read_text()).get('enableChunkGeneration') is not False:
-        raise ValueError('restart choice absent from final persisted config')
-    if mode!='after-restart':
-        baseline=json.loads(regular(path.parent/'baseline-config.json').read_text())
-        expect_config(baseline,json.loads(final.read_text()),{'enableChunkGeneration'} if mode=='stage-restart' else set())
+    expect_config(baseline,values(final,platform='paper' if 'plugins' in Path(receipt['config_relative']).parts else 'mod'),set())
     return {'status':'passed','mode':mode,'run_id':manifest['run_id'],'run_hash':manifest['run_hash']}
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('run',type=Path);p.add_argument('--config',type=Path);p.add_argument('--verify-receipt',type=Path)
-    p.add_argument('--brand',choices=['lss','vss'],default='lss');p.add_argument('--mode',choices=['apply-undo','save-failure','stage-restart','after-restart']);p.add_argument('--previous-receipt',type=Path)
+    p.add_argument('--brand',choices=['lss','vss'],default='lss');p.add_argument('--mode',choices=['reload-restore','invalid-retry']);p.add_argument('--previous-receipt',type=Path)
     args=p.parse_args()
     if args.verify_receipt:
         print(json.dumps(verify_receipt(args.run,args.verify_receipt)));raise SystemExit(0)

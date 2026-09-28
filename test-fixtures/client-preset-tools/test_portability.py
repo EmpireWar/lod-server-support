@@ -26,19 +26,20 @@ class PortabilityTest(unittest.TestCase):
         self.root = self.base / 'owned run'
         self.repo = self.base / 'relocated repository'
         self.active = self.base / 'portable tools'
-        (self.root / 'preset-tools').mkdir(parents=True)
+        (self.root / 'settings-tools').mkdir(parents=True)
         (self.repo / 'tools/rig').mkdir(parents=True)
         self.active.mkdir()
         staged = []
         for name in ('drive.py', 'checks.py', 'verify.py', 'finalize.py'):
-            for target in (self.root / 'preset-tools' / name, self.active / name):
+            for target in (self.root / 'settings-tools' / name, self.active / name):
                 shutil.copy2(Path(__file__).parent / name, target)
-            staged.append({'target': 'preset-tools/' + name, 'sha256': sha(self.active / name)})
+            staged.append({'target': 'settings-tools/' + name, 'sha256': sha(self.active / name)})
         tools = {}
-        for name in ('rig.py', 'native_window.py', 'private_input.py', 'ui_snapshot_wait.py'):
+        for name in ('rig.py', 'native_window.py', 'private_input.py', 'ui_snapshot_wait.py', 'rig_settings.py'):
             target = self.repo / 'tools/rig' / name
             target.write_text('# synthetic dependency ' + name + '\n')
             tools['tools/rig/' + name] = sha(target)
+        helper=self.repo/'tools/settings/settings_file.py';helper.parent.mkdir();helper.write_text('# synthetic shared settings helper\n');tools['tools/settings/settings_file.py']=sha(helper)
         runtime = {'stage_files': staged}
         bound = {'runtime_hash': digest(runtime), 'staged_inputs': staged, 'runtime_tools': tools}
         self.manifest = {'run_manifest': bound, 'run_hash': digest(bound), 'runtime_hash': digest(runtime)}
@@ -55,7 +56,7 @@ class PortabilityTest(unittest.TestCase):
                 p = self.active / name
                 original = p.read_bytes()
                 p.write_bytes(original + b'\n# changed active dependency\n')
-                with self.assertRaisesRegex(ValueError, 'active preset tool differs'):
+                with self.assertRaisesRegex(ValueError, 'active settings tool differs'):
                     checks.verify_tool_identity(self.root, self.repo, self.files)
                 p.write_bytes(original)
 
@@ -65,14 +66,14 @@ class PortabilityTest(unittest.TestCase):
         original = checks.__file__
         try:
             checks.__file__ = str(changed)
-            with self.assertRaisesRegex(ValueError, 'active preset tool differs: checks.py'):
+            with self.assertRaisesRegex(ValueError, 'active settings tool differs: checks.py'):
                 verify.verify(self.root, self.repo)
         finally:
             checks.__file__ = original
-        self.assertFalse((self.root / 'evidence/standalone-presets/receipt.json').exists())
+        self.assertFalse((self.root / 'evidence/standalone-settings/receipt.json').exists())
 
     def test_staged_tool_and_selected_repository_changes_rejected(self):
-        for path, error in ((self.root/'preset-tools/verify.py', 'staged preset tool changed'),
+        for path, error in ((self.root/'settings-tools/verify.py', 'staged settings tool changed'),
                             (self.repo/'tools/rig/private_input.py', 'selected repository tool differs')):
             with self.subTest(path=path):
                 raw = path.read_bytes();path.write_bytes(raw+b'\n# changed\n')

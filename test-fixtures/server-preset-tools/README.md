@@ -1,61 +1,37 @@
-# Owned server preset acceptance tooling
+# Owned server settings acceptance tooling
 
-These Python entrypoints drive and independently verify qualitative and conservative
-server preset controls using the existing owned rig command queue. They are test-only
-orchestration. They do not build a mod/plugin, own a new supervisor, select measured
-values, or publish a product. The server/client fixtures and main rig own native lifecycles.
+This historical fixture directory now drives explicit YAML reloads. The product has
+no preset commands. It uses the existing owned rig console queue and native observer;
+it does not launch an independent supervisor or select performance values.
 
-Stage the following exact repository files into each private rig runtime:
-
-| Repository source | Run stage target |
-| --- | --- |
-| test-fixtures/server-preset-tools/drive.py | preset-tools/drive.py |
-| test-fixtures/server-preset-tools/verify.py | preset-tools/verify.py |
-| tools/rig/server_control_smoke.py | preset-tools/server_control_smoke.py |
-| tools/rig/conservative_native.py | preset-tools/conservative_native.py |
-| tools/rig/check_conservative_native.py | preset-tools/check_conservative_native.py |
-
-Record every SHA256 in stage_files and preset_contract.fixture_artifacts before create.
-Use an explicit owned run root and the checked-out repository's tool root:
+Stage these exact sources into each new private runtime under `settings-tools/`:
+`drive.py`, `verify.py`, and the maintained `tools/rig/server_control_smoke.py`,
+`conservative_native.py`, `check_conservative_native.py`, and `rig_settings.py`. Record their hashes in
+`stage_files` and `settings_contract.fixture_artifacts`. Freeze the shared settings
+helper and its Java codec/schema closure with the runtime tool dependencies too.
 
 ```sh
-python3 "$RUN/preset-tools/drive.py" "$RUN" "$REPO/tools/rig"
-python3 "$RUN/preset-tools/verify.py" "$RUN" "$REPO/tools/rig" --cleanup
+python3 "$RUN/settings-tools/drive.py" "$RUN" "$REPO/tools/rig"
+python3 "$RUN/settings-tools/verify.py" "$RUN" "$REPO/tools/rig" --cleanup
 ```
 
-The driver is a rig launch, after the server and native preset-client handshake. It
-uses the existing console queue and stays alive until the owning supervisor stops it.
-The second command is an independent after-collection verification, not a substitute
-for owned rig collection. Match active tool bytes to the frozen staged dependencies;
-never mix a newer checkout's checker with an older run without explicit provenance.
+`runtime.settings_contract` specifies `config` (the owned authoritative YAML path),
+`platform`, `server_profile_hash`, exact `production_artifacts` and
+`fixture_artifacts` maps, `modes`, and `numeric_target`. Modes are
+`reload-restore`, `invalid-retry`, and `numeric-reload`. Numeric target keys are
+`lod.distance.default_chunks`, `generation.concurrency.global`, and
+`generation.concurrency.per_player`; values must be accepted measured integers.
 
-`runtime.preset_contract` names config, platform, server_profile_hash, exact production
-and fixture artifact maps, modes, previous_run/previous_receipt_sha256, and the accepted
-conservative_target dictionary. Target keys are lodDistanceChunks,
-generationConcurrencyLimitGlobal, and generationConcurrencyLimitPerPlayer. Values
-must be accepted measurement-derived integers already compiled into the final product.
-Synthetic unit-control values are not preset recommendations.
+The qualitative modes prove that saving does not publish, reload publishes generation
+changes without reconnect, a no-op does not rewrite disk, invalid YAML leaves active
+settings intact, and repair/reload restores the original bytes and active behavior.
+Numeric phases additionally require actual client SessionConfig receipts and bounded
+observation windows: saved-only, applied, unrelated, scope-restored, unchanged,
+rejected, restored. The fixture uses `settings-client.private.log` and writes
+`evidence/settings-report.json`. It restores all original settings on completion.
 
-Run the existing qualitative modes apply-undo/save-failure/stage-restart, then
-conservative-numeric LAST in each before-restart attempt. It restores exact staged
-config bytes so a separate after-restart attempt can use the same previous qualitative
-receipt. Require every before checker and cleanup/observer closure gate before creating
-its after run. Use one before/after pair each for primary Fabric, NeoForge and Paper.
-Do not automatically retry a failed attempt or erase its evidence.
-
-Keep the native smoke observer and ordinary client lodDistanceChunks=1 preference.
-The unchanged product logger records every actual received v20 SessionConfig radius;
-the observer pins the native world/connection and records handshake/closure. Numeric
-acceptance recomputes typed exports, persisted config, actual filesystem save error,
-contiguous client-log windows, and original console results. No console success string
-alone proves an effect. Global/per-player atomic publication remains unit controlled.
-
-Run Python checker controls from any checkout location:
-
-```sh
-python3 tools/rig/test_conservative_native.py
-```
-
-They use synthetic inputs and deliberate bad evidence to test rejection. Native
-acceptance still requires actual final shipping artifacts, maintained storage guard,
-owned private runtime, frozen recipe/tool closure, and after-collection verification.
+Use the native smoke observer with its ordinary client distance preference of one.
+Require one actual v20 handshake, typed export and YAML capture hashes, exact console
+receipts, wire receipt counts, observer closure, and owned process cleanup. Unit
+controls use synthetic inputs; they do not prove native acceptance. Do not rewrite
+historical evidence or automatically retry a failed native attempt.

@@ -1,6 +1,11 @@
 """Declared scenario checker/driver closure; unrelated tool files are excluded."""
 import ast,hashlib
 from pathlib import Path
+def local_module(repo,module):
+ candidates=[module.replace('.','/')+'.py']
+ candidates += [directory+'/'+module.replace('.','/')+'.py' for directory in ('tools/rig','tools/compat')]
+ return next((name for name in candidates if name.startswith('tools/') and (repo/name).is_file()),None)
+
 ROUTES={'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'native-server-smoke':['check_server_smoke_report.py'],'server-gametest':[], 'client-ui-no-consumer':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'source-prefill':['check_prefill.py'],'source-seed':['check_source_seed.py']}
 CHECKERS={'export-lifecycle':['check_export_lifecycle.py'],'client-ui':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py'],'elytra':['check_elytra_run.py'],'concurrent-sources':['check_source_run.py'],'receive-lifecycle':['check_receive_run.py'],'send-admission':['check_send_admission_run.py'],'xaero-map':['check_xaero_map_run.py'],'seated-draw':['check_seated_run.py'],'folia-regions':['check_regions.py'],'client-ui-no-consumer':['check_client_ui.py','client_ui_steps.py','finalize_client_ui.py']}
 
@@ -40,15 +45,17 @@ def closure(repo,scenario,runtime,source_repo=None,*,staged_reader=None):
    modules=[node.module] if isinstance(node,ast.ImportFrom) else [a.name for a in node.names] if isinstance(node,ast.Import) else []
    for module in modules:
     if not module:continue
-    for directory in ('tools/rig','tools/compat'):
-     local=directory+'/'+module.replace('.','/')+'.py'
-     if (repo/local).is_file():pending.append(local);break
+    local=local_module(repo,module)
+    if local:pending.append(local)
  while pending:
   name=pending.pop()
   if name in result:continue
   path=repo/name
   if path.is_symlink() or not path.is_file():raise ValueError('missing scenario dependency: '+name)
   data=path.read_bytes();result[name]=hashlib.sha256(data).hexdigest()
+  if name=='tools/settings/settings_file.py':
+   pending.extend(str(member.relative_to(repo)) for member in (repo/'common/src/main').rglob('*') if member.is_file())
+   pending.extend(entry for entry in ('common/build.gradle','tools/verify/run-gradle.sh') if (repo/entry).is_file())
   # Follow common dispatcher dependencies too: ownership, immutable-tree and
   # toolchain verification affect acceptance even without a scenario checker.
   # Only explicitly known scenario branches may be omitted; selected branches
@@ -61,7 +68,6 @@ def closure(repo,scenario,runtime,source_repo=None,*,staged_reader=None):
    for module in modules:
     if not module:continue
     if dispatcher and module in branch_modules:continue
-    for directory in ('tools/rig','tools/compat'):
-     local=directory+'/'+module.replace('.','/')+'.py'
-     if (repo/local).is_file():pending.append(local);break
+    local=local_module(repo,module)
+    if local:pending.append(local)
  return dict(sorted(result.items()))

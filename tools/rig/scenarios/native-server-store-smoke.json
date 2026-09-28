@@ -22,10 +22,10 @@
     }
   },
   "server_config": {
-    "lodStore": "full",
-    "lodStoreBackfill": false,
-    "lodDistanceChunks": 16,
-    "enableChunkGeneration": false
+    "storage.lod_store.enabled": true,
+    "storage.lod_store.backfill.enabled": false,
+    "lod.distance.default_chunks": 16,
+    "generation.enabled": false
   },
   "server_properties": {
     "level-type": "minecraft:flat",
@@ -34,9 +34,9 @@
     "online-mode": false
   },
   "client_config": {
-    "receiveServerLods": true,
-    "enableXaeroMapBridge": false,
-    "lodDistanceChunks": 16
+    "lod.receive": true,
+    "integrations.xaero_map.enabled": false,
+    "lod.distance_chunks": 16
   },
   "fixture_capabilities_required": [
     "exact-payload-object-wire-association",

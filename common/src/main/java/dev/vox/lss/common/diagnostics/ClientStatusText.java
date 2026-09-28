@@ -40,6 +40,7 @@ public final class ClientStatusText {
             lines.add(settingsValues("settings.effective", settings.effective()));
             lines.add(text("settings.pending_reload", paths(settings.pendingReload())));
             lines.add(text("settings.pending_reconnect", paths(settings.pendingReconnect())));
+            lines.add(text("settings.adoption", settings.adoptedRevision(), settings.publishedRevision(), paths(settings.pendingAdoption())));
         }
         lines.add(text("versions", s.versions().components().toString()));
         lines.add(text("age", Math.max(0, nowMillis - s.capturedAtMillis())));

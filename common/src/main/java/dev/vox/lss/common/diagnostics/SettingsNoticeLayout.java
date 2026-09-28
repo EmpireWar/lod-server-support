@@ -1,13 +1,17 @@
 package dev.vox.lss.common.diagnostics;
 
-/** Keeps Sodium's controls usable even at unusually small GUI sizes or large fonts. */
+/** Non-overlapping Sodium viewport, wrapped notice area and always-available action row. */
 public final class SettingsNoticeLayout {
-    public record Bounds(int usableHeight, int physicalHeight) {}
+    public record Bounds(int usableHeight, int noticeBottom, int buttonY, int buttonHeight, int physicalHeight) {}
     public static Bounds fit(int physicalHeight, int requestedNoticeHeight) {
         int total = Math.max(1, physicalHeight);
-        int minimumControls = Math.min(128, total);
-        int usable = Math.max(minimumControls, total - Math.max(0, requestedNoticeHeight));
-        return new Bounds(usable, total);
+        int actionHeight = Math.min(24, total);
+        int noticeBottom = total - actionHeight;
+        int minimumControls = Math.min(128, noticeBottom);
+        int usable = Math.max(minimumControls, noticeBottom - Math.max(0, requestedNoticeHeight));
+        int buttonHeight = Math.min(20, actionHeight);
+        int buttonY = noticeBottom + (actionHeight - buttonHeight) / 2;
+        return new Bounds(usable, noticeBottom, buttonY, buttonHeight, total);
     }
     private SettingsNoticeLayout() {}
 }

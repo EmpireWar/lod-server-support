@@ -25,7 +25,8 @@ def check_snapshot(snapshot,summary,running,configured):
         raise ValueError('active enabled service required')
     if snapshot['generationEnabled'] is not running or snapshot['generationConfiguredForRestart'] is not configured:
         raise ValueError('configured/running generation distinction incorrect')
-    if ('(restart pending)' in summary)!=(running!=configured):raise ValueError('restart summary disagrees with typed export')
+    if '(restart pending)' in summary or 'Generation configured for restart:' in summary:
+        raise ValueError('summary incorrectly describes hot generation as restart-only')
     versions=snapshot['versions']
     if set(versions)!={'components'} or set(versions['components'])!=COMPONENTS:raise ValueError('version component allowlist changed')
     if any(not isinstance(value,str) or not re.fullmatch('[A-Za-z0-9][A-Za-z0-9._+~-]{0,95}',value) for value in versions['components'].values()):

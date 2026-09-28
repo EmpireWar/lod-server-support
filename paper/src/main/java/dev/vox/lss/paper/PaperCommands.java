@@ -76,15 +76,22 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private void exportDiagnostics(CommandSender sender, PaperRequestProcessingService service) {
+    /** Owner-only immutable capture; package seam keeps export I/O out of policy-state tests. */
+    dev.vox.lss.common.diagnostics.ServerStatusSnapshot captureDiagnostics(PaperRequestProcessingService service) {
         var config = configSupplier.get();
-        var snapshot = new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
-                service != null, config.enabled(), config.enableChunkGeneration(), config.generationConfiguredForRestart(), config.lodDistanceChunks(),
+        return new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
+                service != null, config.enabled(), config.enabled() && service != null
+                        && service.getGenerationService() != null && service.getGenerationService().isAdmissionEnabled(),
+                config.generationConfiguredForRestart(), config.lodDistanceChunks(),
                 service == null ? 0 : service.getUptimeSeconds(),
                 service == null ? 0 : service.getTickDiag().getTotalSectionsSent(),
                 service == null ? 0 : service.getTickDiag().getTotalBytesSent(),
                 service == null ? 0 : service.getTickDiag().getTotalWireBytesSent(),
                 service == null ? 0 : service.getWindowBandwidthRate(), diagnosticVersions);
+    }
+
+    private void exportDiagnostics(CommandSender sender, PaperRequestProcessingService service) {
+        var snapshot = captureDiagnostics(service);
         try {
             var job = dev.vox.lss.common.diagnostics.DiagnosticExport.submitServer(
                     java.nio.file.Path.of(Brand.lowerShortName() + "-diagnostics"), snapshot);

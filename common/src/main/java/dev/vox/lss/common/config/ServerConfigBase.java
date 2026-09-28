@@ -27,6 +27,7 @@ public class ServerConfigBase {
         var limits = snapshot().generation().concurrency();
         return new GenerationLimits(limits.global(), limits.perPlayer());
     }
+    /** Legacy diagnostic accessor name: the accepted configured generation flag, not restart timing. */
     public boolean generationConfiguredForRestart() { return snapshot().generation().enabled(); }
     public final boolean enabled() { return snapshot().service().enabled(); }
     public final boolean requireServicePermission() { return snapshot().service().requirePermission(); }

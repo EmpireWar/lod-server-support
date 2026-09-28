@@ -64,8 +64,8 @@ public class ChunkGenerationService {
     // distance-graph fixpoint (see DeferredTicketReleases).
     private final DeferredTicketReleases deferredReleases = new DeferredTicketReleases();
 
-    // Non-final since v0.11.0 stage C (/lsslod set tick-poll): submit/tick are
-    // main-thread-only, so plain fields suffice (unlike the per-player genSlotCap,
+    // Reload policy updates and submit/tick are main-thread-only, so plain
+    // fields suffice (unlike the per-player genSlotCap,
     // which the PROCESSING thread reads and must be volatile).
     private int maxConcurrent;
     private int maxPerPlayerActive;
@@ -291,6 +291,9 @@ public class ChunkGenerationService {
         this.active.clear();
         this.perPlayerActiveCount.clear();
     }
+
+    /** Capture on the service owner; admitted work may still be draining when false. */
+    public boolean isAdmissionEnabled() { return admissionEnabled; }
 
     public String getDiagnostics() {
         return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d",

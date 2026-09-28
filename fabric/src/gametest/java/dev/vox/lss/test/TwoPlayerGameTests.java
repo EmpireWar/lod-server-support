@@ -454,7 +454,7 @@ public class TwoPlayerGameTests {
                                     + "column dirty (save hook -> live filter -> live tracker)");
                     // Forward the mark to this test's own service and fire ITS broadcaster:
                     // intervalTicks manual ticks guarantee at least one broadcast pass.
-                    service.getDirtyTracker().markDirty(dim, chunkPos.x(), chunkPos.z());
+                    service.getDirtyTracker().markDirty(dim, chunkPos.x, chunkPos.z);
                     int intervalTicks = LSSServerConfig.CONFIG.dirtyBroadcastIntervalTicks();
                     for (int i = 0; i < intervalTicks; i++) {
                         service.tick();

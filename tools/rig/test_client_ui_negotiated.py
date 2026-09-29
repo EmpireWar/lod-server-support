@@ -3,6 +3,7 @@ import json,unittest
 import test_client_ui as original
 from check_client_ui import EXPORTS,SCREENS,check_report
 from rig import write,sha
+from rig_settings import values
 
 class NegotiatedUi(unittest.TestCase):
  bind=original.ClientUiNoConsumerTests.bind
@@ -29,7 +30,7 @@ class NegotiatedUi(unittest.TestCase):
    with self.subTest(key=key):self.save(name,dict(old,**{key:value}));self.assertTrue(self.check())
   self.save(name,old);self.assertEqual([],self.check())
  def test_rebound_unrelated_config_change_fails(self):
-  name='preserved-draft-applied-config.json';d=json.loads((self.e/name).read_text());self.save(name,dict(d,unrelated='changed'));self.assertTrue(self.check())
+  name='preserved-draft-applied-config.yaml';d=values(self.e/name,side='client');self.save(name,{**d,'lod.download.max_columns_per_second':80000});self.assertTrue(self.check())
  def test_invalid_png_with_rebound_hash_fails(self):
   name=SCREENS[0];(self.e/name).write_bytes(b'\x89PNG\r\n\x1a\nnot an image');self.proof['evidence'][name]=sha(self.e/name);self.assertTrue(self.check())
  def test_new_route_requires_bound_operator_inspection(self):

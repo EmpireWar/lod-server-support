@@ -745,7 +745,12 @@ class AbstractChunkDiskReaderTest {
 
     /** Minimal concrete config for the reapply seam (only maxConcurrentDiskReads and
      *  the store-conditional AUTO resolver are consulted). */
-    public static class GateReapplyConfig extends dev.vox.lss.common.config.ServerConfigBase {}
+    private static dev.vox.lss.common.config.ServerConfigBase gateConfig(int maxReads) {
+        var values = new java.util.LinkedHashMap<>(dev.vox.lss.common.config.SettingsSchema.server(false).defaultValues());
+        values.put("storage.disk.max_concurrent_reads", maxReads);
+        return new dev.vox.lss.common.config.ServerConfigBase(
+                dev.vox.lss.common.config.ServerSettings.fromValues(values), false);
+    }
 
     /** v0.11.0 stage C (review F8): the tick-poll hop `/lsslod set maxConcurrentDiskReads`
      *  rides — reapplyGateCapacity(config) must move the LIVE gate's capacity, resolve
@@ -755,12 +760,11 @@ class AbstractChunkDiskReaderTest {
     void reapplyGateCapacityResolvesConfigAgainstPoolAndStoreState() {
         var r = new TestDiskReader(4);
         try {
-            var config = new GateReapplyConfig();
-            config.maxConcurrentDiskReads = 2;
+            var config = gateConfig(2);
             r.reapplyGateCapacity(config);
             assertEquals(2, r.readGateCapacity(), "an explicit K reaches the live gate");
 
-            config.maxConcurrentDiskReads = 0; // AUTO, no store attached -> whole pool
+            config = gateConfig(0); // AUTO, no store attached -> whole pool
             r.reapplyGateCapacity(config);
             assertEquals(4, r.readGateCapacity(), "AUTO without a store = the whole pool");
 
@@ -768,7 +772,7 @@ class AbstractChunkDiskReaderTest {
             r.reapplyGateCapacity(config); // AUTO, store attached -> ceil(4/2)
             assertEquals(2, r.readGateCapacity(), "AUTO with a store = half the pool");
 
-            config.maxConcurrentDiskReads = 64; // above pool: resolver clamps to pool
+            config = gateConfig(64); // above pool: resolver clamps to pool
             r.reapplyGateCapacity(config);
             assertEquals(4, r.readGateCapacity(), "K never exceeds the pool");
         } finally {

@@ -229,7 +229,7 @@ public class LodRequestManager {
      * gate without a running Minecraft client; tick() polls it every tick.
      */
     IntSupplier ingestBacklogSupplier = () ->
-            LSSClientConfig.CONFIG.enableIngestBackpressure
+            LSSClientConfig.CONFIG.enableIngestBackpressure()
                     ? LSSApi.maxReportedIngestBacklog() : -1;
 
     // Last polled backlog — trace + /lss diag observability.
@@ -262,13 +262,13 @@ public class LodRequestManager {
     private long lastPingProbeMillis = Long.MIN_VALUE / 2;
     /** Config kill switch seam (the adaptiveCadenceEnabled pattern). */
     java.util.function.BooleanSupplier transferGovernorEnabled =
-            () -> LSSClientConfig.CONFIG.enableAdaptiveTransferRate;
+            () -> LSSClientConfig.CONFIG.enableAdaptiveTransferRate();
     /** Join slow start (join-slow-start-plan.md): sessions START in the governed
      *  RAMP and earn their rate. Manager tests that pin uncapped first walks
      *  override this to false (the frontier-damping test pattern);
      *  productionDefaultEnablesSlowStart pins the real wiring. */
     java.util.function.BooleanSupplier joinSlowStartEnabled =
-            () -> LSSClientConfig.CONFIG.enableJoinSlowStart;
+            () -> LSSClientConfig.CONFIG.enableJoinSlowStart();
 
     private static int readOwnPing() {
         var mc = Minecraft.getInstance(); // null under fabric-loader-junit (headless)
@@ -322,7 +322,7 @@ public class LodRequestManager {
     }
 
     public LodRequestManager() {
-        this(LSSClientConfig.CONFIG.enableRegionScan ? new RegionScanner() : new SpiralScanner());
+        this(LSSClientConfig.CONFIG.enableRegionScan() ? new RegionScanner() : new SpiralScanner());
     }
 
     /** Test ctor (region-scan-plan.md §10 arm policy): scanner-mechanics tests pin the
@@ -343,10 +343,10 @@ public class LodRequestManager {
         // quarter of the governed rate forever — full 1 Hz batches are the manual
         // knob's shipped shape and let the loop actually reach its target).
         this.scanner.columnRateCap = () -> composeRateCaps(
-                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit,
+                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit(),
                 this.governor.sustainedColumnsPerSecond());
         this.scanner.columnBurstCap = () -> composeRateCaps(
-                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit,
+                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit(),
                 governedBurstCap());
     }
 
@@ -769,7 +769,7 @@ public class LodRequestManager {
                 // governor.tick() before this phase, so the latch lands in the
                 // interval this declaration counts toward.
                 int governedBurst = governedBurstCap();
-                int manual = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit;
+                int manual = LSSClientConfig.CONFIG.lodColumnsPerSecondLimit();
                 if (this.scanner.wasLastScanFast()
                         && this.scanner.wasLastWalkTruncated()
                         && this.scanner.wasLastBudgetCapClamped()
@@ -926,7 +926,7 @@ public class LodRequestManager {
      * exchange.
      */
     public void onRegionSummaryFrame(byte[] body) {
-        if (!LSSClientConfig.CONFIG.enableRegionSummarySync) return;
+        if (!LSSClientConfig.CONFIG.enableRegionSummarySync()) return;
         if (this.lastDimension == null) return;
         try {
             var summary = dev.vox.lss.common.region.RegionSummaryWire.decodeSummary(body);
@@ -1002,7 +1002,7 @@ public class LodRequestManager {
      */
     private void sendRegionSummaryRequest(ResourceKey<Level> dimension, int playerCx, int playerCz) {
         this.pendingSummaryFrame = null; // a new dimension invalidates any buffered frame
-        if (!LSSClientConfig.CONFIG.enableRegionSummarySync) return;
+        if (!LSSClientConfig.CONFIG.enableRegionSummarySync()) return;
         if (this.summaryHarnessGate.getAsBoolean()) return;
         if (this.summarySessionVersion.getAsInt() != LSSConstants.PROTOCOL_VERSION) return;
         int lod = this.scanner.getEffectiveLodDistance();
@@ -1043,7 +1043,7 @@ public class LodRequestManager {
      * absent leaves make it a no-op.
      */
     public void onColumnStamps(byte[] body) {
-        if (!LSSClientConfig.CONFIG.enableRegionSummarySync) return;
+        if (!LSSClientConfig.CONFIG.enableRegionSummarySync()) return;
         if (this.lastDimension == null) return;
         try {
             var stamps = dev.vox.lss.common.region.ColumnStampsWire.decode(

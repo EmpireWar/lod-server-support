@@ -42,7 +42,7 @@ public final class Probe {
         failed = true;
     }
     private static boolean enabled() { return ENABLED && safe; }
-    private static boolean off() { return "off".equals(LSSServerConfig.CONFIG.farPlayers); }
+    private static boolean off() { return "off".equals(LSSServerConfig.CONFIG.farPlayers()); }
     private static boolean holdExists() {
         return Files.isRegularFile(HOLD, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(HOLD);
     }

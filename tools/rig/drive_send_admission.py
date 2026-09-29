@@ -4,6 +4,7 @@ import argparse,json,time,math,re
 from pathlib import Path
 from rig import read,write,inside,regular,alive
 from check_send_admission_run import make_proof
+from rig_settings import edit
 
 def shared_deadline(scenario, now):
  seconds=scenario.get('observe_seconds',scenario['timeout_seconds'])
@@ -55,8 +56,13 @@ def run(root):
   if observed.get('status')!='response_observed':raise ValueError('native command not observed')
   receipts.append(dict(request=name,command=command,expected=expected,result=observed))
   write(root/'evidence/admission-native-commands.json',dict(run_id=manifest['run_id'],run_hash=manifest['run_hash'],receipts=receipts))
+ def far_players(mode):
+  candidates=[inside(root,key) for key in runtime['generated_files'] if key.endswith('server-config.yaml') and key.startswith('server/')]
+  if len(candidates)!=1:raise ValueError('one owned authoritative server YAML required')
+  config=regular(candidates[0]);edit(config,{'far_players.mode':mode},platform='paper' if 'plugins' in config.parts else 'mod')
+  send('lsslod reload','Reloaded '+config.name+':')
  send('gamemode creative @a','game mode to Creative Mode')
- send('lsslod set farPlayers on','farPlayers = on')
+ far_players('on')
  send('tp @a[name=!SeatedSubjectA,name=!SeatedSubjectB] 0 -60 0 0 0','Teleported')
  send('tp SeatedSubjectA 0 -60 192 180 0','Teleported SeatedSubjectA')
  send('tp SeatedSubjectB 0 -60 16 0 0','Teleported SeatedSubjectB')
@@ -65,8 +71,8 @@ def run(root):
   if log.stat().st_size>32*1024*1024:raise ValueError('native log bound')
   time.sleep(.05)
  previous_epoch=max(baseline_epochs(log.read_text(errors='replace')))
- send('lsslod set farPlayers off','farPlayers = off')
- send('lsslod set farPlayers on','farPlayers = on')
+ far_players('off')
+ far_players('on')
  def wait_for(markers,predicate=lambda text:True):
   while True:
    if time.monotonic()>deadline:raise ValueError('native admission observation deadline')
@@ -80,9 +86,9 @@ def run(root):
  marker=inside(root,'server/wi6-hold-clear')
  with marker.open('x') as stream:stream.write(manifest['run_id']+'\n')
  wait_for(['[WI6-FIXTURE] ARMED '])
- send('lsslod set farPlayers off','farPlayers = off')
+ far_players('off')
  wait_for(['count=3 epoch=', '[WI6-FIXTURE] UNAFFECTED_CLEAR_ACCEPTED '])
- send('lsslod set farPlayers on','farPlayers = on')
+ far_players('on')
  wait_for(['[WI6-FIXTURE] PASS_SEND_ADMISSION '])
  make_proof(root,manifest)
  while True:time.sleep(1)

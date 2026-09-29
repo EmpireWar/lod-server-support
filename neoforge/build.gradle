@@ -134,21 +134,12 @@ sourceSets {
     }
 }
 
-// N-2 packaging decision (plan §2), AMENDED by neoforge-jarjar-sqlite-plan.md
-// (2026-08-15) and again by issues-275-282-fix-plan.md (2026-09-06): Paper-style
-// SHADING for common ONLY — the dedicated `shade` configuration keeps MDG's
-// MC/NeoForge classpath out of the jar. BOTH native-carrying libraries ride as
-// STOCK jarJar nested libraries (META-INF/jarjar/) so FML dedupes them against
-// other mods nesting the same artifact: the no-relocate rule applies (relocating
-// org.sqlite / com.github.luben breaks their native loaders — zstd-jni's JNI
-// symbol names are derived from the package), and a flat-shaded copy hard-fails
-// module resolution beside any mod nesting the stock jar — sqlite beside the
-// community Voxy NeoForge port (ResolutionException: both modules export
-// org.sqlite.*), zstd-jni beside XMMP (issue #275: both export com.github.luben.zstd).
+// Common is shaded. SQLite is an opaque private resource inside common, never
+// an FML module. zstd-jni stays stock jarJar to preserve issue #275/XMMP dedupe.
 configurations {
     shade
     // Resolution-only carrier for the nested jarJar libraries (stock bytes; no
-    // transitives — neither the sqlite-jdbc nor the zstd-jni POM has any at runtime).
+    // transitives — the zstd-jni POM has none at runtime).
     jarJarStore {
         transitive = false
     }
@@ -163,27 +154,27 @@ configurations.all {
     }
 }
 
-def sqliteJdbcVersion = '3.49.1.0'
 dependencies {
     // the -fabric artifact id swapped for -neoforge: same version, the loader variant
     sodiumNeoGolden "maven.modrinth:sodium:${project.sodium_version.replace('-fabric', '-neoforge')}"
     implementation project(':common')
     shade project(':common')
-    implementation "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
-    jarJarStore "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
     implementation 'com.github.luben:zstd-jni:1.5.7-3'
     // zstd-jni rides NESTED too (issue #275 — the XMMP clash); the version must
     // match paper/build.gradle + fabric's slimStoreDepJars (the wire codec pair).
     jarJarStore 'com.github.luben:zstd-jni:1.5.7-3'
     // DEV-RUN visibility on THIS LINE'S FML (4.x) — same class of problem as the
     // common fold in mods{} below: plain implementation deps are not reachable
-    // from the mod's transformer layer, so dev runs booted store-LESS (sqlite
-    // unresolvable -> LodStores degrade), which also closed the skipDirtyHash
+    // from the mod's transformer layer. Native-codec resolution also controls
+    // the store availability and therefore the skipDirtyHash
     // gate and killed the dirty-hook gametest. additionalRuntimeClasspath puts
     // them on the game layer the mod CAN see. Production is untouched (shadowJar
-    // + jarJar carry both).
-    additionalRuntimeClasspath "org.xerial:sqlite-jdbc:${sqliteJdbcVersion}"
+    // + jarJar carry zstd; common resources carry the SQLite capsule).
     additionalRuntimeClasspath 'com.github.luben:zstd-jni:1.5.7-3'
+    // This line folds unshaded common classes into the development mod above.
+    // Supply their parser only to dev runs; shipping jars carry the private,
+    // relocated copy from common's shadowJar and never this engine namespace.
+    additionalRuntimeClasspath 'org.snakeyaml:snakeyaml-engine:3.1.1'
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -213,8 +204,8 @@ processResources {
     }
 }
 
-// Native strip roots — NO keep rows on this module since issue #275: both
-// native-carrying libraries ride NESTED with all of their stock natives, so a
+// Native strip roots — NO flat native keep rows on this module: zstd rides
+// jarJar and SQLite lives inside the private opaque capsule, so a
 // flat native under any of these roots is a shade regression, and stripping it
 // makes the regression louder (release_check's flat-entry rules are the gate —
 // flat org/sqlite/** and flat com/github/luben/** are both forbidden there).
@@ -224,8 +215,7 @@ def storeNativeStrip = { el ->
     storeNativeRoots.any { p.startsWith(it) }
 }
 
-// The nested libraries' jarJar descriptor (neoforge-jarjar-sqlite-plan.md §3, one
-// entry per jarJarStore artifact since issue #275 added zstd-jni): generated from
+// The zstd library's jarJar descriptor (retained from issue #275): generated from
 // the RESOLVED artifacts so a version bump cannot desync it. Range
 // [<version>,<major+1>.0.0.0) — a future-major copy nested by another mod then
 // fails as a hard jarjar version conflict at boot instead of silently winning
@@ -235,7 +225,7 @@ def storeNativeStrip = { el ->
 // there (case-insensitive filesystems collapse the two), hence lss-jarjar.
 def generateJarJarMetadata = tasks.register('generateJarJarMetadata') {
     group = 'build'
-    description = 'Generates the jarJar metadata.json for the nested stock libraries (sqlite-jdbc, zstd-jni).'
+    description = 'Generates the jarJar metadata.json for the nested stock libraries (zstd-jni).'
     def cfg = configurations.jarJarStore
     def resolved = cfg.incoming.artifacts.resolvedArtifacts
     def outFile = layout.buildDirectory.file('generated/lss-jarjar/metadata.json')
@@ -291,7 +281,7 @@ shadowJar {
     configurations = [project.configurations.shade]
     archiveClassifier = ''
     mergeServiceFiles()
-    // sqlite-jdbc AND zstd-jni ride NESTED as stock jarJar libraries (module-dedupe
+    // zstd-jni rides NESTED as a stock jarJar library (module-dedupe
     // against other mods nesting them) — see the packaging comment at the
     // configurations block.
     from(project.configurations.jarJarStore) { into 'META-INF/jarjar' }

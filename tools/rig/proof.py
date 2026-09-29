@@ -71,6 +71,10 @@ def check_proof(proof, manifest, scenario, root=None):
     if scenario.get('checker') == 'elytra':
         from check_elytra_run import check_report
         errors.extend(check_report(proof,manifest,scenario,root))
+    if scenario.get('checker') == 'yaml-reload':
+        from check_yaml_reload import inspect
+        try: errors.extend(inspect(root)['errors'])
+        except Exception as error: errors.append('native YAML evidence invalid: '+str(error))
     if scenario.get('checker') == 'concurrent-sources':
         from check_source_run import check_report
         errors.extend(check_report(proof,manifest,root))

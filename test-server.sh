@@ -124,7 +124,7 @@ stage_move_trace_marker() {
 }
 
 # LOD store for manual play: LSS_LODSTORE=off|on|full (default on — matching a fresh install; on==full) is written into
-# the staged lss-server-config.json on EVERY run — the staging rewrites that file, so a
+# the staged lss-server-config.yaml on EVERY run — the staging rewrites that file, so a
 # hand-edit does not survive a re-run; this variable is the supported way to flip it.
 # `run-fabric-store` / `run-paper-store` below force "full". The store DB lives at
 # <world>/lss-lod/store.db and persists across restarts (derived data — deleting the
@@ -156,8 +156,7 @@ esac
 # run-fabric-store deliberately keeps the default.
 LSS_LODSTORE_BACKFILL_CPS="${LSS_LODSTORE_BACKFILL_CPS:-}"
 # Optional LOD-distance override (chunks, server clamps 32..2048). UNSET means the key is
-# omitted so the shipped default (256) rules. The rig used to hardcode 64; 256 is 16x the
-# area, so on a small box — or with all three test servers up at once — set this to 64 or
+# omitted so the shipped dimension defaults (512/64/512) apply. On a small box — or with all three test servers up at once — set this to 64 or
 # 96 to keep generation and IO manageable while still exercising the real defaults
 # elsewhere.
 LSS_LOD_DISTANCE="${LSS_LOD_DISTANCE:-}"
@@ -165,9 +164,7 @@ if [ -n "$LSS_LOD_DISTANCE" ]; then
     case "$LSS_LOD_DISTANCE" in
         ''|*[!0-9]*) echo "LSS_LOD_DISTANCE must be a positive integer (got '$LSS_LOD_DISTANCE')" >&2; exit 1 ;;
     esac
-    # Same overflow guard as the CPS knob: a value too large for an int makes GSON throw,
-    # and JsonConfig's whole-file fallback then silently resets the ENTIRE staged config
-    # to defaults rather than failing loudly.
+    # Reject an overflowing value before staging the document.
     if [ "${#LSS_LOD_DISTANCE}" -gt 4 ]; then
         echo "LSS_LOD_DISTANCE too large — server clamps to 2048 (got '$LSS_LOD_DISTANCE')" >&2; exit 1
     fi
@@ -176,9 +173,7 @@ if [ -n "$LSS_LODSTORE_BACKFILL_CPS" ]; then
     case "$LSS_LODSTORE_BACKFILL_CPS" in
         ''|*[!0-9]*) echo "LSS_LODSTORE_BACKFILL_CPS must be a positive integer (got '$LSS_LODSTORE_BACKFILL_CPS')" >&2; exit 1 ;;
     esac
-    # Bound the digits too: an int-overflowing value staged into the JSON makes GSON
-    # throw on load and JsonConfig's whole-file fallback silently resets EVERY key to
-    # its default — the store/backfill run asked for would quietly not happen.
+    # Bound the digits before asking the shared codec to validate the override.
     if [ "${#LSS_LODSTORE_BACKFILL_CPS}" -gt 4 ]; then
         echo "LSS_LODSTORE_BACKFILL_CPS too large — server clamps to 1000 (got '$LSS_LODSTORE_BACKFILL_CPS')" >&2; exit 1
     fi
@@ -358,7 +353,40 @@ EOF
 # mod's own defaults. NOTE the shipped default lodDistanceChunks is 512 (restored
 # 2026-08-13, reverting stage A's 300; ~64x the old rig's 64-chunk area) — set
 # LSS_LOD_DISTANCE to dial it back on a small box or when running all three servers.
+# Generate the actual annotated schema through the product codec, then edit canonical paths.
+# A staged rig starts from fresh defaults every time; only this task-owned file is replaced.
 write_lss_config() {
+    local dir="$1" platform="${2:-mod}"
+    echo "  Writing lss-server-config.yaml (annotated defaults and requested rig overrides)"
+    python3 - "$SCRIPT_DIR" "$dir" "$platform" "$LSS_LODSTORE" \
+        "$LSS_LODSTORE_BACKFILL" "$LSS_LODSTORE_BACKFILL_CPS" "$LSS_LOD_DISTANCE" "$LSS_VIA_GUARD" <<'PYSETTINGS'
+import os, pathlib, sys, tempfile
+root, directory, platform, mode, backfill, cps, distance, via = sys.argv[1:]
+sys.path.insert(0, root)
+from tools.settings.settings_file import create, edit
+parent = pathlib.Path(directory)
+parent.mkdir(parents=True, exist_ok=True)
+changes = {"storage.lod_store.enabled": mode != "off"}
+if platform == "mod":
+    changes["storage.lod_store.backfill.enabled"] = backfill == "true"
+    if cps:
+        changes["storage.lod_store.backfill.columns_per_second"] = int(cps)
+if distance:
+    changes["lod.distance.default_chunks"] = int(distance)
+    changes["lod.distance.by_dimension"] = {}
+if via == "0":
+    changes["compatibility.via_mismatch_guard"] = False
+with tempfile.TemporaryDirectory(prefix=".lss-settings-", dir=parent) as staging:
+    path = pathlib.Path(staging) / "lss-server-config.yaml"
+    create(path, platform=platform)
+    edit(path, changes, platform=platform)
+    os.replace(path, parent / path.name)
+PYSETTINGS
+}
+
+# The historical protocol-16 server predates YAML. Its compatibility fixture must
+# stay in the exact old format that released binary understands.
+write_legacy_lss_config() {
     local dir="$1"
     echo "  Writing lss-server-config.json (shipped defaults; lodStore=${LSS_LODSTORE}, backfill=${LSS_LODSTORE_BACKFILL}${LSS_LOD_DISTANCE:+, lodDistance=${LSS_LOD_DISTANCE}}$([ "$LSS_VIA_GUARD" = 0 ] && echo ', viaGuard=OFF'))"
     mkdir -p "$dir"
@@ -563,7 +591,7 @@ setup_paper() {
 
     write_server_properties "$PAPER_DIR" 25566 "LSS Test Server (Paper)"
     write_ops_json "$PAPER_DIR"
-    write_lss_config "$PAPER_DIR/plugins/LodServerSupport"
+    write_lss_config "$PAPER_DIR/plugins/LodServerSupport" paper
     enable_paper_antixray
     stage_via_paper
 
@@ -610,7 +638,7 @@ setup_folia() {
 
     write_server_properties "$FOLIA_DIR" 25567 "LSS Test Server (Folia)"
     write_ops_json "$FOLIA_DIR"
-    write_lss_config "$FOLIA_DIR/plugins/LodServerSupport"
+    write_lss_config "$FOLIA_DIR/plugins/LodServerSupport" paper
 
     echo "=== Installing Folia plugins ==="
     echo "  Installing LSS (same jar as Paper)..."
@@ -711,7 +739,7 @@ setup_legacy() {
 
     write_server_properties "$LEGACY_DIR" 25568 "LSS LEGACY v${LEGACY_LSS_VERSION} (protocol 16)"
     write_ops_json "$LEGACY_DIR"
-    write_lss_config "$LEGACY_DIR/config"
+    write_legacy_lss_config "$LEGACY_DIR/config"
 
     echo "=== Installing legacy mods ==="
     download "$FABRIC_API_URL" "$mods_dir/fabric-api.jar"
@@ -961,7 +989,7 @@ case "${1:-run}" in
         echo "     server to generate it on demand, so cold terrain fills in — the full LOD"
         echo "     experience. Already-generated terrain (near spawn / where players walked)"
         echo "     also renders. To test strict Tier A load-only instead, set"
-        echo "     \"enableV16Generation\": false in the CLIENT's config/lss-client-config.json"
+        echo "     \"compatibility.v16_generation\": false in the CLIENT's config/lss-client-config.yaml"
         echo "     and rejoin — then cold terrain will NOT fill (only already-generated shows)."
         echo "   - Old-server command is '/lsslod' (this jar predates any /vss rebrand)."
         echo ""
@@ -1010,7 +1038,7 @@ case "${1:-run}" in
         echo "                   to stage config/lss-move-trace.enable; rows land in"
         echo "                   test-server/fabric/logs/lss-move-trace.jsonl (this rig is"
         echo "                   the tracer's vanilla-rung environment)."
-        echo "  LSS_LODSTORE - lodStore mode written into EVERY staged lss-server-config.json"
+        echo "  LSS_LODSTORE - lodStore mode written into EVERY staged lss-server-config.yaml"
         echo "                 (off|full, default: off — the shipped default; the store is"
         echo "                 opt-in). Hand-edits to the config do NOT survive a re-run"
         echo "                 — the staging rewrites it; this variable is the supported knob."

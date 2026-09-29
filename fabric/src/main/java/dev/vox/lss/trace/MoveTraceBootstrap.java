@@ -100,15 +100,15 @@ public final class MoveTraceBootstrap {
         var cfg = LSSServerConfig.CONFIG;
         config.put("bytesPerSecondLimitPerPlayer", cfg.bytesPerSecondPerPlayer());
         config.put("bytesPerSecondLimitGlobal", cfg.bytesPerSecondGlobal());
-        config.put("lodDistanceChunks", cfg.lodDistanceChunks);
-        config.put("lodStore", cfg.lodStore);
+        config.put("lodDistanceChunks", cfg.lodDistanceChunks());
+        config.put("lodStore", cfg.lodStore());
         // A live ping-backstop cut shifts the LOD send envelope the same way an armed
         // yield does — analysis must never mix backstop-on and backstop-off boots.
-        config.put("enablePingBackstop", cfg.enablePingBackstop);
-        config.put("enableSendPacing", cfg.enableSendPacing);
+        config.put("enablePingBackstop", cfg.enablePingBackstop());
+        config.put("enableSendPacing", cfg.enableSendPacing());
         // The §4.5 partition key: an armed-yield collection period shifts the envelope
         // obuf distribution by design — analysis must never mix armed and unarmed boots.
-        config.put("lodYieldsToVanillaTransport", cfg.lodYieldsToVanillaTransport);
+        config.put("lodYieldsToVanillaTransport", cfg.lodYieldsToVanillaTransport());
         var loader = FabricLoader.getInstance();
         tracer.emit(MoveRow.boot(tracer.bootId(), System.currentTimeMillis(),
                 ZonedDateTime.now().getOffset().getTotalSeconds() / 60,

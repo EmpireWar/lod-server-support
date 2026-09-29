@@ -58,6 +58,7 @@ public class PaperChunkGenerationService {
         final long token;
         final List<GenerationCallback> callbacks = new ArrayList<>();
         int ticksWaiting = 0;
+        int timeoutTicks;
 
         ActiveGeneration(long token) { this.token = token; }
     }
@@ -71,11 +72,21 @@ public class PaperChunkGenerationService {
     // tick() swaps it out on the same thread)
     private List<TickSnapshot.GenerationReadyData> mainReady = new ArrayList<>();
 
-    // Non-final since v0.11.0 stage C (/lsslod set tick-poll): submit/tick run on the
-    // pump, so plain fields suffice (the per-player genSlotCap is the volatile one).
+    // Reload policy updates and submit/tick run on the same service owner pump,
+    // so plain fields suffice (the per-player genSlotCap is the volatile one).
     private int maxConcurrent;
     private int maxPerPlayerActive;
-    private final int timeoutTicks;
+    private int timeoutTicks;
+    private boolean admissionEnabled;
+    private long policyRevision;
+
+    public void updatePolicy(boolean enabled, int global, int perPlayer, int timeoutTicks, long revision) {
+        if (revision < this.policyRevision) return;
+        this.admissionEnabled = enabled;
+        this.timeoutTicks = timeoutTicks;
+        this.policyRevision = revision;
+        updateCaps(global, perPlayer);
+    }
 
     /** Test seam: hands the async-load completion back to the pump thread. Production
      *  default is the GlobalRegionScheduler (main thread on Paper, the pump's global-region
@@ -115,7 +126,8 @@ public class PaperChunkGenerationService {
         var generationLimits = config.generationLimits();
         this.maxConcurrent = generationLimits.global();
         this.maxPerPlayerActive = generationLimits.perPlayer();
-        this.timeoutTicks = config.generationTimeoutSeconds * LSSConstants.TICKS_PER_SECOND;
+        this.timeoutTicks = config.generationTimeoutTicks();
+        this.admissionEnabled = config.enableChunkGeneration();
         this.mainThreadScheduler = task ->
                 plugin.getServer().getGlobalRegionScheduler().execute(plugin, task);
     }
@@ -133,7 +145,7 @@ public class PaperChunkGenerationService {
      * false if at capacity (caller should feed back a rejection result).
      */
     public boolean submitGeneration(UUID playerUuid, RequestRegistration registration, ServerLevel level, int cx, int cz, long submissionOrder) {
-        if (registration.isRetired()) return false;
+        if (!this.admissionEnabled || registration.isRetired()) return false;
         var key = new PendingGenerationKey(level.dimension(), cx, cz);
 
         // Already active — piggyback on existing async load
@@ -148,6 +160,7 @@ public class PaperChunkGenerationService {
         int playerActive = this.perPlayerActiveCount.getOrDefault(registration, 0);
         if (this.active.size() < this.maxConcurrent && playerActive < this.maxPerPlayerActive) {
             var gen = new ActiveGeneration(++this.nextGenerationToken);
+            gen.timeoutTicks = this.timeoutTicks;
             gen.callbacks.add(new GenerationCallback(playerUuid, registration, submissionOrder));
             this.active.put(key, gen);
             incrementCount(this.perPlayerActiveCount, registration);
@@ -373,7 +386,7 @@ public class PaperChunkGenerationService {
             var gen = entry.getValue();
             gen.ticksWaiting++;
 
-            if (gen.ticksWaiting > this.timeoutTicks) {
+            if (gen.ticksWaiting > gen.timeoutTicks) {
                 // Timeout is TRANSIENT (under Priority.LOW a starved load is routine on a
                 // busy server): silent drop downstream, the client's re-declaration retries.
                 addFailures(gen.callbacks, entry.getKey(), entry.getKey().cx, entry.getKey().cz, true);
@@ -408,6 +421,9 @@ public class PaperChunkGenerationService {
         this.perPlayerActiveCount.clear();
         this.mainReady.clear();
     }
+
+    /** Capture on the service owner; admitted work may still be draining when false. */
+    public boolean isAdmissionEnabled() { return admissionEnabled; }
 
     public String getDiagnostics() {
         return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d, null_failures=%d, vanished=%d",

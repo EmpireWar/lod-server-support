@@ -1,7 +1,6 @@
 package dev.vox.lss.paper;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import dev.vox.lss.common.config.SettingsReload;
 import dev.vox.lss.common.tracking.DirtyColumnTracker;
 import org.bukkit.Server;
 import org.bukkit.plugin.Plugin;
@@ -9,229 +8,192 @@ import org.bukkit.plugin.PluginManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Pins PaperConfig.load() through the real production entry point (the path the plugin uses
- * for plugins/LodServerSupport/lss-server-config.json):
- * <ul>
- *   <li>broken files never abort plugin startup and are never overwritten;</li>
- *   <li>fields absent from the file keep compiled defaults — critically updateEvents: if GSON
- *       ever stops using the no-arg constructor (Unsafe.allocateInstance after someone adds an
- *       explicit constructor), updateEvents deserializes to null, validate() turns it into an
- *       empty list, and dirty chunk detection dies silently;</li>
- *   <li>re-save migrates newly added fields (and updateEvents) into partial files.</li>
- * </ul>
- */
+/** Exercises the plugin's real startup entry point, adoption, migration and explicit reload. */
 class PaperConfigLoadTest {
-
-    // The on-disk name admins know; renaming it would orphan every existing install's config.
-    private static final String FILE = "lss-server-config.json";
-
-    private static final List<String> DEFAULT_EVENTS = new PaperConfig().updateEvents;
-
-    private static List<String> serializedFieldNames() {
-        // @HiddenFromFile fields are excluded: at their compiled defaults they are
-        // deliberately absent from every written file (the 2026-08-08 config rework).
-        List<String> names = Arrays.stream(PaperConfig.class.getFields())
-                .filter(f -> !Modifier.isStatic(f.getModifiers()))
-                .filter(f -> f.getAnnotation(dev.vox.lss.common.config.JsonConfig.HiddenFromFile.class) == null)
-                .map(Field::getName)
-                .toList();
-        assertTrue(names.size() >= 14, "field reflection broke, found only: " + names);
-        return names;
-    }
-
-    private static JsonObject savedJson(Path dataFolder) throws Exception {
-        return JsonParser.parseString(Files.readString(dataFolder.resolve(FILE))).getAsJsonObject();
-    }
+    private static final String YAML = "lss-server-config.yaml";
+    private static final String JSON = "lss-server-config.json";
+    private static final List<String> DEFAULT_EVENTS = new PaperConfig().updateEvents();
 
     @Test
-    void missingFileLoadsDefaultsAndCreatesFileWithAllFields(@TempDir Path tempDir) throws Exception {
-        Path dataFolder = tempDir.resolve("LodServerSupport"); // first run: folder doesn't exist yet
-        PaperConfig c = PaperConfig.load(dataFolder);
-
-        assertEquals(512, c.lodDistanceChunks);
-        assertFalse(DEFAULT_EVENTS.isEmpty(), "compiled updateEvents defaults must not be empty");
-        assertEquals(DEFAULT_EVENTS, c.updateEvents);
-        assertTrue(Files.isRegularFile(dataFolder.resolve(FILE)));
-
-        JsonObject saved = savedJson(dataFolder);
-        for (String key : serializedFieldNames()) {
-            assertTrue(saved.has(key), "defaults file missing field " + key);
+    void missingFileCreatesCommentedYamlWithDefaultsThatRoundTrip(@TempDir Path tempDir) throws Exception {
+        Path directory = tempDir.resolve("LodServerSupport");
+        try (var config = PaperConfig.load(directory)) {
+            assertNull(config.startupError());
+            assertEquals(512, config.lodDistanceChunks());
+            assertFalse(DEFAULT_EVENTS.isEmpty());
+            assertEquals(DEFAULT_EVENTS, config.updateEvents());
+            assertEquals("on", config.lodStore());
+            assertEquals(directory.resolve(YAML).toAbsolutePath(), config.settingsPath());
+            String saved = Files.readString(config.settingsPath());
+            assertTrue(saved.contains("#"));
+            assertTrue(saved.contains("update_events:"));
+            assertFalse(Files.exists(directory.resolve(JSON)));
+            try (var reread = PaperConfig.load(directory)) {
+                assertEquals(config.snapshot(), reread.snapshot());
+                assertEquals(saved, Files.readString(config.settingsPath()), "ordinary startup must not rewrite YAML");
+            }
         }
-        assertEquals(DEFAULT_EVENTS.size(), saved.getAsJsonArray("updateEvents").size());
-        // The lodStore SPLIT default through the Paper load path: fresh install -> "on".
-        assertEquals("on", c.lodStore, "a fresh install must arm the store");
-        assertEquals("on", saved.get("lodStore").getAsString());
-    }
-
-    /** The other half of the split default: an existing file without the key stays OFF
-     *  (Paper twin of the Fabric pin — an upgrade never silently arms the store). */
-    @Test
-    void existingFileWithoutLodStoreKeyKeepsTheStoreOff(@TempDir Path dataFolder) throws Exception {
-        Files.writeString(dataFolder.resolve(FILE), "{\"lodDistanceChunks\": 64}");
-
-        PaperConfig c = PaperConfig.load(dataFolder);
-
-        assertEquals("off", c.lodStore, "absent key in an existing file must mean OFF");
-        assertEquals("off", savedJson(dataFolder).get("lodStore").getAsString());
     }
 
     @Test
-    void truncatedFileLoadsDefaultsAndPreservesFileExactly(@TempDir Path dataFolder) throws Exception {
-        String broken = "{\"lodDistanceChunks\": 64"; // interrupted write: no closing brace
-        Files.writeString(dataFolder.resolve(FILE), broken);
-
-        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
-
-        assertEquals(512, c.lodDistanceChunks); // defaults, not the half-written value
-        assertEquals(DEFAULT_EVENTS, c.updateEvents);
-        assertEquals(broken, Files.readString(dataFolder.resolve(FILE)));
-    }
-
-    @Test
-    void emptyFileLoadsDefaultsAndIsLeftUntouched(@TempDir Path dataFolder) throws Exception {
-        Files.writeString(dataFolder.resolve(FILE), "");
-
-        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
-
-        assertEquals(512, c.lodDistanceChunks);
-        assertEquals(DEFAULT_EVENTS, c.updateEvents);
-        assertEquals("", Files.readString(dataFolder.resolve(FILE)));
-    }
-
-    @Test
-    void partialFileKeepsCompiledDefaultsIncludingUpdateEvents(@TempDir Path dataFolder) throws Exception {
-        Files.writeString(dataFolder.resolve(FILE), "{\"lodDistanceChunks\": 64}");
-
-        PaperConfig c = PaperConfig.load(dataFolder);
-
-        assertEquals(64, c.lodDistanceChunks);
-        // The GSON Unsafe landmine would null updateEvents -> validate() -> List.of(),
-        // and zero every numeric default before the clamps pull them to the minimums.
-        // Exact values double as Fabric/Paper default-parity pins (see ServerConfigBase).
-        assertEquals(DEFAULT_EVENTS, c.updateEvents);
-        assertTrue(c.enabled);
-        // Post-validate resolved bandwidth (the compiled default is the -1 sentinel —
-        // see the Fabric JsonConfigLoadTest twin for the full rationale).
-        assertEquals(25.0, c.mbPerSecondLimitPerPlayer);
-        assertEquals(26_214_400, c.bytesPerSecondPerPlayer());
-        assertEquals(0, c.diskReaderThreads);           // 0 = AUTO (derived per read path)
-        assertEquals(1024, c.sendQueueLimitPerPlayer);
-        assertEquals(75.0, c.mbPerSecondLimitGlobal);
-        assertEquals(78_643_200, c.bytesPerSecondGlobal());
-        assertTrue(c.enableChunkGeneration);
-        assertEquals(40, c.generationConcurrencyLimitGlobal);
-        assertEquals(60, c.generationTimeoutSeconds);
-        assertEquals(10, c.dirtyBroadcastIntervalSeconds);
-        assertEquals(40, c.generationConcurrencyLimitPerPlayer);
-        assertEquals(0, c.perDimensionTimestampCacheSizeMB); // 0 = AUTO (from lodDistance)
-    }
-
-    @Test
-    void partialFileResaveMigratesUpdateEventsAndNewFieldsIn(@TempDir Path dataFolder) throws Exception {
-        Files.writeString(dataFolder.resolve(FILE), "{\"lodDistanceChunks\": 64}");
-
-        PaperConfig.load(dataFolder);
-
-        JsonObject saved = savedJson(dataFolder);
-        assertEquals(64, saved.get("lodDistanceChunks").getAsInt()); // admin's value kept
-        for (String key : serializedFieldNames()) {
-            assertTrue(saved.has(key), "re-saved file missing migrated field " + key);
+    void partialLegacyFileMigratesWithoutArmingStoreAndPinsOldVanillaRadii(@TempDir Path directory) throws Exception {
+        String original = "{\"lodDistanceChunks\": 64}";
+        Files.writeString(directory.resolve(JSON), original);
+        try (var config = PaperConfig.load(directory)) {
+            assertNull(config.startupError());
+            assertEquals(64, config.lodDistanceChunks());
+            assertEquals("off", config.lodStore());
+            assertEquals(java.util.Map.of("minecraft:overworld",64,"minecraft:the_nether",64,"minecraft:the_end",64),config.snapshot().lod().distance().byDimension());
+            assertEquals(DEFAULT_EVENTS, config.updateEvents());
+            assertTrue(config.enabled());
+            assertEquals(25.0, config.mbPerSecondLimitPerPlayer());
+            assertEquals(26_214_400, config.bytesPerSecondPerPlayer());
+            assertEquals(75.0, config.mbPerSecondLimitGlobal());
+            assertEquals(78_643_200, config.bytesPerSecondGlobal());
+            assertEquals(0, config.diskReaderThreads());
+            assertEquals(1024, config.sendQueueLimitPerPlayer());
+            assertTrue(config.enableChunkGeneration());
+            assertEquals(40, config.generationConcurrencyLimitGlobal());
+            assertEquals(40, config.generationConcurrencyLimitPerPlayer());
+            assertEquals(1200, config.generationTimeoutTicks());
+            assertEquals(200, config.dirtyBroadcastIntervalTicks());
+            assertEquals(0, config.perDimensionTimestampCacheSizeMB());
+            assertEquals(original, Files.readString(directory.resolve(JSON)));
+            assertEquals(original, Files.readString(directory.resolve(JSON + ".migrated.bak")));
+            try (var reread = PaperConfig.load(directory)) {
+                assertEquals(config.snapshot(), reread.snapshot());
+            }
         }
-        var savedEvents = saved.getAsJsonArray("updateEvents");
-        assertEquals(DEFAULT_EVENTS.size(), savedEvents.size());
-        assertTrue(savedEvents.toString().contains("org.bukkit.event.block.BlockPlaceEvent"));
     }
 
     @Test
-    void updateEventsFromFileReplaceDefaultsEntirely(@TempDir Path dataFolder) throws Exception {
-        Files.writeString(dataFolder.resolve(FILE),
-                "{\"updateEvents\": [\"org.bukkit.event.block.BlockPlaceEvent\"]}");
-
-        PaperConfig c = PaperConfig.load(dataFolder);
-
-        assertEquals(List.of("org.bukkit.event.block.BlockPlaceEvent"), c.updateEvents);
-        assertEquals(1, savedJson(dataFolder).getAsJsonArray("updateEvents").size());
+    void brokenLegacyFilesDisableServiceAndPreserveSourceWithoutCreatingYaml(@TempDir Path directory) throws Exception {
+        for (String broken : List.of("", "{\"lodDistanceChunks\": 64", "{\"updateEvents\": \"wrong\", \"lodDistanceChunks\": 64}")) {
+            Files.writeString(directory.resolve(JSON), broken);
+            try (var config = assertDoesNotThrow(() -> PaperConfig.load(directory))) {
+                assertNotNull(config.startupError());
+                assertFalse(config.enabled());
+                assertFalse(config.enableChunkGeneration());
+                assertEquals("off", config.lodStore());
+                assertEquals(broken, Files.readString(directory.resolve(JSON)));
+                assertFalse(Files.exists(directory.resolve(YAML)));
+            }
+        }
     }
 
     @Test
-    void nullUpdateEventsInFileBecomesEmptyListAndResavesAsEmptyArray(@TempDir Path dataFolder) throws Exception {
-        Files.writeString(dataFolder.resolve(FILE), "{\"updateEvents\": null}");
-
-        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
-
-        assertEquals(List.of(), c.updateEvents); // null guard in validate(), no NPE downstream
-        assertEquals(0, savedJson(dataFolder).getAsJsonArray("updateEvents").size());
+    void authoritativeInvalidYamlNeverFallsBackToValidJson(@TempDir Path directory) throws Exception {
+        String yaml = "config_version: 1\nlod:\n  distance:\n    defaut_chunks: 64\n";
+        Files.writeString(directory.resolve(YAML), yaml);
+        Files.writeString(directory.resolve(JSON), "{\"lodDistanceChunks\": 64}");
+        try (var config = PaperConfig.load(directory)) {
+            assertNotNull(config.startupError());
+            assertFalse(config.enabled());
+            assertEquals(yaml, Files.readString(directory.resolve(YAML)));
+            assertFalse(Files.exists(directory.resolve(JSON + ".migrated.bak")));
+        }
     }
 
-    // ---- registration glue: a Plugin proxy recording PaperWorldHandler's registerEvent calls ----
-
-    private static <T> T proxy(Class<T> iface, InvocationHandler h) {
-        return iface.cast(Proxy.newProxyInstance(iface.getClassLoader(), new Class<?>[]{iface}, h));
+    @Test
+    void legacyEventsReplaceDefaultsAndNullListMigratesToEmpty(@TempDir Path directory) throws Exception {
+        for (String value : List.of("[\"org.bukkit.event.block.BlockPlaceEvent\"]", "null")) {
+            Files.deleteIfExists(directory.resolve(YAML));
+            String original = "{\"updateEvents\": " + value + "}";
+            Files.writeString(directory.resolve(JSON), original);
+            try (var config = PaperConfig.load(directory)) {
+                assertNull(config.startupError());
+                assertEquals(value.equals("null") ? List.of() : List.of("org.bukkit.event.block.BlockPlaceEvent"), config.updateEvents());
+                assertEquals(original, Files.readString(directory.resolve(JSON)));
+                try (var reread = PaperConfig.load(directory)) {
+                    assertEquals(config.updateEvents(), reread.updateEvents());
+                }
+            }
+        }
     }
 
-    /** Records the event class of every registerEvent call (same proxy shape as PaperWorldHandlerTest). */
+    @Test
+    void migrationDropsNullEventEntryAndRegistersBothValidNeighbours(@TempDir Path directory) throws Exception {
+        Files.writeString(directory.resolve(JSON), "{\"updateEvents\": ["
+                + "\"org.bukkit.event.block.BlockPlaceEvent\", null, \"org.bukkit.event.block.BlockBreakEvent\"]}");
+        try (var config = PaperConfig.load(directory)) {
+            assertNull(config.startupError());
+            List<String> expected = List.of("org.bukkit.event.block.BlockPlaceEvent", "org.bukkit.event.block.BlockBreakEvent");
+            assertEquals(expected, config.updateEvents());
+            List<Class<?>> registered = new ArrayList<>();
+            new PaperWorldHandler(recordingPlugin(registered), new DirtyColumnTracker()).registerUpdateListeners(config.updateEvents());
+            assertEquals(expected, registered.stream().map(Class::getName).toList());
+        }
+    }
+
+    @Test
+    void freshDefaultEventsAllRegister(@TempDir Path directory) {
+        try (var config = PaperConfig.load(directory)) {
+            List<Class<?>> registered = new ArrayList<>();
+            new PaperWorldHandler(recordingPlugin(registered), new DirtyColumnTracker()).registerUpdateListeners(config.updateEvents());
+            assertEquals(DEFAULT_EVENTS, registered.stream().map(Class::getName).toList());
+        }
+    }
+
+    @Test
+    void adoptsOtherBrandYamlAndReloadsOnlyOnExplicitRequestWithoutRewriting(@TempDir Path directory) throws Exception {
+        Path adopted = directory.resolve("vss-server-config.yaml");
+        String initial = "# retained operator comment\nconfig_version: 1\nlod:\n  distance:\n    default_chunks: 64\n";
+        Files.writeString(adopted, initial);
+        try (var config = PaperConfig.load(directory)) {
+            assertNull(config.startupError());
+            assertEquals(adopted.toAbsolutePath(), config.settingsPath());
+            assertEquals(64, config.lodDistanceChunks());
+            assertEquals(initial, Files.readString(adopted));
+            String edited = initial.replace("64", "96");
+            Files.writeString(adopted, edited);
+            assertEquals(64, config.lodDistanceChunks(), "disk edits are drafts until explicit reload");
+            var result = config.reload(Runnable::run, (previous, next, revision) -> CompletableFuture.completedFuture(null))
+                    .get(10, TimeUnit.SECONDS);
+            assertEquals(SettingsReload.Status.APPLIED, result.status());
+            assertEquals(96, config.lodDistanceChunks());
+            assertEquals(edited, Files.readString(adopted));
+            assertFalse(Files.exists(directory.resolve(YAML)));
+        }
+    }
+
+    @Test
+    void adoptsOtherBrandLegacyStemAndRetainsByteExactBackup(@TempDir Path directory) throws Exception {
+        String original = "{\"lodDistanceChunks\": 80, \"generationTimeoutSeconds\": 3, \"dirtyBroadcastIntervalSeconds\": 0}";
+        Path source = directory.resolve("vss-server-config.json");
+        Files.writeString(source, original);
+        try (var config = PaperConfig.load(directory)) {
+            assertNull(config.startupError());
+            assertEquals(directory.resolve("vss-server-config.yaml").toAbsolutePath(), config.settingsPath());
+            assertEquals(80, config.lodDistanceChunks());
+            assertEquals(60, config.generationTimeoutTicks());
+            assertEquals(0, config.dirtyBroadcastIntervalTicks());
+            assertEquals(original, Files.readString(source));
+            assertEquals(original, Files.readString(directory.resolve("vss-server-config.json.migrated.bak")));
+            assertFalse(Files.exists(directory.resolve(YAML)));
+        }
+    }
+
+    private static <T> T proxy(Class<T> iface, InvocationHandler handler) {
+        return iface.cast(Proxy.newProxyInstance(iface.getClassLoader(), new Class<?>[]{iface}, handler));
+    }
+
     private static Plugin recordingPlugin(List<Class<?>> registered) {
-        PluginManager pm = proxy(PluginManager.class, (p, m, args) -> {
-            if ("registerEvent".equals(m.getName())) registered.add((Class<?>) args[0]);
+        PluginManager manager = proxy(PluginManager.class, (p, method, args) -> {
+            if ("registerEvent".equals(method.getName())) registered.add((Class<?>) args[0]);
             return null;
         });
-        Server server = proxy(Server.class, (p, m, args) ->
-                "getPluginManager".equals(m.getName()) ? pm : null);
-        return proxy(Plugin.class, (p, m, args) ->
-                "getServer".equals(m.getName()) ? server : null);
-    }
-
-    @Test
-    void updateEventsStringInsteadOfArrayRevertsWholeFileAndDefaultsRegister(@TempDir Path dataFolder) throws Exception {
-        // A string where the array is expected fails GSON's collection adapter, which reverts
-        // the WHOLE file to defaults — including the valid lodDistanceChunks customization.
-        String broken = "{\"updateEvents\": \"org.bukkit.event.block.BlockPlaceEvent\", \"lodDistanceChunks\": 64}";
-        Files.writeString(dataFolder.resolve(FILE), broken);
-
-        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
-
-        assertEquals(DEFAULT_EVENTS, c.updateEvents);
-        assertEquals(512, c.lodDistanceChunks); // the valid customization is reverted with the rest
-        assertEquals(broken, Files.readString(dataFolder.resolve(FILE)));
-
-        List<Class<?>> registered = new ArrayList<>();
-        new PaperWorldHandler(recordingPlugin(registered), new DirtyColumnTracker())
-                .registerUpdateListeners(c.updateEvents);
-        assertEquals(DEFAULT_EVENTS.size(), registered.size(),
-                "the fallback default events must all register so dirty detection still works");
-    }
-
-    @Test
-    void updateEventsNullEntrySurvivesLoadAndRegistrationSkipsOnlyTheNull(@TempDir Path dataFolder) throws Exception {
-        // GSON loads a null ELEMENT into the list — a shape List.of-based tests can never build.
-        // Registration must skip it via the per-entry catch and keep both valid neighbours.
-        Files.writeString(dataFolder.resolve(FILE), "{\"updateEvents\": ["
-                + "\"org.bukkit.event.block.BlockPlaceEvent\", null, \"org.bukkit.event.block.BlockBreakEvent\"]}");
-
-        PaperConfig c = assertDoesNotThrow(() -> PaperConfig.load(dataFolder));
-
-        assertEquals(Arrays.asList("org.bukkit.event.block.BlockPlaceEvent", null,
-                "org.bukkit.event.block.BlockBreakEvent"), c.updateEvents);
-        assertEquals(3, savedJson(dataFolder).getAsJsonArray("updateEvents").size()); // write-back keeps the null
-
-        List<Class<?>> registered = new ArrayList<>();
-        assertDoesNotThrow(() -> new PaperWorldHandler(recordingPlugin(registered), new DirtyColumnTracker())
-                .registerUpdateListeners(c.updateEvents));
-        assertEquals(List.of("org.bukkit.event.block.BlockPlaceEvent", "org.bukkit.event.block.BlockBreakEvent"),
-                registered.stream().map(Class::getName).toList(),
-                "entries before AND after the null must register; the null lands in the per-entry catch");
+        Server server = proxy(Server.class, (p, method, args) -> "getPluginManager".equals(method.getName()) ? manager : null);
+        return proxy(Plugin.class, (p, method, args) -> "getServer".equals(method.getName()) ? server : null);
     }
 }

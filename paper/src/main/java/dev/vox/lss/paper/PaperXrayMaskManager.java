@@ -53,7 +53,7 @@ final class PaperXrayMaskManager {
     private volatile PaperXrayMaskFilter.MaskSet fallbackMask;
 
     PaperXrayMaskManager(ServerConfigBase config) {
-        this.mode = XrayMaskPolicy.Mode.parse(config.xrayObfuscation);
+        this.mode = XrayMaskPolicy.Mode.parse(config.xrayObfuscation());
         this.config = config;
     }
 
@@ -188,7 +188,7 @@ final class PaperXrayMaskManager {
                 resolved = this.fallbackMask;
                 if (resolved == null) {
                     resolved = PaperXrayMaskFilter.MaskSet.resolve(
-                            this.config.xrayHiddenBlocks, this.config.xrayMaxBlockHeight);
+                            this.config.xrayHiddenBlocks(), this.config.xrayMaxBlockHeight());
                     this.fallbackMask = resolved;
                 }
             }

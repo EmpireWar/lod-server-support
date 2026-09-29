@@ -1,6 +1,7 @@
 plugins {
     id 'java-library'
     id 'java-test-fixtures'
+    id 'com.gradleup.shadow' version '9.4.2'
 }
 
 version = project.mod_version
@@ -10,33 +11,54 @@ repositories {
     mavenCentral()
 }
 
+configurations {
+    yamlEngine {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 21
 }
 
 dependencies {
     api 'org.slf4j:slf4j-api:2.0.18'
+    compileOnly 'org.snakeyaml:snakeyaml-engine:3.1.1'
+    yamlEngine 'org.snakeyaml:snakeyaml-engine:3.1.1'
     compileOnly 'it.unimi.dsi:fastutil:8.5.18'
     // Provided at runtime by both platforms (Minecraft bundles GSON); compileOnly keeps it
     // out of the Paper shadow jar and the Fabric jar-in-jar, same pattern as fastutil.
     compileOnly 'com.google.code.gson:gson:2.13.2'
-    // LOD store engine + codec (docs/planning/lod-store-implementation-plan.md §3).
-    // compileOnly: each platform supplies the runtime — Fabric nests native-stripped
-    // jar-in-jar copies (fabric/build.gradle slimStoreDepJars), Paper shades them into
-    // the plugin jar WITHOUT relocating org.sqlite (relocation breaks its native loader).
-    compileOnly 'org.xerial:sqlite-jdbc:3.49.1.0'
+    // SQLite is compiled only by the private bridge and packaged as an opaque
+    // resource (gradle/sqlite-runtime.gradle). Platforms still provide zstd.
     compileOnly 'com.github.luben:zstd-jni:1.5.7-3'
 }
 
 // P6a: MC/loader-free tests execute on Java 21 on every support line.
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.snakeyaml:snakeyaml-engine:3.1.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'it.unimi.dsi:fastutil:8.5.18'
     testImplementation 'com.google.code.gson:gson:2.13.2'
-    testImplementation 'org.xerial:sqlite-jdbc:3.49.1.0'
     testImplementation 'com.github.luben:zstd-jni:1.5.7-3'
 }
+
+// One relocated parser copy travels with common, whether nested by Fabric or
+// flattened into Paper/NeoForge. Never resolve an ambient server YAML implementation.
+tasks.named('jar') { archiveClassifier = 'plain' }
+tasks.named('shadowJar') {
+    archiveClassifier = ''
+    configurations = [project.configurations.yamlEngine]
+    relocate 'org.snakeyaml.engine', 'dev.vox.lss.internal.yaml'
+    exclude 'module-info.class', 'META-INF/versions/**/module-info.class'
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA'
+    // Parser license/notice are tracked in common's META-INF/licenses resources.
+}
+configurations.runtimeElements.outgoing.artifacts.clear()
+artifacts { runtimeElements tasks.named('shadowJar') }
+tasks.named('assemble') { dependsOn tasks.named('shadowJar') }
 test {
     useJUnitPlatform()
     doFirst {
@@ -57,3 +79,36 @@ test {
         .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.dir('src/main/java').withPathSensitivity(PathSensitivity.RELATIVE)
 }
+
+// Shared settings-file helper: no Minecraft launch or loader classpath is needed.
+configurations {
+    settingsCliRuntime {
+        canBeConsumed = false
+        transitive = false
+    }
+}
+dependencies {
+    settingsCliRuntime 'org.snakeyaml:snakeyaml-engine:3.1.1'
+    settingsCliRuntime 'com.google.code.gson:gson:2.13.2'
+}
+tasks.register('settingsCliClasspath') {
+    dependsOn tasks.named('classes')
+    def target = layout.buildDirectory.file('settings-cli/classpath.txt')
+    outputs.file(target)
+    inputs.files(sourceSets.main.output, configurations.settingsCliRuntime)
+    doLast {
+        def output = target.get().asFile
+        output.parentFile.mkdirs()
+        output.text = (sourceSets.main.output.files + configurations.settingsCliRuntime.files)
+            .collect { it.absolutePath }.join(File.pathSeparator) + '\n'
+    }
+}
+tasks.register('settingsCli', JavaExec) {
+    dependsOn tasks.named('classes')
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+    classpath = sourceSets.main.output + configurations.settingsCliRuntime
+    mainClass = 'dev.vox.lss.common.config.SettingsCli'
+    if (project.hasProperty('settingsArgs')) args project.property('settingsArgs').split('\\s+')
+}
+
+apply from: rootProject.file('gradle/sqlite-runtime.gradle')

@@ -43,6 +43,7 @@ public class ChunkGenerationService {
         final ServerLevel level;
         final List<GenerationCallback> callbacks = new ArrayList<>();
         int ticksWaiting = 0;
+        int timeoutTicks;
 
         PendingGeneration(ChunkPos pos, ServerLevel level) {
             this.pos = pos;
@@ -66,12 +67,22 @@ public class ChunkGenerationService {
     // distance-graph fixpoint (see DeferredTicketReleases).
     private final DeferredTicketReleases deferredReleases = new DeferredTicketReleases();
 
-    // Non-final since v0.11.0 stage C (/lsslod set tick-poll): submit/tick are
-    // main-thread-only, so plain fields suffice (unlike the per-player genSlotCap,
+    // Reload policy updates and submit/tick are main-thread-only, so plain
+    // fields suffice (unlike the per-player genSlotCap,
     // which the PROCESSING thread reads and must be volatile).
     private int maxConcurrent;
     private int maxPerPlayerActive;
-    private final int timeoutTicks;
+    private int timeoutTicks;
+    private boolean admissionEnabled;
+    private long policyRevision;
+
+    public void updatePolicy(boolean enabled, int global, int perPlayer, int timeoutTicks, long revision) {
+        if (revision < this.policyRevision) return;
+        this.admissionEnabled = enabled;
+        this.timeoutTicks = timeoutTicks;
+        this.policyRevision = revision;
+        updateCaps(global, perPlayer);
+    }
     private final ColumnSerializer columnSerializer;
     private DirtyContentFilter dirtyContentFilter;
 
@@ -91,7 +102,8 @@ public class ChunkGenerationService {
         var generationLimits = config.generationLimits();
         this.maxConcurrent = generationLimits.global();
         this.maxPerPlayerActive = generationLimits.perPlayer();
-        this.timeoutTicks = config.generationTimeoutSeconds * LSSConstants.TICKS_PER_SECOND;
+        this.timeoutTicks = config.generationTimeoutTicks();
+        this.admissionEnabled = config.enableChunkGeneration();
         this.columnSerializer = columnSerializer;
     }
 
@@ -113,7 +125,7 @@ public class ChunkGenerationService {
      * false if at capacity (caller should feed back a rejection result).
      */
     public boolean submitGeneration(UUID playerUuid, RequestRegistration registration, ServerLevel level, int cx, int cz, long submissionOrder) {
-        if (registration.isRetired()) return false;
+        if (!this.admissionEnabled || registration.isRetired()) return false;
         var key = new PendingGenerationKey(level.dimension(), cx, cz);
 
         // Already active — piggyback on existing entry
@@ -136,6 +148,7 @@ public class ChunkGenerationService {
             }
 
             var gen = new PendingGeneration(pos, level);
+            gen.timeoutTicks = this.timeoutTicks;
             gen.callbacks.add(new GenerationCallback(playerUuid, registration, submissionOrder));
             this.active.put(key, gen);
             incrementCount(this.perPlayerActiveCount, registration);
@@ -164,7 +177,7 @@ public class ChunkGenerationService {
             var gen = entry.getValue();
             gen.ticksWaiting++;
 
-            if (gen.ticksWaiting > this.timeoutTicks) {
+            if (gen.ticksWaiting > gen.timeoutTicks) {
                 LSSLogger.debug("Generation timeout for chunk " + gen.pos.x + "," + gen.pos.z
                         + " after " + gen.ticksWaiting + " ticks (" + gen.callbacks.size() + " callbacks)");
                 if (ready == null) ready = new ArrayList<>();
@@ -281,6 +294,9 @@ public class ChunkGenerationService {
         this.active.clear();
         this.perPlayerActiveCount.clear();
     }
+
+    /** Capture on the service owner; admitted work may still be draining when false. */
+    public boolean isAdmissionEnabled() { return admissionEnabled; }
 
     public String getDiagnostics() {
         return String.format("submitted=%d, completed=%d, active=%d, timeouts=%d, removed=%d",

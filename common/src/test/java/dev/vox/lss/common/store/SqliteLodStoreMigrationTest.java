@@ -76,8 +76,7 @@ class SqliteLodStoreMigrationTest {
 
     private void buildSchema3Store(String fingerprint, List<FixtureRow> rows) throws Exception {
         Files.createDirectories(storeDir());
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         StoreCodec codec = StoreCodec.zstdOrNull();
         assertNotNull(codec, "zstd natives required on the test classpath");
         long now = System.currentTimeMillis() / 1000L;
@@ -188,8 +187,7 @@ class SqliteLodStoreMigrationTest {
     }
 
     private String metaValue(String key) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             try (var rs = st.executeQuery("SELECT v FROM meta WHERE k='" + key + "'")) {
@@ -251,8 +249,7 @@ class SqliteLodStoreMigrationTest {
         // WRITE_FAILURE_LATCH, recoverable only by hand-deleting store.db.
         long p1 = PositionUtil.packPosition(1, 2);
         buildSchema3Store(FP, List.of(new FixtureRow(p1, raw(10, 900), false)));
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("UPDATE meta SET v='4' WHERE k='schema_version'");
             st.execute("UPDATE meta SET v='20' WHERE k='wire_format_version'");
@@ -332,8 +329,7 @@ class SqliteLodStoreMigrationTest {
         // The CRITICAL-1 shape: a bit-rotted usize would size a multi-GB decompress
         // allocation on the batcher — the walk must bound-check and resolve the row,
         // never attempt it (the old shape OOM'd into an endless batch-retry → latch).
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.executeUpdate("UPDATE lods_1 SET usize=" + (1 << 30) + " WHERE pos=" + poison);
         }
@@ -510,8 +506,7 @@ class SqliteLodStoreMigrationTest {
         open().shutdown();
         // Hand-advance the watermark PAST the row: byte-for-byte the end-state of the
         // swallowed delete-failure (the walk never looks behind its watermark).
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (Connection c = ds.getConnection(); Statement st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             st.executeUpdate("INSERT OR REPLACE INTO meta (k, v) VALUES"
@@ -562,8 +557,7 @@ class SqliteLodStoreMigrationTest {
 
     private void assertMigrationRejectsIntegrityChange(String mutation) throws Exception {
         buildSchema3Store(FP, List.of(new FixtureRow(0L, new byte[]{1, 2, 3, 4}, false)));
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (var c = ds.getConnection(); var st = c.createStatement()) {
             st.executeUpdate("UPDATE lods_1 SET " + mutation);
         }
@@ -582,8 +576,7 @@ class SqliteLodStoreMigrationTest {
 
     @Test void ordinaryReaderRejectsSameLegacyChecksumMismatch() throws Exception {
         buildSchema3Store(FP, List.of(new FixtureRow(0L, new byte[]{1, 2, 3, 4}, false)));
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + storeDir().resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + storeDir().resolve("store.db"));
         try (var c = ds.getConnection(); var st = c.createStatement()) {
             st.executeUpdate("UPDATE lods_1 SET chash=chash+1");
         }

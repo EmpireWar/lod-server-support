@@ -146,7 +146,8 @@ class NeoForgeLoaderSeamContractTest {
         // The PREFS-CARRIER gate MUST survive: a config-disabled client renders nothing yet
         // still delivers its shareSelf opt-out (the capability bit is the prefs carrier).
         assertTrue(renderer.contains("capabilityBit() == 0")
-                        && renderer.contains("effectiveFarPlayersEnabled()"),
+                        && renderer.contains("var config = LSSClientConfig.CONFIG.snapshot().farPlayers()")
+                        && renderer.contains("|| !config.enabled()"),
                 "renderContained must keep the capability/effective-enabled gate — a disabled"
                         + " NeoForge client must render nothing but still carry its prefs");
         // The crash-containment ladder MUST survive: the whole-pass Throwable latch + the

@@ -8,6 +8,7 @@ import net.minecraft.network.chat.Component;
 
 /** Small loader-neutral status surface; render performs no collection or I/O. */
 public final class ClientStatusScreen extends Screen {
+    public static Screen currentScreen() { return net.minecraft.client.Minecraft.getInstance().screen; }
     private final Screen parent;
     private final Runnable onReturn;
     private final dev.vox.lss.common.diagnostics.ScreenEscapeRelease escape =
@@ -24,16 +25,6 @@ public final class ClientStatusScreen extends Screen {
         int left = Math.max(3, width / 2 - 155);
         addRenderableWidget(Button.builder(Component.translatable("lss.status.export"), button ->
                 ClientCommandActions.exportDiagnostics(this::feedback)).bounds(left, height - 27, 90, 20).build());
-        addRenderableWidget(Button.builder(Component.translatable(
-                dev.vox.lss.config.LSSClientConfig.CONFIG.receiveServerLods ? "lss.status.receive_off" : "lss.status.receive_on"), button -> {
-            var cfg = dev.vox.lss.config.LSSClientConfig.CONFIG;
-            cfg.receiveServerLods = !cfg.receiveServerLods;
-            ClientNetGlue.reconcileClientConfig();
-            boolean saved = cfg.trySave();
-            button.setMessage(Component.translatable(cfg.receiveServerLods ? "lss.status.receive_off" : "lss.status.receive_on"));
-            feedback(Component.literal("Reception " + (cfg.receiveServerLods ? "ON" : "OFF")
-                    + (saved ? "; saved." : "; applied, but not saved — check client log.")));
-        }).bounds(left + 93, height - 27, 90, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("lss.status.more"), button -> textPage++)
                 .bounds(left + 186, height - 27, 60, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("lss.status.done"), button -> onClose())
@@ -41,7 +32,12 @@ public final class ClientStatusScreen extends Screen {
     }
     private void feedback(Component message) {
         lastActionFeedback = message;
-        if (minecraft.player != null) minecraft.gui.getChat().addMessage(message);
+        sendChatFeedback(message);
+    }
+    /** Local action feedback, shared with automatic Sodium reloads across screen API generations. */
+    public static void sendChatFeedback(Component message) {
+        var client = net.minecraft.client.Minecraft.getInstance();
+        if (client.player != null) client.gui.getChat().addMessage(message);
     }
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float delta) {
         // 1.21.1 Screen.render draws its blurred background before widgets.
@@ -49,10 +45,15 @@ public final class ClientStatusScreen extends Screen {
         super.render(graphics, mouseX, mouseY, delta);
         graphics.drawCenteredString(font, title, width / 2, 12, 0xffffff);
         var snapshot = ClientStatus.latest();
-        var lines = snapshot == null ? java.util.List.of("Waiting for a current-session snapshot…") : snapshot.lines();
+        var lines = ClientStatusComponents.lines(snapshot);
         var wrappedLines = new java.util.ArrayList<net.minecraft.util.FormattedCharSequence>();
+        var config = dev.vox.lss.config.LSSClientConfig.CONFIG;
+        if (config.error() != null) wrappedLines.addAll(font.split(
+                Component.translatable("lss.settings.inactive", config.error()), Math.max(50, width - 30)));
+        if (!config.pendingReconnect().isEmpty()) wrappedLines.addAll(font.split(
+                Component.translatable("lss.settings.pending_reconnect_notice"), Math.max(50, width - 30)));
         if (lastActionFeedback != null) wrappedLines.addAll(font.split(lastActionFeedback, Math.max(50, width - 30)));
-        for (String line : lines) wrappedLines.addAll(font.split(Component.literal(line), Math.max(50, width - 30)));
+        for (Component line : lines) wrappedLines.addAll(font.split(line, Math.max(50, width - 30)));
         int rows = Math.max(1, (height - 72) / 11);
         int pages = Math.max(1, (wrappedLines.size() + rows - 1) / rows);
         int first = Math.floorMod(textPage, pages) * rows;

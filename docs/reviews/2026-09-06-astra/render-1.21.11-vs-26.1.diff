@@ -74,10 +74,10 @@
 +import java.util.function.IntSupplier;
  
  /**
-  * The far-player proxy renderer (E2, FARP §3.3/§7-B — the SeeU
+  * The far-player proxy renderer (E2, FARP §3.3/§7-B — the
 - * {@code RemotePlayer}-proxy + {@code WorldRenderContext} submission approach, proven
 + * {@code RemotePlayer}-proxy + {@code LevelRenderContext} submission approach, proven
-  * on 26.2, reimplemented in LSS idiom). Differences from SeeU that are DECISIONS, not
+  * on 26.2, reimplemented in LSS idiom). Behavioral choices that are DECISIONS, not
   * drift (all review-pinned in the FARP plan):
 @@ -101,21 +109,20 @@
 

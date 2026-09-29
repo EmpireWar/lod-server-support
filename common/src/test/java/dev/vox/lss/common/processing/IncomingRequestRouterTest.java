@@ -1653,4 +1653,62 @@ class IncomingRequestRouterTest {
             proc.shutdown();
         }
     }
+    @Test
+    void generationReloadFencesQueuedTerminalAndUnwindsPolicyRacedTicket() throws Exception {
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var state = addPlayer(players, 4, 4);
+        var proc = new TestProcessor(players, null, false, null);
+        try {
+            proc.start();
+            offer(state, new IncomingRequest(3, 3, -1));
+            proc.postSnapshot(snapshot(state), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalRequestsRouted() == 1, "disabled terminal queued");
+            proc.updateSettingsPolicy(true, 1 << 20, 0, 1).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            var stale = new ArrayList<Delivered>();
+            proc.drainSendActions((who, types, positions, count) -> {
+                for (int i = 0; i < count; i++) stale.add(new Delivered(who, types[i], positions[i]));
+            });
+            assertTrue(stale.isEmpty(), "NOT_GENERATED queued before enable cannot poison the refreshed client");
+            offer(state, new IncomingRequest(3, 3, -1));
+            proc.postSnapshot(snapshot(state), List.of());
+            var ticket = awaitTicket(proc);
+            assertEquals(1, ticket.policyRevision(), "platform submission carries the admitting policy fence");
+            proc.updateSettingsPolicy(false, 1 << 20, 0, 2).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            // The platform submission boundary rejects this queued ticket transiently.
+            proc.feedGenerationFailure(ticket.playerUuid(), ticket.registration(), ticket.cx(), ticket.cz(),
+                    ticket.dimension(), ticket.submissionOrder(), true);
+            proc.postSnapshot(snapshot(state), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalGenDrained() == 1, "rejected ticket slot released");
+            proc.updateSettingsPolicy(true, 1 << 20, 0, 3).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            offer(state, new IncomingRequest(3, 3, -1));
+            proc.postSnapshot(snapshot(state), List.of());
+            assertEquals(3, awaitTicket(proc).policyRevision(), "same position re-admits under the new policy without reconnect");
+        } finally { proc.shutdown(); }
+        assertTrue(proc.updateSettingsPolicy(true, 1 << 20, 0, 4).isCompletedExceptionally());
+    }
+
+    @Test
+    void oldGenerationPermanentFailureBecomesTransientAcrossOffOn() throws Exception {
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var state = addPlayer(players, 4, 4);
+        var proc = new TestProcessor(players, null, true, null);
+        try {
+            proc.start();
+            offer(state, new IncomingRequest(4, 4, -1));
+            proc.postSnapshot(snapshot(state), List.of());
+            var oldTicket = awaitTicket(proc);
+            proc.updateSettingsPolicy(false, 1 << 20, 0, 1).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            proc.updateSettingsPolicy(true, 1 << 20, 0, 2).get(10, java.util.concurrent.TimeUnit.SECONDS);
+            proc.feedGenerationFailure(oldTicket.playerUuid(), oldTicket.registration(), 4, 4,
+                    oldTicket.dimension(), oldTicket.submissionOrder(), false);
+            proc.postSnapshot(snapshot(state), List.of());
+            waitFor(() -> proc.getDiagnostics().getTotalGenDrained() == 1, "old outcome drained");
+            proc.drainSendActions((who, types, positions, count) -> fail("old failure must not become permanent"));
+            assertEquals(1, proc.getDiagnostics().getTotalSuperseded());
+            offer(state, new IncomingRequest(4, 4, -1));
+            proc.postSnapshot(snapshot(state), List.of());
+            assertNotNull(awaitTicket(proc));
+        } finally { proc.shutdown(); }
+    }
+
 }

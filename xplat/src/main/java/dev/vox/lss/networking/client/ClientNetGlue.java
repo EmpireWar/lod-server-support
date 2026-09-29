@@ -166,7 +166,7 @@ public final class ClientNetGlue {
     public static void triggerHostHandshake() {
         Minecraft.getInstance().execute(() -> {
             sessionGate.onHostServiceReady(); // remember publication even when downloads are OFF
-            if (!LSSClientConfig.CONFIG.receiveServerLods) return;
+            if (!LSSClientConfig.CONFIG.receiveServerLods()) return;
             if (sessionGate.getRequestManager() != null) return;
             if (!LSSApi.hasVoxelConsumers()) return; // no LOD consumer -> stay silent
             try {
@@ -230,7 +230,7 @@ public final class ClientNetGlue {
         // factory runs), so this is the single place that combines "v16 session" with the client
         // opt-in. A v18 session leaves it false and the egress byte-identical.
         manager.setV16GenerationDrive(shouldDriveV16Generation(
-                payload.protocolVersion(), LSSClientConfig.CONFIG.enableV16Generation));
+                payload.protocolVersion(), LSSClientConfig.CONFIG.enableV16Generation()));
         return manager;
     }
 
@@ -251,7 +251,7 @@ public final class ClientNetGlue {
         // rewritten — the §11 fold: a re-save must not erase dropped groups), so
         // this re-parse is silent — a warn sink here would double-log every session.
         var groups = CacheKeyAliases.validated(
-                LSSClientConfig.CONFIG.cacheAddressAliases, warn -> {});
+                LSSClientConfig.CONFIG.cacheAddressAliases(), warn -> {});
         var group = CacheKeyAliases.match(groups, connectAddr);
         if (group == null) {
             return unaliasedDecision(connectAddr, "no-group");
@@ -294,18 +294,20 @@ public final class ClientNetGlue {
 
     /** SessionConfig receiver body — hops to the client main thread. */
     public static void onSessionConfigFrame(SessionConfigS2CPayload payload) {
+        Object connection = FarPlayerClientSupport.connectionIdentity();
         Minecraft.getInstance().execute(() -> {
+            if (connection != FarPlayerClientSupport.connectionIdentity()) return;
             reconcileClientConfig();
             var previous = sessionGate.getRequestManager();
             sessionGate.onSessionConfig(payload, LSSApi.hasVoxelConsumers(),
-                    LSSClientConfig.CONFIG.enableV16ServerCompat);
+                    LSSClientConfig.CONFIG.enableV16ServerCompat());
             if (previous != null && previous != sessionGate.getRequestManager()) {
                 dev.vox.lss.compat.ModCompat.retireClientAcquisition();
             }
             // Far players (E1): the prefs frame follows the session config
             // (send-once-unless-changed, contained; no-op while the capability bit is
             // not composed — all of E1).
-            FarPlayerClientSupport.maybeSendPrefs();
+            FarPlayerClientSupport.onSessionReady();
         });
     }
 
@@ -332,12 +334,18 @@ public final class ClientNetGlue {
 
     /** Far-player roster receiver body — hops to the client main thread. */
     public static void onFarPlayerRosterFrame(byte[] body) {
-        Minecraft.getInstance().execute(() -> FarPlayerClientSupport.onRosterFrame(body));
+        Object connection = FarPlayerClientSupport.connectionIdentity();
+        Minecraft.getInstance().execute(() -> {
+            if (connection == FarPlayerClientSupport.connectionIdentity()) FarPlayerClientSupport.onRosterFrame(body);
+        });
     }
 
     /** Far-player updates receiver body — hops to the client main thread. */
     public static void onFarPlayerUpdatesFrame(byte[] body) {
-        Minecraft.getInstance().execute(() -> FarPlayerClientSupport.onUpdatesFrame(body));
+        Object connection = FarPlayerClientSupport.connectionIdentity();
+        Minecraft.getInstance().execute(() -> {
+            if (connection == FarPlayerClientSupport.connectionIdentity()) FarPlayerClientSupport.onUpdatesFrame(body);
+        });
     }
 
     /** Region-summary receiver body (region-summary-sync-plan.md §6) — hops to the
@@ -454,13 +462,14 @@ public final class ClientNetGlue {
 
     /** JOIN ladder body (each loader's connection-join event calls this). */
     public static void onJoin() {
+        LSSClientConfig.CONFIG.beginConnection(FarPlayerClientSupport.connectionIdentity());
         ClientStatus.invalidate();
         // Don't activate on singleplayer/integrated servers (unless testing)
         boolean localIntegratedServer = Minecraft.getInstance().hasSingleplayerServer()
                 && !Boolean.getBoolean("lss.test.integratedServer");
-        sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods, localIntegratedServer,
-                LSSApi.hasVoxelConsumers(), LSSClientConfig.CONFIG.enableV16ServerCompat,
-                LSSClientConfig.CONFIG.enableV19ServerCompat);
+        sessionGate.onJoin(LSSClientConfig.CONFIG.receiveServerLods(), localIntegratedServer,
+                LSSApi.hasVoxelConsumers(), LSSClientConfig.CONFIG.enableV16ServerCompat(),
+                LSSClientConfig.CONFIG.enableV19ServerCompat());
     }
 
     /** DISCONNECT ladder body. Known shared residual (N-3 review, pre-existing and
@@ -474,6 +483,13 @@ public final class ClientNetGlue {
         sessionGate.onDisconnect();
         FarPlayerClientSupport.onSessionEnd();
         dev.vox.lss.compat.ModCompat.onDisconnect();
+        LSSClientConfig.CONFIG.endConnection();
+    }
+
+    public static void validateClientSettings(dev.vox.lss.common.config.ClientSettings candidate) {
+        ClientIdentityResolver.validateConfiguredFallbacks(candidate);
+        CacheKeyAliases.validated(candidate.cache().addressAliases(),
+                warning -> LSSLogger.warn("cache.address_aliases: " + warning));
     }
 
     /** Apply and tick share the same idempotent, client-thread option transition. */
@@ -484,8 +500,8 @@ public final class ClientNetGlue {
             mc.execute(ClientNetGlue::reconcileClientConfig);
             return;
         }
-        if (sessionGate.reconcileReception(LSSClientConfig.CONFIG.receiveServerLods, LSSApi.hasVoxelConsumers())
-                && !LSSClientConfig.CONFIG.receiveServerLods) {
+        if (sessionGate.reconcileReception(LSSClientConfig.CONFIG.receiveServerLods(), LSSApi.hasVoxelConsumers())
+                && !LSSClientConfig.CONFIG.receiveServerLods()) {
             // Receipt retirement/save has completed; cancel queued map work but retain
             // texture rebuilds already committed to the still-connected native world.
             dev.vox.lss.compat.ModCompat.retireClientAcquisition();
@@ -494,6 +510,7 @@ public final class ClientNetGlue {
 
     /** End-of-client-tick body. */
     public static void onEndClientTick() {
+        FarPlayerClientSupport.tickPreferenceRetry();
         reconcileClientConfig();
         // Runs even before a session: the v16-server discovery fallback (no-op on the v18
         // happy path, which disarms it before the delay elapses).

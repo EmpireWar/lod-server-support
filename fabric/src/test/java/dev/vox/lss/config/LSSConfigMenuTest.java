@@ -33,16 +33,30 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code LegacySodiumPageTest} pins the legacy one: the catalog is walked in order into
  * two pages with the catalog's groups, every option carries the catalog's id/name/
  * tooltip/impact/default/range/binding/dependency, the value formatter renders the
- * catalog labels, and EXACTLY TWO storage handlers are installed across all options —
+ * catalog labels, and EXACTLY ONE storage handler are installed across all options —
  * Sodium fires each distinct handler once per Apply, so per-option lambdas would have
  * saved the file once per changed option (implementation review).
  */
 class LSSConfigMenuTest {
+    @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp;
+    private dev.vox.lss.config.menu.ClientSettingsEditSession draft;
+    private void register(RecordingConfigBuilder builder) {
+        try {
+            if (draft == null) {
+                var schema = dev.vox.lss.common.config.SettingsSchema.client();
+                var store = new dev.vox.lss.common.config.SettingsStore<>(temp, "lss", schema);
+                store.initialize();
+                draft = new dev.vox.lss.config.menu.ClientSettingsEditSession(store, schema::defaults);
+            }
+            new LSSConfigMenu().registerDraft(builder, draft, dev.vox.lss.config.menu.MenuContext.current());
+        } catch (java.io.IOException error) { throw new AssertionError(error); }
+    }
+
 
     @Test
     void walksTheCatalogIntoTwoPagesWithTheCatalogsShape() {
         var builder = new RecordingConfigBuilder();
-        new LSSConfigMenu().registerConfigLate(builder);
+        register(builder);
 
         assertEquals(1, builder.mods.size());
         var mod = builder.mods.get(0);
@@ -56,11 +70,9 @@ class LSSConfigMenuTest {
         for (int p = 0; p < catalog.size(); p++) {
             var page = mod.pages.get(p);
             assertEquals(catalog.get(p).titleKey(), page.name.getString(), "page title key");
-            // In a unit JVM nothing is hidden by SeeU (absent) but the far-player
             // renderer is AVAILABLE on Fabric, so the visible group shape is the catalog's
-            // minus the SeeU-only option.
             var visibleGroups = catalog.get(p).groups().stream()
-                    .map(g -> g.options().stream().filter(o -> o.visibility() != dev.vox.lss.config.menu.Visibility.SEEU_ONLY).toList())
+                    .map(g -> g.options().stream().toList())
                     .filter(l -> !l.isEmpty()).toList();
             assertEquals(visibleGroups.size(), page.groups.size(), "group count on page " + p);
             for (int g = 0; g < visibleGroups.size(); g++) {
@@ -74,10 +86,10 @@ class LSSConfigMenuTest {
     @Test
     void everyOptionCarriesTheCatalogsFacts() {
         var builder = new RecordingConfigBuilder();
-        new LSSConfigMenu().registerConfigLate(builder);
+        register(builder);
         List<RecordedOption<?>> built = new ArrayList<>();
         builder.mods.get(0).pages.forEach(p -> p.groups.forEach(g -> g.options.forEach(o -> built.add((RecordedOption<?>) o))));
-        assertEquals(10, built.size(), "11 catalog options minus the SeeU-only one");
+        assertEquals(10, built.size(), "ten explicit controls");
 
         for (RecordedOption<?> o : built) {
             OptionSpec spec = ClientOptionCatalog.find(o.id.toString()).orElseThrow();
@@ -125,47 +137,75 @@ class LSSConfigMenuTest {
     }
 
     @Test
-    void bindingsReadAndWriteTheLiveConfig() {
+    void bindingsEditOnlyTheRetainedDraft() {
         var builder = new RecordingConfigBuilder();
-        new LSSConfigMenu().registerConfigLate(builder);
-        var cfg = LSSClientConfig.CONFIG;
-        boolean priorReceive = cfg.receiveServerLods;
-        int priorRate = cfg.lodColumnsPerSecondLimit;
-        try {
-            @SuppressWarnings("unchecked")
-            var receive = (RecordedOption<Boolean>) find(builder, ClientOptionCatalog.ID_RECEIVE_SERVER_LODS);
-            receive.setter.accept(false);
-            assertEquals(false, cfg.receiveServerLods);
-            assertEquals(false, receive.getter.get());
-            @SuppressWarnings("unchecked")
-            var rate = (RecordedOption<Integer>) find(builder, ClientOptionCatalog.ID_COLUMN_RATE_LIMIT);
-            rate.setter.accept(1);
-            assertEquals(10, cfg.lodColumnsPerSecondLimit, "slider index 1 → 10 col/s");
-            assertEquals(1, rate.getter.get());
-        } finally {
-            cfg.receiveServerLods = priorReceive;
-            cfg.lodColumnsPerSecondLimit = priorRate;
-        }
+        register(builder);
+        @SuppressWarnings("unchecked") var receive = (RecordedOption<Boolean>) find(builder, ClientOptionCatalog.ID_RECEIVE_SERVER_LODS);
+        receive.setter.accept(false);
+        assertEquals(false, draft.bool("lod.receive"));
+        assertEquals(false, receive.getter.get());
+        @SuppressWarnings("unchecked") var rate = (RecordedOption<Integer>) find(builder, ClientOptionCatalog.ID_COLUMN_RATE_LIMIT);
+        rate.setter.accept(1);
+        assertEquals(10, draft.integer("lod.download.max_columns_per_second"));
+        assertEquals(1, rate.getter.get());
+        assertTrue(draft.hasRetainedEdits());
+        assertTrue(dev.vox.lss.common.config.SettingsSchema.client().defaults().lod().receive());
     }
 
     @Test
-    void exactlyTwoStorageHandlersAreSharedAcrossAllOptions() {
+    void oneStorageHandlerIsSharedAcrossAllOptions() {
         var builder = new RecordingConfigBuilder();
-        new LSSConfigMenu().registerConfigLate(builder);
+        register(builder);
         Set<StorageEventHandler> distinct = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
         List<RecordedOption<?>> built = new ArrayList<>();
         builder.mods.get(0).pages.forEach(p -> p.groups.forEach(g -> g.options.forEach(o -> built.add((RecordedOption<?>) o))));
         built.forEach(o -> distinct.add(o.storageHandler));
-        assertEquals(2, distinct.size(), "one handler per SaveHook — Sodium fires each distinct handler"
+        assertEquals(1, distinct.size(), "one handler per SaveHook — Sodium fires each distinct handler"
                 + " once per Apply; per-option lambdas save the file once per changed option");
-        // and the split follows the catalog: main page = one handler, far-player page = the other
+        // Both pages share the same save-and-reload transaction.
         var main = built.stream().filter(o -> ClientOptionCatalog.pages().get(0).options().stream()
                 .anyMatch(s -> s.id().equals(o.id.toString()))).map(o -> o.storageHandler).distinct().toList();
         var far = built.stream().filter(o -> ClientOptionCatalog.pages().get(1).options().stream()
                 .anyMatch(s -> s.id().equals(o.id.toString()))).map(o -> o.storageHandler).distinct().toList();
         assertEquals(1, main.size());
         assertEquals(1, far.size());
-        assertTrue(main.get(0) != far.get(0));
+        assertTrue(main.get(0) == far.get(0));
+    }
+
+    @Test
+    void cleanedModernOptionsRetainFailedEditsAndRetryWithoutReentry() throws Exception {
+        var schema = dev.vox.lss.common.config.SettingsSchema.client();
+        var fail = new java.util.concurrent.atomic.AtomicBoolean();
+        var store = new dev.vox.lss.common.config.SettingsStore<>(temp, "lss", schema,
+                line -> {}, (temporary, destination) -> { if (fail.get()) throw new java.io.IOException("disk full"); });
+        var live = new dev.vox.lss.common.config.SettingsHandle<>(store);
+        var reloads = new java.util.concurrent.atomic.AtomicInteger();
+        draft = new dev.vox.lss.config.menu.ClientSettingsEditSession(store, () -> live.state().effective(),
+                () -> live.state().configured(), () -> {
+                    try { reloads.incrementAndGet(); live.commit(live.prepareReload()); }
+                    catch (Exception failure) { throw new AssertionError(failure); }
+                });
+        var builder = new RecordingConfigBuilder();
+        register(builder);
+        @SuppressWarnings("unchecked") var option = (RecordedOption<Boolean>) find(builder, ClientOptionCatalog.ID_FAR_PLAYERS_SHARE_SELF);
+        option.modifyValue(false);
+        assertTrue(option.hasChanged());
+        option.applyChanges();
+        assertEquals(false, option.hasChanged(), "Sodium marks clean before saving");
+        fail.set(true);
+        option.storageHandler.afterSave();
+        assertTrue(draft.hasRetainedEdits());
+        assertEquals(dev.vox.lss.config.menu.ClientSettingsEditSession.Outcome.FAILED, draft.outcome());
+        assertTrue(live.state().effective().farPlayers().sharing().enabled());
+        draft.open(new Object());
+        option.resetFromBinding();
+        assertEquals(false, option.getValidatedValue(), "reopen keeps the failed draft visible");
+        assertEquals(0, reloads.get(), "failed save must not request reload");
+        fail.set(false);
+        assertTrue(draft.apply());
+        assertEquals(1, reloads.get(), "recovery must reload the saved draft");
+        assertEquals(false, store.read().configured().farPlayers().sharing().enabled());
+        assertEquals(false, live.state().effective().farPlayers().sharing().enabled());
     }
 
     private static RecordedOption<?> find(RecordingConfigBuilder builder, String id) {

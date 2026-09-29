@@ -1,61 +1,58 @@
 {
-  "independent_review_sources": [
-    "docs/implementation/2026-09-28-yaml-settings-progress.md",
-    "docs/implementation/2026-09-28-yaml-settings-cross-line-review.md",
-    "docs/reviews/2026-09-28-sqlite-isolation-implementation.md"
-  ],
   "intended_publish_artifact_count": 13,
   "lines": {
     "1.21.1": {
       "artifacts": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.1.jar": {
-          "bytes": 8760912,
+          "bytes": 8760228,
           "publish": true,
-          "sha256": "c5d537fa2c12a10f5d2080569b3b76342c95dda63a84eef4ad80b30974c9731a"
+          "sha256": "f93fa217e0fdc6433e47c38555dcb8efda3d808490265974d6cdececfbaaff1e"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.1.jar": {
-          "bytes": 8767061,
+          "bytes": 8766377,
           "publish": false,
-          "sha256": "bf9774dbac11fe7873fd4ebb054ec75a412bb5ec037a8de522a988c879e346d5"
+          "sha256": "157e13a23adc991eba22401f4268496f9192089eab9ac841402d3bfb94d338da"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.1.jar": {
-          "bytes": 13955063,
+          "bytes": 13954384,
           "publish": true,
-          "sha256": "a52753deade05fd833cedff0141cdae462d65d2766d6afe7f0794f18a4f9f0e8"
+          "sha256": "404ac7b3dde3454ae8087144956a5abf970bdf4ddaa273764e0a1ed5b216095e"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.1.jar": {
-          "bytes": 13961140,
+          "bytes": 13960461,
           "publish": false,
-          "sha256": "10fae75c9efb1a42ccac45000e49d24617c5636c33fcd51731ca9bdab8ab2990"
+          "sha256": "a780f192500f72e7559cc2bad28fea0ec3c07d8dc20c08c2eb96d3d79f8ce06b"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.1.jar": {
-          "bytes": 8321995,
+          "bytes": 8321235,
           "publish": true,
-          "sha256": "9b4515801f24892d859ce3ebed9dc7fb8f9cc9f8ed7b4361c301e92f22d6772b"
+          "sha256": "50071419f15e371574fc8f52977de54a6dbac0314b49e483a42d5db73cdce55e"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.1.jar": {
-          "bytes": 8321929,
+          "bytes": 8321169,
           "publish": false,
-          "sha256": "fa2d77ab6d9f7af304a137eedb124cd23b81714bca1f04096c5243b00abb53f3"
+          "sha256": "bb9d3705d682d42ed23ea25dd4744d18ac95f79bc96de9d3c370120daa0917e5"
         }
       },
       "base_branch": "support/mc1.21.1",
       "base_commit": "0390908b4e7857e0ec11fbd329364a5376582349",
-      "build_commit": "2c6f2d943840923f966a3a93f7475d0625e28c3d",
-      "build_log_sha256": "033934576bfbfc6b5a5ad591d7a4dfdfc722d7407f5b63357b18bee2b90fa4fa",
+      "baseline_candidate_commit": "b5d9059d911ddda34765c4fd62fd5da49d5477c5",
+      "build_attempt": "01",
+      "build_commit": "861379538331c3966e732f8528806d4d6e87bd23",
+      "build_log_sha256": "50a5c4efcf6f9f6b10ce85818a850377b2ebba3c3edaf62412356f273418b152",
       "client_gametest": "unavailable-on-line",
       "junit": {
         "common": {
           "errors": 0,
           "failures": 0,
           "skipped": 0,
-          "tests": 904
+          "tests": 917
         },
         "fabric": {
           "errors": 0,
           "failures": 0,
           "skipped": 4,
-          "tests": 1652
+          "tests": 1653
         },
         "neoforge": {
           "errors": 0,
@@ -86,65 +83,66 @@
       "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.1.md",
       "notes_sha256": "05de38eae104df4099bba41eb03c0f3dd2f401ce373fe0ea3aa4ef81ed424122",
       "release_branch": "release/v0.16.0-mc1.21.1",
-      "reviewed_catalog_commit": "00ec418c20486230a2a4a3807abcc14c4e0e6d2f",
-      "reviewed_feature_commit": "e71f267f823dfb9c7c750b509ef1bdb221a8e9bf",
+      "reviewed_catalog_commit": "861379538331c3966e732f8528806d4d6e87bd23",
       "server_gametests_passed": [
         78,
         8
       ],
-      "source_commit": "8dc7381f1dca866bcfb2fd6015da82c255bb721f",
+      "source_commit": "6d5f2b00b5af2512177cf9c2b8cf29435d22d3b0",
       "tag": "v0.16.0+mc1.21.1"
     },
     "1.21.10": {
       "artifacts": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.10.jar": {
-          "bytes": 8755325,
+          "bytes": 8754701,
           "publish": true,
-          "sha256": "c009af672e923b15399966c8e814c6ebba4c9f0848a2026cc104a69850bb51c9"
+          "sha256": "743a67c95534395651889e796422e2bb8ad989c7e4290a1dd09351678c709e5b"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.10.jar": {
-          "bytes": 8761475,
+          "bytes": 8760851,
           "publish": false,
-          "sha256": "7cda8678836150f996aa195d403748af254b7b1a6f21b87e6185ebabf1bb1fec"
+          "sha256": "5d683bf6224bd60667504bd4364f0cefc1343a49d873b8daf4dca9360943aaca"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.10.jar": {
-          "bytes": 13921282,
+          "bytes": 13920603,
           "publish": false,
-          "sha256": "bc726b476d62d2850c0e0974f48c403538dc7bc540345c507c234b99e46c5fe3"
+          "sha256": "09ba777120ec1a7ff842f2f96efd608ddc1fff3f187f6964a545f1452f0cd027"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.10.jar": {
-          "bytes": 13927362,
+          "bytes": 13926683,
           "publish": false,
-          "sha256": "ab6557b360506f90035aa83863eca57a3e71972d7b0686ff907280e8d328792b"
+          "sha256": "636b7c4a884c863107f5f9621d1f5bb84abffad4f75807070b40194caf700f44"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.10.jar": {
-          "bytes": 8321557,
+          "bytes": 8320797,
           "publish": true,
-          "sha256": "527c8b9f26d9aaadfe48f8f923112657998572405ce0f3f953ce4b1b73c32ac0"
+          "sha256": "00d5463dbd15815e9b05a490fc0b0dd158205acc686edaaeea478d413ea17148"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.10.jar": {
-          "bytes": 8321495,
+          "bytes": 8320735,
           "publish": false,
-          "sha256": "15dfc9a0de97704e00f43fe1be4b419f197b8ec2341cb253a5bf9c457eb73a77"
+          "sha256": "97c2a96c2d92ff0a45f044744316eae1907f99375e3f1f1e8131ce36893923a4"
         }
       },
       "base_branch": "support/mc1.21.10",
       "base_commit": "4d4f630078b84ec51f2564fd4f55843c4a14b3cc",
-      "build_commit": "54e1557f2bd0efef24d2dffe1e95df1beae2f71a",
-      "build_log_sha256": "c74aad355157bbdd4ede8043773cb134de5fdfad04e3ba133ac14faf359020b2",
+      "baseline_candidate_commit": "d606269965b2d4677988e73726f0eda46721e784",
+      "build_attempt": "01",
+      "build_commit": "e50b3b6f91eb65c414bd24ea421757cced6812ef",
+      "build_log_sha256": "cc943231570c501be9efc09c30fa71048579dcb0fc769d714b5e4866403b559a",
       "client_gametest": "passed",
       "junit": {
         "common": {
           "errors": 0,
           "failures": 0,
           "skipped": 0,
-          "tests": 903
+          "tests": 916
         },
         "fabric": {
           "errors": 0,
           "failures": 0,
           "skipped": 6,
-          "tests": 1648
+          "tests": 1649
         },
         "neoforge": {
           "errors": 0,
@@ -175,65 +173,66 @@
       "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.10.md",
       "notes_sha256": "a244e63197d995ea867219bb03fc6372c0ee3975cceb752b36c885c7992781f6",
       "release_branch": "release/v0.16.0-mc1.21.10",
-      "reviewed_catalog_commit": "ba6a05950b1e03568e49b516e99df85ed4c0fb51",
-      "reviewed_feature_commit": "f6e7203893ac2351307dbc9da19636a20af00ffb",
+      "reviewed_catalog_commit": "e50b3b6f91eb65c414bd24ea421757cced6812ef",
       "server_gametests_passed": [
         80,
         8
       ],
-      "source_commit": "5c5adb3bac4f5ed3a4d764d6f7447d7482ea85a3",
+      "source_commit": "c048f1079a281b18fd1e50dcfb44b6e1727ed267",
       "tag": "v0.16.0+mc1.21.10"
     },
     "1.21.11": {
       "artifacts": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.11.jar": {
-          "bytes": 8761639,
+          "bytes": 8761022,
           "publish": true,
-          "sha256": "0b7f86a449a9a88102c53e8f74a4deaac3695ea9eaec813ac6dff678c04f105c"
+          "sha256": "a169e92f9cd2501c2f22f6025403fb991cf136753add19946ad86689c8a2c4a6"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.11.jar": {
-          "bytes": 8767789,
+          "bytes": 8767172,
           "publish": false,
-          "sha256": "49939e8f5d39e32e37ff38dbbfdc852cd5eb4c8db6a1dcc39ce5a760f4bf1f7b"
+          "sha256": "7553c52eae755f37c4e3100e91899e5537ffb9cdf9442b0efc3b3502e551b610"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.11.jar": {
-          "bytes": 13927833,
+          "bytes": 13927152,
           "publish": false,
-          "sha256": "5b020257a341a2c376ed9573001398a4918bce3794a8d3d455fd3ebbafd10b86"
+          "sha256": "196789293adb485d427be914bec56b494682b1efeb679e06c180676f68508dde"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.11.jar": {
-          "bytes": 13933909,
+          "bytes": 13933228,
           "publish": false,
-          "sha256": "70108440d20609a498b99a9cbdab14394bf1b79697a4ade443611a7a6a4dfe57"
+          "sha256": "cca7ab02252f2e53a3f9991b7d9c1ab17a3cc661d458a8326fef4be06dbd959c"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.11.jar": {
-          "bytes": 8321484,
+          "bytes": 8320724,
           "publish": true,
-          "sha256": "c637142c3a29979cf2702f16b0817225db1352ec28dd6ab0f39090be4652e5ae"
+          "sha256": "e18b0c75ff9dc60e042c538f42c0eddb0474b3eca54c1b38e668a341fdfa34d8"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.11.jar": {
-          "bytes": 8321423,
+          "bytes": 8320663,
           "publish": false,
-          "sha256": "76b9fcb2195270851972d9f2ebe15e8cd60165ca4e2f3f0ea00a6ccb9fa630e8"
+          "sha256": "4fd7ac5ee70273ef53f8c66d2a7a14454adcd2448fd0606010c0164f40ab3d79"
         }
       },
       "base_branch": "support/mc1.21.11-v0.14",
       "base_commit": "e2aed3953f2a13d3fe9b2e9c978ef8973220c245",
-      "build_commit": "8cb1d65e01ecc0fec5f1eaf7d296ac1cf46f159f",
-      "build_log_sha256": "7f1d9b4a0f9785f53a1a198930eddc3b5c9f0cfbd0e73cb7a8e55b717e84165a",
+      "baseline_candidate_commit": "549c28515fa9e5fb432a6ac07b54e1dc49f7607d",
+      "build_attempt": "01",
+      "build_commit": "03aa8485585e9dfd4e062dbaca222d2959e0c261",
+      "build_log_sha256": "e8e8557d2ee043291eaea4d32cfb6ed6026d642504ae053d6571a9d36e1f941f",
       "client_gametest": "passed",
       "junit": {
         "common": {
           "errors": 0,
           "failures": 0,
           "skipped": 0,
-          "tests": 903
+          "tests": 916
         },
         "fabric": {
           "errors": 0,
           "failures": 0,
           "skipped": 4,
-          "tests": 1653
+          "tests": 1654
         },
         "neoforge": {
           "errors": 0,
@@ -264,65 +263,66 @@
       "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.11.md",
       "notes_sha256": "bec1b0ea89c06653c352cb1a004f25e521e9a8ab9baa01f3826be57545ff9e87",
       "release_branch": "release/v0.16.0-mc1.21.11",
-      "reviewed_catalog_commit": "19c108d36309a897d4b31ab49551fdef45120f2e",
-      "reviewed_feature_commit": "0fc8f63c8349590818c82d3729ca10ce53ebea16",
+      "reviewed_catalog_commit": "03aa8485585e9dfd4e062dbaca222d2959e0c261",
       "server_gametests_passed": [
         80,
         8
       ],
-      "source_commit": "f7d2458bac4cb1451764bca6ae4ddbaa92cf07b6",
+      "source_commit": "18805068462ce5ef38337fc08a9680ff01e195b1",
       "tag": "v0.16.0+mc1.21.11"
     },
     "26.1": {
       "artifacts": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+26.1.2.jar": {
-          "bytes": 8764245,
+          "bytes": 8763640,
           "publish": true,
-          "sha256": "4d3c353ada373dc8424cfa6604a82f3937c5eaa25c2d5763e67dd0b5e9d20c81"
+          "sha256": "79e73a9fcb55067af652551d628f2736ebdc28ffc37de5ae101b9db1bbdf2877"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.1.2.jar": {
-          "bytes": 8770394,
+          "bytes": 8769789,
           "publish": false,
-          "sha256": "b6c99c878fce6e0ba027805af05cafe4f5e73a08b1912dabb66a96979f241f52"
+          "sha256": "64644e8598cf44133e39d3b7aa3aca563affcfff35c9c31afe7f296892dfd384"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.1.2.jar": {
-          "bytes": 13930107,
+          "bytes": 13929426,
           "publish": true,
-          "sha256": "33c07c3dd817bf3cba95d07970facee4da81d667f38da048579a9d805349660c"
+          "sha256": "cc6b49b175e1d4c84a7875e1b78e73354760d948d9a585b80adae321b3673873"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.1.2.jar": {
-          "bytes": 13936183,
+          "bytes": 13935502,
           "publish": false,
-          "sha256": "ea16bd69255c62e4da5206076696008993a20ba01790888809131505912e857e"
+          "sha256": "727896a1e4f512ae4cfcc7f648879ccb3f2ac73dd8245f833e74f843ef9b8611"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+26.1.2.jar": {
-          "bytes": 8321390,
+          "bytes": 8320630,
           "publish": true,
-          "sha256": "64cf20d9738233ddad3f9b1c66efffbf19b1c1b6460d14c45d4acd2f423a7b04"
+          "sha256": "c3b502a718ba94223c96c44fa983d3e7f82d86b86f6e207b25fecf395711426f"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+26.1.2.jar": {
-          "bytes": 8321328,
+          "bytes": 8320568,
           "publish": false,
-          "sha256": "1b488d1ed9d8073734c222d2523cbcac04ad123bd7ecf111e436dfc571ab7754"
+          "sha256": "b57d6bc731cd16958cde8f8eae44e3adcf425a4f71be8de65bb851b0fab798f3"
         }
       },
       "base_branch": "support/mc26.1-v0.14",
       "base_commit": "decdeceedc323749304c4dcb73255de07544b6f0",
-      "build_commit": "deb7bc32b2731b05e675a170f18a0e4c81dce03a",
-      "build_log_sha256": "2e7315c69b8edb388aeb3471da207e62d7559aa489b9b23f6bfd7bdd21e1c869",
+      "baseline_candidate_commit": "dc82cfabb809117db2ae8d21b97143a898d31c6e",
+      "build_attempt": "01",
+      "build_commit": "c3b1fcdd2494cd655501d2b7196188ebc242e1a7",
+      "build_log_sha256": "093285b7248d3480535e1cc2f228cd386c62cbd4c411001908a0e1fb087de865",
       "client_gametest": "passed",
       "junit": {
         "common": {
           "errors": 0,
           "failures": 0,
           "skipped": 0,
-          "tests": 903
+          "tests": 916
         },
         "fabric": {
           "errors": 0,
           "failures": 0,
           "skipped": 4,
-          "tests": 1660
+          "tests": 1661
         },
         "neoforge": {
           "errors": 0,
@@ -355,65 +355,66 @@
       "notes_file": "docs/planning/v0.16.0-release-notes/mc26.1.md",
       "notes_sha256": "ab26bcd70ec5bda097b022763aae304fe420b5af136338d9c9dc48b82835fe81",
       "release_branch": "release/v0.16.0-mc26.1",
-      "reviewed_catalog_commit": "0573006533d9b216b1b91f546dadafb641f92cdb",
-      "reviewed_feature_commit": "d19448139889595a2b10199cf5b53e69f0546ed4",
+      "reviewed_catalog_commit": "c3b1fcdd2494cd655501d2b7196188ebc242e1a7",
       "server_gametests_passed": [
         79,
         8
       ],
-      "source_commit": "9705af70d6c2a6e99ef93a439d268e52f853d5ad",
+      "source_commit": "fd48a48c8c24132c5c51c519659c6e547583246d",
       "tag": "v0.16.0+mc26.1"
     },
     "26.2": {
       "artifacts": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+26.2.jar": {
-          "bytes": 8765626,
+          "bytes": 8765019,
           "publish": true,
-          "sha256": "11781e8d97951dba80d406f9aa7ba53c00020814906c51a699c465676def4c2d"
+          "sha256": "9c5307223c61a6e771954b0f7c3e247cfb8fc2adceadd3622efe91a9f1ea840a"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.2.jar": {
-          "bytes": 8771784,
+          "bytes": 8771177,
           "publish": false,
-          "sha256": "1086d6f10b7ebbf7f672a449b17bbf31a2a6a505b95c8554ca29ce5fd99c2f39"
+          "sha256": "6afd7880fac5df3f8fac492b7582b60eab8141f56b88b335a0bcfac2e8f6324b"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.2.jar": {
-          "bytes": 13931062,
+          "bytes": 13930381,
           "publish": true,
-          "sha256": "958e131b2811e52a516761a791caa9ffcac7d705c28222d369d6e7ed45386929"
+          "sha256": "87546481fefb3dc8449a4e8bcadeb6978f31b2c9c5ec8c22f26d534419c71164"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.2.jar": {
-          "bytes": 13937148,
+          "bytes": 13936467,
           "publish": false,
-          "sha256": "ca7c81eb11dd67177e9ac02fee78a2359fcb32fb6c1bd876d6d0027e24d940ea"
+          "sha256": "9e6a61d732f9617f0b15dbde63295144dcb78f1f40699d458ca9edca1dee078f"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+26.2.jar": {
-          "bytes": 8321523,
+          "bytes": 8320763,
           "publish": true,
-          "sha256": "e74c3d92c4bf4abd4aed9b25084304c3fccb3a22820c14aa9da583c969e66018"
+          "sha256": "6fbc800156329e2efcb4fb17e6f087217c3752b5ecc26c849df9c2a0661706e9"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+26.2.jar": {
-          "bytes": 8321463,
+          "bytes": 8320703,
           "publish": false,
-          "sha256": "09ec7ffffa5ad302350b2830e78bec4dc957ce7d675d5f5b3854731c889b0fda"
+          "sha256": "75e4d6a554900dd630e379b090c7bce429cd9a964be3aeb6bdb8b7e93776f387"
         }
       },
       "base_branch": "main",
       "base_commit": "d4b415d5d84c2b272532e011669a265109db509c",
-      "build_commit": "bdb7fefa9d129a2d487707d41c94f74b58579128",
-      "build_log_sha256": "0d0e53772b06d65811ebb5f5811578897cde125463172a3997734ff6a264bf67",
+      "baseline_candidate_commit": "c04dd01e7d7272f4b5add1df86d776502273d1ae",
+      "build_attempt": "02",
+      "build_commit": "e9e2caad73dd9e883772cc42157d34947cfa14f3",
+      "build_log_sha256": "6dcb78bea734b5e59feba6953085f120be02b998d042e739a839f9e538ba13b3",
       "client_gametest": "passed",
       "junit": {
         "common": {
           "errors": 0,
           "failures": 0,
           "skipped": 0,
-          "tests": 904
+          "tests": 917
         },
         "fabric": {
           "errors": 0,
           "failures": 0,
           "skipped": 4,
-          "tests": 1659
+          "tests": 1660
         },
         "neoforge": {
           "errors": 0,
@@ -444,752 +445,268 @@
       "notes_file": "docs/planning/v0.16.0-release-notes/main.md",
       "notes_sha256": "926191faf39718fdc9e556c3c2573c0ea05c7d1a66e1c1daa94d6abb6abef819",
       "release_branch": "release/v0.16.0-mc26.2",
-      "reviewed_catalog_commit": "08d869cd3fa5f93c277d7628165bfa86376fc7a0",
-      "reviewed_feature_commit": "e8d42cf9aa56d5d476b9442ae9f74ab578f06842",
+      "reviewed_catalog_commit": "e9e2caad73dd9e883772cc42157d34947cfa14f3",
       "server_gametests_passed": [
         79,
         8
       ],
-      "source_commit": "eaf0856188b013171aa4bda372c53a2e0376c809",
+      "source_commit": "ce2533c9a13dd8599beb2e380843888a3a45b3d3",
       "tag": "v0.16.0"
     }
   },
   "postchecks": {
-    "artifact_code_equivalence": {
+    "old_gson_validation": "gson-legacy-01.log",
+    "per_line": {
+      "1.21.1": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "1.21.10": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "1.21.11": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "26.1": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "26.2": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      }
+    },
+    "settings_runtime_identity": {
+      "exit": 0,
+      "log_sha256": "643c7cfc3921e5830e047bed28578bc933677c101c9c5a9f6610b6207052d03c",
+      "prior_invocation": "settings-runtime-identity.log (import failure: missing tools/compat on PYTHONPATH; no tests executed)",
+      "pythonpath": [
+        "tools/compat",
+        "tools/rig"
+      ]
+    },
+    "sqlite_capsules_unchanged": {
       "1.21.1": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.1.jar": {
-          "equal_class_and_private_resource_entries": 850,
-          "previous_dev_sha256": "54d6a65a3144107739fa20046c9cd100bfede6c9cc726b83bbd87a68fe97e203",
-          "release_sha256": "c5d537fa2c12a10f5d2080569b3b76342c95dda63a84eef4ad80b30974c9731a"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.1.jar": {
-          "equal_class_and_private_resource_entries": 850,
-          "previous_dev_sha256": "94f33ce6542d4f1299dfd0bbc040256a3e5521b9e02fdd859e42ad5b2daa9dbd",
-          "release_sha256": "bf9774dbac11fe7873fd4ebb054ec75a412bb5ec037a8de522a988c879e346d5"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.1.jar": {
-          "equal_class_and_private_resource_entries": 842,
-          "previous_dev_sha256": "65050a2c485de58d33403ac8f94c5a29d3358c0d1f129f5c5a94c13b0e234b89",
-          "release_sha256": "a52753deade05fd833cedff0141cdae462d65d2766d6afe7f0794f18a4f9f0e8"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.1.jar": {
-          "equal_class_and_private_resource_entries": 842,
-          "previous_dev_sha256": "679d636d143ff0d3cd1ca6c9e4c92b4587c14e243e2a414a5028f639456bc2b4",
-          "release_sha256": "10fae75c9efb1a42ccac45000e49d24617c5636c33fcd51731ca9bdab8ab2990"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.1.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "b6045783376c251df7a7783078d67de3487ccba13d914bb914d245b7c9fbe426",
-          "release_sha256": "9b4515801f24892d859ce3ebed9dc7fb8f9cc9f8ed7b4361c301e92f22d6772b"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.1.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "83dc01594e35e484a497f68de8f3be062119ebcab3636241d4fcc01a474b8913",
-          "release_sha256": "fa2d77ab6d9f7af304a137eedb124cd23b81714bca1f04096c5243b00abb53f3"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         }
       },
       "1.21.10": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.10.jar": {
-          "equal_class_and_private_resource_entries": 849,
-          "previous_dev_sha256": "4eefbd3ecd2aaff0c34fbaf8b7962e54c745fa193f68bdee765d27b11a1c2f6f",
-          "release_sha256": "c009af672e923b15399966c8e814c6ebba4c9f0848a2026cc104a69850bb51c9"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.10.jar": {
-          "equal_class_and_private_resource_entries": 849,
-          "previous_dev_sha256": "0c534309d876570d22985a394426679c57fc7b06393b67a89f16642a0a1e3e74",
-          "release_sha256": "7cda8678836150f996aa195d403748af254b7b1a6f21b87e6185ebabf1bb1fec"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.10.jar": {
-          "equal_class_and_private_resource_entries": 836,
-          "previous_dev_sha256": "835bdbbc4d89152f0061dc3a209b2691299f08c1990fd612ac93bc879780ef34",
-          "release_sha256": "bc726b476d62d2850c0e0974f48c403538dc7bc540345c507c234b99e46c5fe3"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.10.jar": {
-          "equal_class_and_private_resource_entries": 836,
-          "previous_dev_sha256": "4fb50eb9325354144d2f360aaed363b4278e26620544f9b1491fea41a58a951d",
-          "release_sha256": "ab6557b360506f90035aa83863eca57a3e71972d7b0686ff907280e8d328792b"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.10.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "d48402fbbf74d58d88680888542e12efab68722de0eb5f1b605e8dfed9202828",
-          "release_sha256": "527c8b9f26d9aaadfe48f8f923112657998572405ce0f3f953ce4b1b73c32ac0"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.10.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "86554b6b24537672595f0fffb1aaa0bd44ddf7531a5442198fc5bbf5684824bb",
-          "release_sha256": "15dfc9a0de97704e00f43fe1be4b419f197b8ec2341cb253a5bf9c457eb73a77"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         }
       },
       "1.21.11": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.11.jar": {
-          "equal_class_and_private_resource_entries": 850,
-          "previous_dev_sha256": "4d2438180afb0728922d2d90beaebf8bca3f1a0428c54f1b2d8f22988f86fa08",
-          "release_sha256": "0b7f86a449a9a88102c53e8f74a4deaac3695ea9eaec813ac6dff678c04f105c"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.11.jar": {
-          "equal_class_and_private_resource_entries": 850,
-          "previous_dev_sha256": "5389095d4ef95754030577732502ea3365d268fcc4f4b4d031214d0e89fce198",
-          "release_sha256": "49939e8f5d39e32e37ff38dbbfdc852cd5eb4c8db6a1dcc39ce5a760f4bf1f7b"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.11.jar": {
-          "equal_class_and_private_resource_entries": 837,
-          "previous_dev_sha256": "4e14aa6da362018b196bb403c45841788c3b10b89a89e6eda9e8fa24ff97ea5c",
-          "release_sha256": "5b020257a341a2c376ed9573001398a4918bce3794a8d3d455fd3ebbafd10b86"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.11.jar": {
-          "equal_class_and_private_resource_entries": 837,
-          "previous_dev_sha256": "0450a376953230a0cf141600ae13d90bcbf45bd139783d4b89b4dd7010261dfd",
-          "release_sha256": "70108440d20609a498b99a9cbdab14394bf1b79697a4ade443611a7a6a4dfe57"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.11.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "e71bb14dfb218d8945c38ef43d0e1e06431cc070bd1d48bdc4ddf6bf07fd11f0",
-          "release_sha256": "c637142c3a29979cf2702f16b0817225db1352ec28dd6ab0f39090be4652e5ae"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.11.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "510f43f57ac35bd647ace196accd3d4e0a2807f0734b230bf339c164a0d171b6",
-          "release_sha256": "76b9fcb2195270851972d9f2ebe15e8cd60165ca4e2f3f0ea00a6ccb9fa630e8"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         }
       },
       "26.1": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+26.1.2.jar": {
-          "equal_class_and_private_resource_entries": 850,
-          "previous_dev_sha256": "fe515a1bae5ae3e5abaad4ab2e8bf2cbd40497bdc2df18e382208ed064a99b81",
-          "release_sha256": "4d3c353ada373dc8424cfa6604a82f3937c5eaa25c2d5763e67dd0b5e9d20c81"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.1.2.jar": {
-          "equal_class_and_private_resource_entries": 850,
-          "previous_dev_sha256": "3e8c2f0396e30a109327ad741946041231a0e840651b5b3ea6635fd6422c0a3f",
-          "release_sha256": "b6c99c878fce6e0ba027805af05cafe4f5e73a08b1912dabb66a96979f241f52"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.1.2.jar": {
-          "equal_class_and_private_resource_entries": 837,
-          "previous_dev_sha256": "8a0cebbcf30da0f41ef07efcc97590dd30a5958db737957c2cbeb152d5d494ab",
-          "release_sha256": "33c07c3dd817bf3cba95d07970facee4da81d667f38da048579a9d805349660c"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.1.2.jar": {
-          "equal_class_and_private_resource_entries": 837,
-          "previous_dev_sha256": "da62f17dcac23742b1e77c4abda15417ba95c6d9c452bdd469c276856a7f76b0",
-          "release_sha256": "ea16bd69255c62e4da5206076696008993a20ba01790888809131505912e857e"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+26.1.2.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "02bb2332f84f4dc2ea0aa22c912466903ce7b0d08fc2da10b85eceeb492ebb4d",
-          "release_sha256": "64cf20d9738233ddad3f9b1c66efffbf19b1c1b6460d14c45d4acd2f423a7b04"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+26.1.2.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "0ab70adc0bc18258d48c25cbbc3b5cce501392fdf207aa30965fa3cc1961bc89",
-          "release_sha256": "1b488d1ed9d8073734c222d2523cbcac04ad123bd7ecf111e436dfc571ab7754"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         }
       },
       "26.2": {
         "fabric/build/libs/lod-server-support-fabric-0.16.0+26.2.jar": {
-          "equal_class_and_private_resource_entries": 851,
-          "previous_dev_sha256": "a1d8bdc7ce5f69b84b008b874e7bcc8ddf931f3c9078dec05ba5355e956accba",
-          "release_sha256": "11781e8d97951dba80d406f9aa7ba53c00020814906c51a699c465676def4c2d"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.2.jar": {
-          "equal_class_and_private_resource_entries": 851,
-          "previous_dev_sha256": "222e4b09934f1e1f7041050540bb7901412cf57937e974100cc1f4e7164eb1d3",
-          "release_sha256": "1086d6f10b7ebbf7f672a449b17bbf31a2a6a505b95c8554ca29ce5fd99c2f39"
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.2.jar": {
-          "equal_class_and_private_resource_entries": 838,
-          "previous_dev_sha256": "79470acef0a5839927108b3827a5a5b961161a4967eb9a2d8a65a221612542ba",
-          "release_sha256": "958e131b2811e52a516761a791caa9ffcac7d705c28222d369d6e7ed45386929"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.2.jar": {
-          "equal_class_and_private_resource_entries": 838,
-          "previous_dev_sha256": "cfd0ce4222ea7618db76ace9db9742e21d986f6ff21f18f1370432b30c914e16",
-          "release_sha256": "ca7c81eb11dd67177e9ac02fee78a2359fcb32fb6c1bd876d6d0027e24d940ea"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+26.2.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "3adc64a820b361a322be9cc1b0ec438ca417e669f1ec6bb0252d6c9450b58167",
-          "release_sha256": "e74c3d92c4bf4abd4aed9b25084304c3fccb3a22820c14aa9da583c969e66018"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+26.2.jar": {
-          "equal_class_and_private_resource_entries": 635,
-          "previous_dev_sha256": "83861f7d7a9adfab11acd39fa9a136075ac02c4a33898ba4dc76cec762b407d3",
-          "release_sha256": "09ec7ffffa5ad302350b2830e78bec4dc957ce7d675d5f5b3854731c889b0fda"
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
         }
-      }
-    },
-    "per_line": {
-      "1.21.1": {
-        "release-check-final": {
-          "exit": 0,
-          "log_sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6",
-          "previous_success_log": "1.21.1-release-check-final-02.log"
-        },
-        "release-selftest-final": {
-          "exit": 0,
-          "log_sha256": "34bde75a40d3344c65dad761b921916788a7f95d78401d754efcb6312c89214b",
-          "previous_success_log": "1.21.1-release-selftest-final-02.log"
-        },
-        "settings-inventory": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-settings-inventory-02.log"
-        },
-        "settings-reference": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-settings-reference-02.log"
-        },
-        "shell-backfill_profile": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-backfill_profile-02.log"
-        },
-        "shell-benchmark": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-benchmark-02.log"
-        },
-        "shell-benchmark_compare": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-benchmark_compare-02.log"
-        },
-        "shell-compress_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-compress_gate-02.log"
-        },
-        "shell-harness-lock": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-harness-lock-02.log"
-        },
-        "shell-mc-run": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-mc-run-02.log"
-        },
-        "shell-profile_disk_read": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-profile_disk_read-02.log"
-        },
-        "shell-soak": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-soak-02.log"
-        },
-        "shell-stamp_heal": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-stamp_heal-02.log"
-        },
-        "shell-store_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-store_gate-02.log"
-        },
-        "shell-store_migration_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-store_migration_gate-02.log"
-        },
-        "shell-store_offline_edit": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-store_offline_edit-02.log"
-        },
-        "shell-store_save_storm": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-store_save_storm-02.log"
-        },
-        "shell-summary_evicted": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-summary_evicted-02.log"
-        },
-        "shell-test-server": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.1-shell-test-server-02.log"
-        },
-        "test-placement": {
-          "exit": 0,
-          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc",
-          "previous_success_log": "1.21.1-test-placement-02.log"
-        }
-      },
-      "1.21.10": {
-        "release-check-final": {
-          "exit": 0,
-          "log_sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6",
-          "previous_success_log": "1.21.10-release-check-final-02.log"
-        },
-        "release-selftest-final": {
-          "exit": 0,
-          "log_sha256": "c2415a402186d7268afee0ae9b0932d1485912bb3a60ee5e52b828c033709c64",
-          "previous_success_log": "1.21.10-release-selftest-final-02.log"
-        },
-        "settings-inventory": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-settings-inventory-02.log"
-        },
-        "settings-reference": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-settings-reference-02.log"
-        },
-        "shell-backfill_profile": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-backfill_profile-02.log"
-        },
-        "shell-benchmark": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-benchmark-02.log"
-        },
-        "shell-benchmark_compare": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-benchmark_compare-02.log"
-        },
-        "shell-compress_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-compress_gate-02.log"
-        },
-        "shell-harness-lock": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-harness-lock-02.log"
-        },
-        "shell-mc-run": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-mc-run-02.log"
-        },
-        "shell-profile_disk_read": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-profile_disk_read-02.log"
-        },
-        "shell-soak": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-soak-02.log"
-        },
-        "shell-stamp_heal": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-stamp_heal-02.log"
-        },
-        "shell-store_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-store_gate-02.log"
-        },
-        "shell-store_migration_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-store_migration_gate-02.log"
-        },
-        "shell-store_offline_edit": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-store_offline_edit-02.log"
-        },
-        "shell-store_save_storm": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-store_save_storm-02.log"
-        },
-        "shell-summary_evicted": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-summary_evicted-02.log"
-        },
-        "shell-test-server": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.10-shell-test-server-02.log"
-        },
-        "test-placement": {
-          "exit": 0,
-          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc",
-          "previous_success_log": "1.21.10-test-placement-02.log"
-        }
-      },
-      "1.21.11": {
-        "release-check-final": {
-          "exit": 0,
-          "log_sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6",
-          "previous_success_log": "1.21.11-release-check-final-02.log"
-        },
-        "release-selftest-final": {
-          "exit": 0,
-          "log_sha256": "5e24824dd1afb9d09a2fc0f8cfd64e1be0d365c1f7b592f53a948a0ca0fb886d",
-          "previous_success_log": "1.21.11-release-selftest-final-02.log"
-        },
-        "settings-inventory": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-settings-inventory-02.log"
-        },
-        "settings-reference": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-settings-reference-02.log"
-        },
-        "shell-backfill_profile": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-backfill_profile-02.log"
-        },
-        "shell-benchmark": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-benchmark-02.log"
-        },
-        "shell-benchmark_compare": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-benchmark_compare-02.log"
-        },
-        "shell-compress_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-compress_gate-02.log"
-        },
-        "shell-harness-lock": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-harness-lock-02.log"
-        },
-        "shell-mc-run": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-mc-run-02.log"
-        },
-        "shell-profile_disk_read": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-profile_disk_read-02.log"
-        },
-        "shell-soak": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-soak-02.log"
-        },
-        "shell-stamp_heal": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-stamp_heal-02.log"
-        },
-        "shell-store_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-store_gate-02.log"
-        },
-        "shell-store_migration_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-store_migration_gate-02.log"
-        },
-        "shell-store_offline_edit": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-store_offline_edit-02.log"
-        },
-        "shell-store_save_storm": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-store_save_storm-02.log"
-        },
-        "shell-summary_evicted": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-summary_evicted-02.log"
-        },
-        "shell-test-server": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "1.21.11-shell-test-server-02.log"
-        },
-        "test-placement": {
-          "exit": 0,
-          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc",
-          "previous_success_log": "1.21.11-test-placement-02.log"
-        }
-      },
-      "26.1": {
-        "release-check-final": {
-          "exit": 0,
-          "log_sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6",
-          "previous_success_log": "26.1-release-check-final-02.log"
-        },
-        "release-selftest-final": {
-          "exit": 0,
-          "log_sha256": "365b6c045319d443aa6dd96c79525f8886c035b232a63626e543e9b6a67b405d",
-          "previous_success_log": "26.1-release-selftest-final-02.log"
-        },
-        "settings-inventory": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-settings-inventory-03.log"
-        },
-        "settings-reference": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-settings-reference-03.log"
-        },
-        "shell-backfill_profile": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-backfill_profile-03.log"
-        },
-        "shell-benchmark": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-benchmark-03.log"
-        },
-        "shell-benchmark_compare": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-benchmark_compare-03.log"
-        },
-        "shell-compress_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-compress_gate-03.log"
-        },
-        "shell-harness-lock": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-harness-lock-03.log"
-        },
-        "shell-mc-run": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-mc-run-03.log"
-        },
-        "shell-profile_disk_read": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-profile_disk_read-03.log"
-        },
-        "shell-soak": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-soak-03.log"
-        },
-        "shell-stamp_heal": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-stamp_heal-03.log"
-        },
-        "shell-store_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-store_gate-03.log"
-        },
-        "shell-store_migration_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-store_migration_gate-03.log"
-        },
-        "shell-store_offline_edit": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-store_offline_edit-03.log"
-        },
-        "shell-store_save_storm": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-store_save_storm-03.log"
-        },
-        "shell-summary_evicted": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-summary_evicted-03.log"
-        },
-        "shell-test-server": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.1-shell-test-server-03.log"
-        },
-        "test-placement": {
-          "exit": 0,
-          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc",
-          "previous_success_log": "26.1-test-placement-03.log"
-        }
-      },
-      "26.2": {
-        "release-check-final": {
-          "exit": 0,
-          "log_sha256": "e641fda1a65478f2956e4081072ee00368a937a85b16b0933f09c07a30730fc6",
-          "previous_success_log": "26.2-release-check-final-03.log"
-        },
-        "release-selftest-final": {
-          "exit": 0,
-          "log_sha256": "5e24824dd1afb9d09a2fc0f8cfd64e1be0d365c1f7b592f53a948a0ca0fb886d",
-          "previous_success_log": "26.2-release-selftest-final-03.log"
-        },
-        "settings-inventory": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-settings-inventory-03.log"
-        },
-        "settings-reference": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-settings-reference-03.log"
-        },
-        "shell-backfill_profile": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-backfill_profile-03.log"
-        },
-        "shell-benchmark": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-benchmark-03.log"
-        },
-        "shell-benchmark_compare": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-benchmark_compare-03.log"
-        },
-        "shell-compress_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-compress_gate-03.log"
-        },
-        "shell-harness-lock": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-harness-lock-03.log"
-        },
-        "shell-mc-run": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-mc-run-03.log"
-        },
-        "shell-profile_disk_read": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-profile_disk_read-03.log"
-        },
-        "shell-soak": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-soak-03.log"
-        },
-        "shell-stamp_heal": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-stamp_heal-03.log"
-        },
-        "shell-store_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-store_gate-03.log"
-        },
-        "shell-store_migration_gate": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-store_migration_gate-03.log"
-        },
-        "shell-store_offline_edit": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-store_offline_edit-03.log"
-        },
-        "shell-store_save_storm": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-store_save_storm-03.log"
-        },
-        "shell-summary_evicted": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-summary_evicted-03.log"
-        },
-        "shell-test-server": {
-          "exit": 0,
-          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "previous_success_log": "26.2-shell-test-server-03.log"
-        },
-        "test-placement": {
-          "exit": 0,
-          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc",
-          "previous_success_log": "26.2-test-placement-03.log"
-        }
-      }
-    },
-    "shared_tool_suites": {
-      "check_move_trace": {
-        "exit": 0,
-        "log_sha256": "86cb22693530f179afbba270a08811dd3e31d6784b38a7387d285b3286592b7d",
-        "previous_success_log": "check_move_trace-03.log"
-      },
-      "check_soak": {
-        "exit": 0,
-        "log_sha256": "38eadb4d77c4d7477896fa2644da7e4460233ba327ed5b05baf0147aa5c8f7eb",
-        "previous_success_log": "check_soak-03.log"
-      },
-      "compare_profile": {
-        "exit": 0,
-        "log_sha256": "a5a36bc1aea67d25d284d712477fc6ca79aad593eddbc3155e4f72799e041a9d",
-        "previous_success_log": "compare_profile-03.log"
-      },
-      "harness": {
-        "exit": 0,
-        "log_sha256": "29d28b511baa05cc2255368c97b9d0141287b0887721ee5570d76396498a3ab0",
-        "previous_success_log": "harness-03.log"
-      },
-      "soak_report": {
-        "exit": 0,
-        "log_sha256": "78104ad44469fa44596e42320097b578e8b0cb930f4c82b33875265ae00fc4aa",
-        "previous_success_log": "soak_report-03.log"
-      },
-      "unittest-client-preset-tools": {
-        "exit": 0,
-        "log_sha256": "987b5b06cb290480b4d980e72f37bbf2477a60bdd0e9dc768573667e7f42e94f"
-      },
-      "unittest-compat": {
-        "exit": 0,
-        "log_sha256": "fa58ae8d38ff9e41d74d270018d72870561b9ad5357ecf53117e8052ff0b4d4e",
-        "previous_success_log": "unittest-compat-03.log"
-      },
-      "unittest-lines": {
-        "exit": 0,
-        "log_sha256": "8d3706b31cba63f5ce0d978d4de6468dda4b4d1bd58eab5418ca893ede1c85c0",
-        "previous_success_log": "unittest-lines-03.log"
-      },
-      "unittest-rig": {
-        "exit": 0,
-        "log_sha256": "504ebc2836524b06c1017b483b28370b821ab251911614eb0b2ed03872b224ef",
-        "previous_success_log": "unittest-rig-03.log"
-      },
-      "unittest-tests": {
-        "exit": 0,
-        "log_sha256": "ca3691546a64a4d2c903e70a78b53a9453c2785cda14a3ed2f0c3bde38f8d3dd",
-        "previous_success_log": "unittest-tests-03.log"
-      },
-      "unittest-verify": {
-        "exit": 0,
-        "log_sha256": "a403b031ca53505b1068c5c1262f30475f8ef294ae83636c47835f0a12e632af",
-        "previous_success_log": "unittest-verify-03.log"
       }
     }
   },
+  "previous_validation_state": "lss-release-prep-v0.16.0-20260929",
   "published": false,
   "remote_ci": "pending candidate push and PR checks",
   "schema_version": 1,
-  "status": "followup-changes-awaiting-exact-version-validation",
+  "status": "local-preflight-complete-awaiting-release-authorization",
+  "validation_revision": "lenient-migration-backfill-followups",
+  "validation_state": "lss-release-followups-v0.16.0",
   "version": "0.16.0",
   "vss_publish": false
 }

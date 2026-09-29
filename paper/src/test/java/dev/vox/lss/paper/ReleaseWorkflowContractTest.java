@@ -135,6 +135,17 @@ class ReleaseWorkflowContractTest {
         return end < 0 ? releaseYml.substring(start) : releaseYml.substring(start, end);
     }
 
+    @Test
+    void privateSqliteNeedsNoExternalModrinthLibrary() throws Exception {
+        for (String text : java.util.List.of(releaseYml,
+                Files.readString(locate("neoforge/src/main/resources/META-INF/neoforge.mods.toml")),
+                Files.readString(locate("fabric/src/main/resources/fabric.mod.json")))) {
+            for (String forbidden : java.util.List.of("sqlite_jdbc", "minecraft-sqlite-jdbc", "bTTf2DEw")) {
+                assertFalse(text.contains(forbidden), "SQLite isolation must remain self-contained: " + forbidden);
+            }
+        }
+    }
+
     // ---- the line data file itself ----
 
     @Test

@@ -128,12 +128,12 @@ class DirtyColumnBroadcasterTest {
         final DirtyColumnTracker tracker = new DirtyColumnTracker();
         final List<Object> events = new ArrayList<>();
         final FakeView view = new FakeView(this.events);
-        final LSSServerConfig config = new LSSServerConfig();
+        final LSSServerConfig config = new MutableServerSettings();
         final DirtyColumnBroadcaster broadcaster;
 
         Rig(List<ResourceKey<Level>> dimensions) {
-            this.config.dirtyBroadcastIntervalSeconds = 1; // 20 tick() calls per broadcast
-            this.config.lodDistanceChunks = 8;
+            MutableServerSettings.set(this.config, "updates.dirty_broadcast_interval_ticks", (1) * 20); // 20 tick() calls per broadcast
+            MutableServerSettings.set(this.config, "lod.distance.default_chunks", 8);
             var processor = new RecordingProcessor(this.players, this.events);
             this.broadcaster = new DirtyColumnBroadcaster(this.players, processor, this.tracker,
                     () -> dimensions, this.view);
@@ -154,7 +154,7 @@ class DirtyColumnBroadcasterTest {
 
         /** One full broadcast interval at the configured cadence. */
         void fire() {
-            int intervalTicks = this.config.dirtyBroadcastIntervalSeconds * LSSConstants.TICKS_PER_SECOND;
+            int intervalTicks = this.config.dirtyBroadcastIntervalTicks();
             for (int i = 0; i < intervalTicks; i++) {
                 this.broadcaster.tick(this.config);
             }
@@ -236,7 +236,7 @@ class DirtyColumnBroadcasterTest {
         // Counter restarted at zero and the interval is re-derived from config each tick:
         // at 2 s the next broadcast needs exactly 40 further ticks.
         rig.events.clear();
-        rig.config.dirtyBroadcastIntervalSeconds = 2;
+        MutableServerSettings.set(rig.config, "updates.dirty_broadcast_interval_ticks", (2) * 20);
         rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 3, 4);
         for (int t = 1; t <= 39; t++) {
             rig.broadcaster.tick(rig.config);
@@ -251,9 +251,9 @@ class DirtyColumnBroadcasterTest {
     @Test
     void perWorldLodDistanceOverridesDirtyBroadcastRange() {
         var rig = new Rig(List.of(Level.OVERWORLD, Level.NETHER));
-        rig.config.lodDistanceChunks = 8;
-        rig.config.lodDistanceChunksByWorld = new java.util.LinkedHashMap<>();
-        rig.config.lodDistanceChunksByWorld.put(LSSConstants.DIM_STR_THE_NETHER, 4);
+        MutableServerSettings.set(rig.config, "lod.distance.default_chunks", 8);
+        MutableServerSettings.set(rig.config, "lod.distance.by_world", new java.util.LinkedHashMap<>());
+        MutableServerSettings.dimension(rig.config, LSSConstants.DIM_STR_THE_NETHER, 4);
         var overworldPlayer = rig.addPlayer(Level.OVERWORLD, 100, 200);
         var netherPlayer = rig.addPlayer(Level.NETHER, 100, 200);
 
@@ -278,7 +278,7 @@ class DirtyColumnBroadcasterTest {
     @Test
     void rangeGateUsesRawLodDistanceWithoutTheRequestGateBuffer() {
         var rig = new Rig(List.of(Level.OVERWORLD));
-        rig.config.lodDistanceChunks = 8;
+        MutableServerSettings.set(rig.config, "lod.distance.default_chunks", 8);
         var player = rig.addPlayer(Level.OVERWORLD, 100, 200);
 
         long inAtBoundary = PositionUtil.packPosition(108, 192);  // Chebyshev exactly 8
@@ -330,7 +330,7 @@ class DirtyColumnBroadcasterTest {
     @Test
     void floodBeyondMaxPositionsPaginatesAcrossPacketsCoveringEveryPosition() {
         var rig = new Rig(List.of(Level.OVERWORLD));
-        rig.config.lodDistanceChunks = 128;
+        MutableServerSettings.set(rig.config, "lod.distance.default_chunks", 128);
         var player = rig.addPlayer(Level.OVERWORLD, 0, 0);
 
         assertEquals(10240, DirtyColumnsS2CPayload.MAX_POSITIONS, "the per-packet wire cap");
@@ -447,7 +447,7 @@ class DirtyColumnBroadcasterTest {
     @Test
     void intervalZeroDrainsInvalidatesAndClearsWithZeroSends() {
         var rig = new Rig(List.of(Level.OVERWORLD));
-        rig.config.dirtyBroadcastIntervalSeconds = 0;
+        MutableServerSettings.set(rig.config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         var player = rig.addPlayer(Level.OVERWORLD, 0, 0);
         long pos = PositionUtil.packPosition(1, 2);
         player.stampProbeSuppress(pos);
@@ -479,7 +479,7 @@ class DirtyColumnBroadcasterTest {
     @Test
     void intervalZeroFiresOnExactlyTheFallbackCadenceTick() {
         var rig = new Rig(List.of(Level.OVERWORLD));
-        rig.config.dirtyBroadcastIntervalSeconds = 0;
+        MutableServerSettings.set(rig.config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         rig.addPlayer(Level.OVERWORLD, 0, 0);
         rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 3, 4);
 
@@ -507,7 +507,7 @@ class DirtyColumnBroadcasterTest {
         long pos = PositionUtil.packPosition(1, 2);
 
         // Start off (0): a drain happens at the fallback cadence, silently.
-        rig.config.dirtyBroadcastIntervalSeconds = 0;
+        MutableServerSettings.set(rig.config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 1, 2);
         for (int i = 0; i < LSSConstants.DIRTY_DRAIN_ONLY_INTERVAL_SECONDS * LSSConstants.TICKS_PER_SECOND; i++) {
             rig.broadcaster.tick(rig.config);
@@ -517,7 +517,7 @@ class DirtyColumnBroadcasterTest {
 
         // Flip 0 -> 1: sends resume on the next (1 s) interval.
         rig.events.clear();
-        rig.config.dirtyBroadcastIntervalSeconds = 1;
+        MutableServerSettings.set(rig.config, "updates.dirty_broadcast_interval_ticks", (1) * 20);
         rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 1, 2);
         rig.fire();
         assertArrayEquals(new long[]{pos}, only(sentTo(rig, player)),
@@ -525,7 +525,7 @@ class DirtyColumnBroadcasterTest {
 
         // Flip 1 -> 0: sends stop, the drain keeps running at the fallback cadence.
         rig.events.clear();
-        rig.config.dirtyBroadcastIntervalSeconds = 0;
+        MutableServerSettings.set(rig.config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         rig.tracker.markDirty(LSSConstants.DIM_STR_OVERWORLD, 5, 6);
         for (int i = 0; i < LSSConstants.DIRTY_DRAIN_ONLY_INTERVAL_SECONDS * LSSConstants.TICKS_PER_SECOND; i++) {
             rig.broadcaster.tick(rig.config);

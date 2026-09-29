@@ -13,8 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * The far-player broadcast core (v0.11.0 stage E1 — far-player-proxies-plan.md §3.2 as
  * amended by R-3/R-10). Platform-neutral: the owning service calls {@link #tick} from
  * its existing tick (Fabric server thread / Paper GlobalRegionScheduler pump — Folia-
- * safe by construction) with the per-tick ONLINE snapshots built ONCE (the inversion of
- * SeeU's per-viewer×per-target snapshot construction), and every side effect rides the
+ * safe by construction) with the per-tick ONLINE snapshots built ONCE, and every side effect rides the
  * injected {@link FrameSender} lane.
  *
  * <p>THREADING CONTRACT: single-threaded — every method runs on the owning service's
@@ -288,7 +287,7 @@ public final class FarPlayerBroadcastService {
     private void tickViewer(long nowMillis, UUID viewerUuid, ViewerState state,
                             PlayerSnapshot viewer, List<PlayerSnapshot> online,
                             Settings settings, FrameSender sender) {
-        // Visible set under the filter ladder (SeeU's proven order + LSS privacy).
+        // Visible set under the dimension, visibility, range and privacy filter ladder.
         var visible = new ArrayList<PlayerSnapshot>();
         for (var target : online) {
             if (isVisible(viewerUuid, state, viewer, target, settings)) {
@@ -525,7 +524,7 @@ public final class FarPlayerBroadcastService {
         }
     }
 
-    /** The filter ladder, in SeeU's proven order plus the LSS privacy additions. */
+    /** The filter ladder, including server visibility and client sharing privacy. */
     private boolean isVisible(UUID viewerUuid, ViewerState state, PlayerSnapshot viewer,
                               PlayerSnapshot target, Settings settings) {
         if (target.uuid().equals(viewerUuid)) return false;

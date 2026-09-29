@@ -55,7 +55,10 @@ public sealed interface SendAction {
     }
 
     record ColumnNotGenerated(UUID playerUuid, long packedPosition,
-                              AbstractPlayerRequestState<?> producerState) implements SendAction {
+                              AbstractPlayerRequestState<?> producerState, long policyEpoch) implements SendAction {
+        public ColumnNotGenerated(UUID playerUuid, long packedPosition, AbstractPlayerRequestState<?> producerState) {
+            this(playerUuid, packedPosition, producerState, producerState.terminalPolicyEpoch());
+        }
         @Override public byte responseType() { return LSSConstants.RESPONSE_NOT_GENERATED; }
     }
 }

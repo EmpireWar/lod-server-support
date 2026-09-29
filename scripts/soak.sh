@@ -32,6 +32,7 @@ SCENARIO="${1:-}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
 harness_acquire
+source "$HARNESS_LIB_DIR/settings.sh"
 SELF="$PROJECT_ROOT/scripts/soak.sh"
 CLIENT_RUN_DIR="$PROJECT_ROOT/fabric/build/run/soak-client"
 RESULTS_ROOT="$PROJECT_ROOT/soak-results"
@@ -342,7 +343,10 @@ RUNTIME_BUDGET=$((EXPECTED_SECONDS + 240))
 DEADLINE_EPOCH=0
 
 SCENARIO_JSON="$SCENARIOS_DIR/$SCENARIO.json"
-SCENARIO_CONFIG="$SCENARIOS_DIR/$SCENARIO-config.json"
+SCENARIO_CONFIG="$SCENARIOS_DIR/$SCENARIO-config.yaml"
+if [[ "$SOAK_PLATFORM" != fabric && -f "$SCENARIOS_DIR/$SCENARIO-config.paper.yaml" ]]; then
+    SCENARIO_CONFIG="$SCENARIOS_DIR/$SCENARIO-config.paper.yaml"
+fi
 for f in "$SCENARIO_JSON" "$SCENARIO_CONFIG"; do
     if [[ ! -f "$f" ]]; then
         echo "[soak] ERROR: Missing scenario file: $f"
@@ -399,7 +403,8 @@ fi
 
 # Step 2: Pre-flight — validate the scenario timeline before anything boots
 echo "[soak] Validating scenario..."
-python3 "$PROJECT_ROOT/scripts/check_soak.py" --validate "$SCENARIO"
+harness_settings_prepare
+python3 "$PROJECT_ROOT/scripts/check_soak.py" --validate "$SCENARIO" --platform "$SOAK_PLATFORM"
 
 # Step 3: Build (the soak client is always the Fabric client; paper/folia additionally need
 # the dev plugin jar that retains the soak package)
@@ -512,7 +517,7 @@ printf '%s' "$SOAK_PLATFORM" > "$CACHE_PLATFORM_MARKER"
 
 # Step 6a: Stage server config override (fabric: config/; paper: the plugin data folder)
 mkdir -p "$SERVER_CONFIG_DIR"
-cp "$SCENARIO_CONFIG" "$SERVER_CONFIG_DIR/lss-server-config.json"
+cp "$SCENARIO_CONFIG" "$SERVER_CONFIG_DIR/lss-server-config.yaml"
 # C2 legacy-dialect lever: SOAK_DIALECT=19 makes the soak CLIENT emulate a
 # protocol-19 install (announce 19, accept the 19 echo, skip the v20 decode
 # translation) so the run exercises the server's legacy egress translators
@@ -531,22 +536,22 @@ fi
 # produce store-on/backfill-off — which is not the shipped default, so the suite could
 # not be run "against the shipped defaults" as intended. (v0.9.0 review.)
 if [[ -n "${SOAK_LODSTORE_OVERRIDE:-}" || -n "${SOAK_LODSTORE_BACKFILL_OVERRIDE:-}" ]]; then
-    python3 - "$SERVER_CONFIG_DIR/lss-server-config.json" \
+    python3 - "$SERVER_CONFIG_DIR/lss-server-config.yaml" \
         "${SOAK_LODSTORE_OVERRIDE:-}" "${SOAK_LODSTORE_BACKFILL_OVERRIDE:-}" <<'PYEOF'
-import json, sys
+import pathlib, sys
+from tools.settings.settings_file import edit
 path, mode, backfill = sys.argv[1], sys.argv[2], sys.argv[3]
-cfg = json.load(open(path))
-applied = []
+changes = {}
 if mode:
-    cfg["lodStore"] = mode
-    applied.append(f"lodStore={mode}")
+    changes["storage.lod_store.enabled"] = mode.lower() in ("1", "true", "yes", "on", "full")
 if backfill:
-    cfg["lodStoreBackfill"] = backfill.lower() in ("1", "true", "yes", "on")
-    applied.append(f"lodStoreBackfill={cfg['lodStoreBackfill']}")
-json.dump(cfg, open(path, "w"), indent=2)
-print("[soak] SOAK_LODSTORE override: " + ", ".join(applied) + " merged into the staged config")
+    changes["storage.lod_store.backfill.enabled"] = backfill.lower() in ("1", "true", "yes", "on")
+edit(pathlib.Path(path), changes)
+print("[soak] Applied staged YAML overrides: " + ", ".join(changes))
 PYEOF
 fi
+# Bind checker premises to exactly the staged settings, including explicit overrides.
+cp "$SERVER_CONFIG_DIR/lss-server-config.yaml" "$RUN_RESULTS_DIR/server-config.yaml"
 
 # Step 6b: Write server.properties + eula.txt. Superflat: fresh noise terrain carries
 # minutes of unsettled fluid ticks (aquifers, gen-border flows) that mutate chunk content

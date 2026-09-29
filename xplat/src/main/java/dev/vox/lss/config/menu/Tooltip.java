@@ -7,7 +7,7 @@ import java.util.Objects;
  * An option's tooltip as catalog DATA: a fixed translation key, or a pair of keys
  * chosen by an enumerable {@link Condition} over the {@link MenuContext} at page-build
  * time — the "say so where the user is looking" tooltips (join-slow-start with the
- * governor off, the Xaero toggle without Xaero, Show Far Players under SeeU).
+ * governor off, the Xaero toggle without Xaero).
  *
  * <p>The condition is an ENUM rather than a predicate lambda so {@link #keys()} can
  * enumerate every key the tooltip may ever resolve to — that is what lets the catalog
@@ -22,16 +22,13 @@ public record Tooltip(Condition condition, String whenTrueKey, String whenFalseK
         /** The adaptive transfer governor umbrella is on (join slow start is live). */
         GOVERNOR_ON,
         /** Xaero's World Map is installed (the map bridge can do something). */
-        XAERO_PRESENT,
-        /** SeeU is NOT installed (LSS far players are not overridden by the coexist gate). */
-        SEEU_ABSENT;
+        XAERO_PRESENT;
 
         public boolean test(MenuContext ctx) {
             return switch (this) {
                 case ALWAYS -> true;
                 case GOVERNOR_ON -> ctx.governorOn();
                 case XAERO_PRESENT -> ctx.xaeroPresent();
-                case SEEU_ABSENT -> !ctx.seeuPresent();
             };
         }
     }

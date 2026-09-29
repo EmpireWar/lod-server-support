@@ -13,24 +13,19 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Bukkit command handler for /lsslod stats and /lsslod diag.
- *
- * <p>On Folia, command dispatch is region-threaded (player senders) or global-threaded
- * (console), so these handlers read pump-owned state cross-thread. Every read on this path
- * is a concurrent structure (the players CHM) or a stale-tolerable primitive (volatile
- * counters, plain int/long gauges like the generation active-count and the
- * TickDiagnostics/SharedBandwidthLimiter fields, and the plain DOUBLE config fields
- * mbPerSecondLimit* — JLS §17.7 permits a torn 64-bit read there, garbling at worst one
- * diag number concurrent with a /lsslod set; accepted, Folia review 2026-08-27) —
- * audited 2026-07-02; nothing iterates a non-concurrent collection off the pump.
+ * Bukkit diagnostics, operational store jobs and explicit YAML reload.
+ * Settings publication and adoption feedback use the service owner on Paper/Folia;
+ * display-only diagnostics read concurrent maps and stale-tolerant counters.
  */
 public class PaperCommands implements CommandExecutor, TabCompleter {
+    private LSSPaperPlugin plugin;
     private final Supplier<PaperRequestProcessingService> serviceSupplier;
     private final Supplier<PaperConfig> configSupplier;
     private dev.vox.lss.common.diagnostics.DiagnosticVersions diagnosticVersions = dev.vox.lss.common.diagnostics.DiagnosticVersions.unknown();
 
     public PaperCommands(LSSPaperPlugin plugin) {
         this(plugin::getRequestService, plugin::getLssConfig);
+        this.plugin = plugin;
         diagnosticVersions = new dev.vox.lss.common.diagnostics.DiagnosticVersions(java.util.Map.of(
                 dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.LSS, plugin.getDescription().getVersion(),
                 dev.vox.lss.common.diagnostics.DiagnosticVersions.Component.MINECRAFT, org.bukkit.Bukkit.getMinecraftVersion(),
@@ -57,27 +52,8 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         }
 
         var service = this.serviceSupplier.get();
-        if (args[0].equalsIgnoreCase("preset")) {
-            if (args.length != 2) {
-                sender.sendMessage("Usage: /" + label + " preset <conservative|pregenerated-world|apply|undo> (server-global only)");
-                return true;
-            }
-            Runnable apply = () -> {
-                try {
-                    var config = configSupplier.get();
-                    int previousDistance = config.lodDistanceChunks;
-                    var feedback = config.presetCommand(args[1]);
-                    if (config.lodDistanceChunks != previousDistance && service != null) {
-                        int[] counts = service.repushSessionConfig();
-                        sender.sendMessage("Re-pushed to " + counts[0] + " client(s)"
-                                + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : ""));
-                    }
-                    for (String line : feedback) sender.sendMessage(line);
-                } catch (IllegalArgumentException | IllegalStateException failure) {
-                    sender.sendMessage(failure.getMessage());
-                }
-            };
-            if (service == null) apply.run(); else service.enqueueRuntimeTask(apply);
+        if (args[0].equalsIgnoreCase("reload")) {
+            reload(sender, service);
             return true;
         }
         if (args[0].equalsIgnoreCase("diagnostics") && args.length == 2 && args[1].equalsIgnoreCase("export")) {
@@ -94,22 +70,28 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
             case "stats" -> showStats(sender, service);
             case "diag" -> showDiagnostics(sender, service);
             case "store" -> storeCommand(sender, label, service, args);
-            case "set" -> setCommand(sender, label, service, args);
-            default -> sender.sendMessage("Usage: /" + label + " <stats|diag|diagnostics|preset|store|set|help>");
+            default -> sender.sendMessage("Usage: /" + label + " <stats|diag|diagnostics|store|reload|help>");
         }
 
         return true;
     }
 
-    private void exportDiagnostics(CommandSender sender, PaperRequestProcessingService service) {
+    /** Owner-only immutable capture; package seam keeps export I/O out of policy-state tests. */
+    dev.vox.lss.common.diagnostics.ServerStatusSnapshot captureDiagnostics(PaperRequestProcessingService service) {
         var config = configSupplier.get();
-        var snapshot = new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
-                service != null, config.enabled, config.enableChunkGeneration, config.generationConfiguredForRestart(), config.lodDistanceChunks,
+        return new dev.vox.lss.common.diagnostics.ServerStatusSnapshot(1, System.currentTimeMillis(),
+                service != null, config.enabled(), config.enabled() && service != null
+                        && service.getGenerationService() != null && service.getGenerationService().isAdmissionEnabled(),
+                config.generationConfiguredForRestart(), config.lodDistanceChunks(),
                 service == null ? 0 : service.getUptimeSeconds(),
                 service == null ? 0 : service.getTickDiag().getTotalSectionsSent(),
                 service == null ? 0 : service.getTickDiag().getTotalBytesSent(),
                 service == null ? 0 : service.getTickDiag().getTotalWireBytesSent(),
                 service == null ? 0 : service.getWindowBandwidthRate(), diagnosticVersions);
+    }
+
+    private void exportDiagnostics(CommandSender sender, PaperRequestProcessingService service) {
+        var snapshot = captureDiagnostics(service);
         try {
             var job = dev.vox.lss.common.diagnostics.DiagnosticExport.submitServer(
                     java.nio.file.Path.of(Brand.lowerShortName() + "-diagnostics"), snapshot);
@@ -120,59 +102,66 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         }
     }
 
-    /** The /lsslod set apply path (v0.11.0 stage C). Unknown-key and usage errors reply
-     *  inline from the command thread; VALUE-parse failures reply from inside the pump
-     *  task (the parse happens in applyAndPersist). The MUTATION (per-key clamp →
-     *  assign once → validate → save → reply, plus the lodDistance re-push) is
-     *  marshaled through the pump via enqueueRuntimeTask — Folia dispatches commands on
-     *  region threads, and the re-push must enumerate dialects only AFTER the lifecycle
-     *  mailbox drain (the SET review's ordering MAJOR: a flip-pending player must never
-     *  be pushed a v20 config). Command-block senders on Folia may see the reply land
-     *  after the block's tick window (the message is delivered, possibly dropped to
-     *  the void for an unloaded block) — accepted: admins drive this from console. */
-    private void setCommand(CommandSender sender, String label,
-                            PaperRequestProcessingService service, String[] args) {
-        var config = this.configSupplier.get();
-        if (args.length == 1) {
-            sender.sendMessage("Runtime-settable keys (applied + persisted to "
-                    + dev.vox.lss.common.Brand.lowerShortName() + "-server-config.json):");
-            for (var line : dev.vox.lss.common.config.RuntimeSettings.listLines(config)) {
-                sender.sendMessage("  " + line);
+    private void reload(CommandSender sender, PaperRequestProcessingService service) {
+        var config = configSupplier.get();
+        dev.vox.lss.common.config.SettingsReload.Owner owner = action -> {
+            if (service != null) return service.submitSettingsControl(() -> { action.run(); return null; });
+            return controlWithoutService(action);
+        };
+        sender.sendMessage("Reading " + config.settingsPath() + "…");
+        config.reloadOwned(owner, (previous, next, revision) -> service == null
+                ? java.util.concurrent.CompletableFuture.completedFuture(null)
+                : service.reconcileSettings(previous, next, revision)).whenComplete((result, failure) -> {
+            var lines = failure == null
+                    ? dev.vox.lss.common.config.ReloadFeedback.lines(config.settingsPath(), result)
+                    : java.util.List.of("Reload failed: " + dev.vox.lss.common.config.SettingsReload.message(failure));
+            var report = new java.util.ArrayList<>(lines);
+            if (failure == null && service != null
+                    && result.status() != dev.vox.lss.common.config.SettingsReload.Status.UNCHANGED) {
+                // This immutable receipt was captured on the pump before reconciliation
+                // completed. Reading it cannot add a new, unbounded reply task at shutdown.
+                var feedback = service.settingsFeedback();
+                if (feedback != null && feedback.revision() == result.revision()) {
+                    report.removeIf(line -> line.startsWith("Existing legacy clients may"));
+                    if (feedback.legacyReconnects() > 0)
+                        report.add(feedback.legacyReconnects() + " legacy client(s) need to reconnect for the new distance or generation policy.");
+                    report.addAll(feedback.draining());
+                }
             }
-            return;
-        }
-        var key = dev.vox.lss.common.config.RuntimeSettings.byName(args[1]);
-        if (key == null) {
-            sender.sendMessage("Unknown key '" + args[1] + "'. Settable: "
-                    + String.join(", ", dev.vox.lss.common.config.RuntimeSettings.keyNames()));
-            return;
-        }
-        if (args.length < 3) {
-            sender.sendMessage("Usage: /" + label + " set " + key.name() + " <value>");
-            return;
-        }
-        String rawValue = String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length));
-        service.enqueueRuntimeTask(() -> {
-            dev.vox.lss.common.config.RuntimeSettings.ApplyResult result;
-            try {
-                result = dev.vox.lss.common.config.RuntimeSettings
-                        .applyAndPersist(config, key, rawValue);
-            } catch (IllegalArgumentException e) {
-                sender.sendMessage(key.name() + ": " + e.getMessage());
-                return;
-            }
-            String repushNote = "";
-            // Re-push keyed on the MUTATION, not a reply-string diff (a per-world set
-            // leaves the scalar unchanged); the twin of the Fabric command surface.
-            if (result.repush()) {
-                int[] counts = service.repushSessionConfig();
-                repushNote = "; re-pushed to " + counts[0] + " client(s)"
-                        + (counts[1] > 0 ? " (" + counts[1] + " legacy update on rejoin)" : "");
-            }
-            sender.sendMessage(key.name() + " = "
-                    + dev.vox.lss.common.config.RuntimeSettings.renderReplyValue(key, result, rawValue)
-                    + " — " + key.applyNote() + repushNote + result.persistenceNote());
+            report.forEach(dev.vox.lss.common.LSSLogger::info);
+            reply(sender, report);
         });
+    }
+
+    private java.util.concurrent.CompletableFuture<Void> controlWithoutService(Runnable action) {
+        var result = new java.util.concurrent.CompletableFuture<Void>();
+        if (plugin == null) {
+            try { action.run(); result.complete(null); }
+            catch (Throwable failure) { result.completeExceptionally(failure); }
+        } else if (!plugin.isEnabled()) result.completeExceptionally(new IllegalStateException("Plugin disabled"));
+        else {
+            try {
+                plugin.getServer().getGlobalRegionScheduler().execute(plugin, () -> {
+                    if (!plugin.isEnabled()) { result.completeExceptionally(new IllegalStateException("Plugin disabled")); return; }
+                    try { action.run(); result.complete(null); }
+                    catch (Throwable failure) { result.completeExceptionally(failure); }
+                });
+            } catch (Throwable failure) { result.completeExceptionally(failure); }
+        }
+        return result;
+    }
+
+    private void reply(CommandSender sender, java.util.List<String> lines) {
+        Runnable send = () -> lines.forEach(sender::sendMessage);
+        if (plugin == null) { send.run(); return; }
+        if (!plugin.isEnabled()) return; // the durable server log still contains the terminal result
+        try {
+            if (sender instanceof org.bukkit.entity.Player player)
+                player.getScheduler().run(plugin, task -> send.run(), () -> {});
+            else plugin.getServer().getGlobalRegionScheduler().execute(plugin, send);
+        } catch (RuntimeException stopped) {
+            dev.vox.lss.common.LSSLogger.warn("Reload reply retained in server log: " + stopped.getMessage());
+        }
     }
 
     /** The store ops verbs (4-agent round R3: Paper shipped the store with no ops
@@ -194,6 +183,8 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                     // "latched" / "sweeping" / "ok", never a healthy token with frozen
                     // counters.
                     + " state=" + store.stateToken()
+                    + (store instanceof dev.vox.lss.common.store.SqliteLodStore
+                       ? " driver=private/" + dev.vox.lss.common.store.SqliteDriverRuntime.VERSION : "")
                     + " db=" + (store.diagnostics().getDbBytes() >> 20) + "MB wal="
                     + (store.diagnostics().getWalBytes() >> 20) + "MB sweep_drops="
                     + store.diagnostics().getSweepDrops()
@@ -237,23 +228,23 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
         var config = this.configSupplier.get();
         var genService = service.getGenerationService();
         var data = DiagnosticsFormatter.collectDiagData(
-                config.enabled, config.lodDistanceChunks,
+                config.enabled(), config.lodDistanceChunks(),
                 config.bytesPerSecondPerPlayer(), config.bytesPerSecondGlobal(),
-                config.sendQueueLimitPerPlayer,
+                config.sendQueueLimitPerPlayer(),
                 service.getUptimeSeconds(), service.getTickDiagnostics(), service.getWindowBandwidthRate(),
                 service.getTickDiag().getTotalSectionsSent(), service.getTickDiag().getTotalBytesSent(),
                 service.getTickDiag().getTotalWireBytesSent(),
                 service.getOffThreadProcessor().getDiagnostics(), service.getDiskReader(),
                 service.getBandwidthLimiter(),
-                genService != null ? genService.getDiagnostics() : null,
+                config.enableChunkGeneration() && genService != null ? genService.getDiagnostics() : null,
                 // LIVE store mode, not the config's ask (review MINOR-3): a codec-probe
                 // degrade renders store=unavailable, never a lying store=memory h=0.
                 // enabled=false is an OFF store, not a degraded one — without that term
                 // a disabled server rendered store=unavailable, which reads as the
                 // degraded-boot state (codec or SQLite-init failure), sending admins
                 // after a zstd problem that does not exist (v0.9.0 final review).
-                !config.enabled
-                        || dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore)
+                !config.enabled()
+                        || dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
                                 == dev.vox.lss.common.store.LodStoreMode.OFF
                         ? dev.vox.lss.common.store.LodStoreMode.OFF
                         : (service.getLodStore() != null ? service.getLodStore().mode() : null),
@@ -265,9 +256,9 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                 .withSummaryLine(service.getRegionSummaries() == null ? null
                         : service.getRegionSummaries().diagnostics().diagLineOrNull())
                 .withYieldLine(DiagnosticsFormatter.yieldDiagLineOrNull(
-                        config.lodYieldsToVanillaTransport, service.getTickDiag()))
+                        config.lodYieldsToVanillaTransport(), service.getTickDiag()))
                 .withXrayLine(xrayDiagLine())
-                .withGateLine(!config.requireServicePermission ? null
+                .withGateLine(!config.requireServicePermission() ? null
                         : "Gate: requireServicePermission=on denied="
                                 + service.getServiceGateState().deniedCount()
                                 + " provider=bukkit");
@@ -285,23 +276,13 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return List.of("stats", "diag", "diagnostics", "preset", "store", "set", "help").stream()
+            return List.of("stats", "diag", "diagnostics", "store", "reload", "help").stream()
                     .filter(s -> s.startsWith(args[0].toLowerCase()))
                     .toList();
-        }
-        if (args.length == 2 && args[0].equalsIgnoreCase("preset")) {
-            return List.of("conservative", "pregenerated-world", "apply", "undo").stream()
-                    .filter(s -> s.startsWith(args[1].toLowerCase(java.util.Locale.ROOT))).toList();
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("store")) {
             return List.of("status", "invalidate").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase()))
-                    .toList();
-        }
-        if (args.length == 2 && args[0].equalsIgnoreCase("set")) {
-            // Registry-derived so completion cannot drift from the settable set.
-            return dev.vox.lss.common.config.RuntimeSettings.keyNames().stream()
-                    .filter(s -> s.toLowerCase().startsWith(args[1].toLowerCase()))
                     .toList();
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("store")

@@ -2,6 +2,7 @@
 """Create two fresh direct-client roots from an exact staged native client closure."""
 import argparse,copy,hashlib,json,sys
 from pathlib import Path
+from rig_settings import render, values
 
 def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 def prepare(runtime,client_id,fixture,output,platform,store_database,neo_closure=None):
@@ -37,15 +38,15 @@ def prepare(runtime,client_id,fixture,output,platform,store_database,neo_closure
         for path,value in old_generated.items():
             if path.startswith(prefix+'/'):d['generated_files'][destination+path[len(prefix):]]=value
         d['stage_files'].append(dict(source=str(fixture.resolve()),sha256=sha(fixture),target=destination+'/mods/lss-server-smoke-client.jar'))
-        d['generated_files'][destination+'/config/lss-client-config.json']=json.dumps(recipe['client_config'])+'\n'
+        d['generated_files'][destination+'/config/lss-client-config.yaml']=render(recipe['client_config'],side='client')
         d['generated_files'][destination+'/options.txt']='maxFps:30\nrenderDistance:2\nsimulationDistance:2\npauseOnLostFocus:false\nenableVsync:false\nonboardAccessibility:false\n'
         args=[value.replace('{run}/'+prefix,'{run}/'+destination) for value in client['argv'] if not value.startswith('-Dlss.rig.elytraTarget=')]
         if '--username' not in args or '--gameDir' not in args:raise ValueError('direct client identity/game root absent')
         args[args.index('--username')+1]='RigSubjectA'
         args[1:1]=['-Dlss.smoke.connection={run_id}-'+phase,'-Dlss.smoke.phase='+phase,'-Dlss.smoke.evidence={run}/evidence']
         phases[phase]=dict(argv=args,cwd=destination,env=client.get('env',{}))
-    server_config='server/plugins/LodServerSupport/lss-server-config.json' if platform=='paper' else 'server/config/lss-server-config.json'
-    d['generated_files'][server_config]=json.dumps(recipe['server_config'])+'\n'
+    server_config='server/plugins/LodServerSupport/lss-server-config.yaml' if platform=='paper' else 'server/config/lss-server-config.yaml'
+    d['generated_files'][server_config]=render(recipe['server_config'],platform='paper' if platform=='paper' else 'mod')
     properties={line.split('=',1)[0]:line.split('=',1)[1] for line in d['generated_files']['server/server.properties'].splitlines() if '=' in line}
     properties.update(recipe['server_properties']);d['generated_files']['server/server.properties']=''.join(str(k)+'='+str(v).lower()+'\n' for k,v in properties.items())
     if neo_closure:

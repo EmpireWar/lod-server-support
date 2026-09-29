@@ -21,4 +21,19 @@ class ReportTests(unittest.TestCase):
  def test_native_wire_substitution_rejected(self):
   path=self.e/'client-second.jsonl';rows=[json.loads(r) for r in path.read_text().splitlines()];rows[1]['body_hex']='00';path.write_text(''.join(json.dumps(r)+'\n' for r in rows));self.assertTrue(check_report(self.proof,self.manifest,self.scenario,self.root))
  def test_no_handshake_exemption(self):self.scenario['requires_handshake']=False;self.assertTrue(check_report(self.proof,self.manifest,self.scenario,self.root))
+ def restart_fixture(self):
+  self.scenario.update(restart_between_sessions=True,expected_store_driver='private/3.49.1.0')
+  events={r['event']:r for r in self.value['events']}
+  self.value['events'].append(dict(event='server_reopened',run_id='owned',time_ns=(events['disconnect_first']['time_ns']+events['handshake_second']['time_ns'])/2,state='ok',driver='private/3.49.1.0',previous_exit_code=0))
+  self.path.write_text(json.dumps(self.value));self.proof['server_smoke_report']['artifact_sha256']=hashlib.sha256(self.path.read_bytes()).hexdigest()
+  log='Done (1s)!\nLSS handshake received from RigSubjectA (protocol v20, capabilities=1)\n'
+  (self.e/'smoke-server.log').write_text(log);(self.e/'smoke-server-reopened.log').write_text(log+'store state=ok driver=private/3.49.1.0\n')
+ def test_restart_uses_both_real_server_logs(self):
+  self.restart_fixture();self.assertEqual([],check_report(self.proof,self.manifest,self.scenario,self.root))
+ def test_restart_rejects_missing_actual_private_status(self):
+  self.restart_fixture();path=self.e/'smoke-server-reopened.log';path.write_text(path.read_text().replace('state=ok','state=off'))
+  self.assertIn('actual private store status after restart absent',check_report(self.proof,self.manifest,self.scenario,self.root))
+ def test_restart_cannot_reuse_both_handshakes_from_first_boot(self):
+  self.restart_fixture();path=self.e/'smoke-server.log';path.write_text(path.read_text()+'LSS handshake received from RigSubjectA (protocol v20, capabilities=1)\n')
+  self.assertIn('each server boot must observe one v20 handshake',check_report(self.proof,self.manifest,self.scenario,self.root))
 if __name__=='__main__':unittest.main()

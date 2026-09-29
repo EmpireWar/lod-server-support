@@ -23,15 +23,14 @@ import static org.mockito.Mockito.when;
 /**
  * Graceful-degradation coverage for /lsslod via the Supplier seam: the command must answer
  * (never throw at the admin) when the service is not active, when no players are connected,
- * and — the concrete trap — when generation is disabled and getGenerationService() is null
- * while the diag formatter runs.
+ * and when the always-present generation controller is dormant.
  */
 class PaperCommandsTest {
 
-    private static final String USAGE = "Usage: /lsslod <stats|diag|diagnostics|preset|store|set|help>";
+    private static final String USAGE = "Usage: /lsslod <stats|diag|diagnostics|store|reload|help>";
     private static final String STORE_USAGE = "Usage: /lsslod store <status|invalidate all>";
 
-    private final List<String> messages = new ArrayList<>();
+    private final List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
     private CommandSender sender;
 
     @BeforeEach
@@ -62,6 +61,37 @@ class PaperCommandsTest {
         return cmd.onCommand(sender, null, "lsslod", args);
     }
 
+    @Test void diagnosticCaptureUsesTheOwnerGateAndWholeServiceGate() {
+        var service = mock(PaperRequestProcessingService.class);
+        var generation = mock(PaperChunkGenerationService.class);
+        when(service.getGenerationService()).thenReturn(generation);
+        when(service.getTickDiag()).thenReturn(mock(dev.vox.lss.common.processing.TickDiagnostics.class));
+        var config = new MutablePaperSettings();
+        MutablePaperSettings.set(config, "generation.enabled", true);
+        var cmd = commands(service, config);
+
+        var pending = cmd.captureDiagnostics(service);
+        assertTrue(pending.serviceAvailable());
+        assertFalse(pending.generationEnabled(), "published true must not replace the owner's false gate");
+        assertTrue(pending.generationConfiguredForRestart(), "legacy JSON value remains configured");
+
+        when(generation.isAdmissionEnabled()).thenReturn(true);
+        assertTrue(cmd.captureDiagnostics(service).generationEnabled());
+        MutablePaperSettings.set(config, "service.enabled", false);
+        var disabled = cmd.captureDiagnostics(service);
+        assertTrue(disabled.serviceAvailable(), "Paper retains its dormant service instance");
+        assertFalse(disabled.enabled());
+        assertFalse(disabled.generationEnabled(), "whole-service disable closes admission");
+        assertTrue(disabled.generationConfiguredForRestart());
+
+        MutablePaperSettings.set(config, "service.enabled", true);
+        MutablePaperSettings.set(config, "generation.enabled", false);
+        var pendingDisable = cmd.captureDiagnostics(service);
+        assertTrue(pendingDisable.generationEnabled(), "an owner not yet disabled still reports its actual gate");
+        assertFalse(pendingDisable.generationConfiguredForRestart());
+        assertFalse(cmd.captureDiagnostics(null).generationEnabled(), "absent owner cannot admit");
+    }
+
     @Test
     void noArgsShowsHelp() {
         // v0.11.0 stage C: bare /lsslod = help (was a usage line), served BEFORE the
@@ -69,8 +99,8 @@ class PaperCommandsTest {
         assertTrue(run(commands(null, null)));
         assertEquals(dev.vox.lss.common.CommandHelp.lines("lsslod", false), messages,
                 "the shared CommandHelp builder is the one source of the help text");
-        assertTrue(messages.stream().anyMatch(m -> m.contains("set <key> <value>")),
-                "help must document the runtime-set verb: " + messages);
+        assertTrue(messages.stream().anyMatch(m -> m.contains("reload")),
+                "help must document explicit reload: " + messages);
         assertTrue(messages.stream().noneMatch(m -> m.contains("backfill")),
                 "backfill verbs are Fabric-only and must not appear in Paper help");
     }
@@ -166,13 +196,17 @@ class PaperCommandsTest {
         when(service.getTickDiagnostics()).thenReturn("tick");
         when(service.getTickDiag()).thenReturn(new dev.vox.lss.common.processing.TickDiagnostics());
         when(service.getPlayers()).thenReturn(Map.of());
-        // getGenerationService() returns null (generation disabled) — the path that must not NPE
+        var generation = mock(PaperChunkGenerationService.class);
+        when(generation.getDiagnostics()).thenReturn("dormant controller");
+        when(service.getGenerationService()).thenReturn(generation);
+        var config = new MutablePaperSettings();
+        MutablePaperSettings.set(config, "generation.enabled", false);
 
-        assertTrue(run(commands(service, new PaperConfig()), "diag"));
+        assertTrue(run(commands(service, config), "diag"));
 
         assertEquals("=== LSS LOD Diagnostics ===", messages.get(0));
         assertTrue(messages.contains("Generation: disabled"),
-                "null generation service renders as 'disabled': " + messages);
+                "a dormant generation controller renders as 'disabled': " + messages);
         assertFalse(messages.contains("Generation: null"),
                 "disabled generation must not format the null diagnostics string");
         assertTrue(messages.stream().noneMatch(m -> m.startsWith("V18Compat")),
@@ -225,8 +259,8 @@ class PaperCommandsTest {
         when(service.getTickDiagnostics()).thenReturn("tick");
         when(service.getTickDiag()).thenReturn(new dev.vox.lss.common.processing.TickDiagnostics());
         when(service.getPlayers()).thenReturn(Map.of());
-        var config = new PaperConfig();
-        config.enabled = false;
+        var config = new MutablePaperSettings();
+        MutablePaperSettings.set(config, "service.enabled", false);
 
         assertTrue(run(commands(service, config), "diag"));
 
@@ -258,9 +292,9 @@ class PaperCommandsTest {
     @Test
     void tabCompleteFiltersByPrefix() {
         var cmd = commands(null, null);
-        assertEquals(List.of("stats", "diag", "diagnostics", "preset", "store", "set", "help"),
+        assertEquals(List.of("stats", "diag", "diagnostics", "store", "reload", "help"),
                 cmd.onTabComplete(sender, null, "lsslod", new String[]{""}));
-        assertEquals(List.of("stats", "store", "set"), cmd.onTabComplete(sender, null, "lsslod", new String[]{"s"}));
+        assertEquals(List.of("stats", "store"), cmd.onTabComplete(sender, null, "lsslod", new String[]{"s"}));
         assertEquals(List.of("diag", "diagnostics"), cmd.onTabComplete(sender, null, "lsslod", new String[]{"D"}));
         assertEquals(List.of(), cmd.onTabComplete(sender, null, "lsslod", new String[]{"zz"}));
         assertEquals(List.of(), cmd.onTabComplete(sender, null, "lsslod", new String[]{"stats", "x"}));
@@ -268,121 +302,166 @@ class PaperCommandsTest {
                 cmd.onTabComplete(sender, null, "lsslod", new String[]{"store", ""}));
         assertEquals(List.of("all"),
                 cmd.onTabComplete(sender, null, "lsslod", new String[]{"store", "invalidate", ""}));
-        // v0.11.0 stage C: key completion is registry-derived, so it cannot drift.
-        assertEquals(dev.vox.lss.common.config.RuntimeSettings.keyNames(),
-                cmd.onTabComplete(sender, null, "lsslod", new String[]{"set", ""}));
-        assertEquals(List.of("maxConcurrentDiskReads"),
-                cmd.onTabComplete(sender, null, "lsslod", new String[]{"set", "max"}));
+        assertEquals(List.of(), cmd.onTabComplete(sender, null, "lsslod", new String[]{"set", ""}));
+        assertEquals(List.of(), cmd.onTabComplete(sender, null, "lsslod", new String[]{"preset", ""}));
     }
 
-    // ---- v0.11.0 stage C: /lsslod set ----
-
-    /** A service mock whose runtime-task queue runs INLINE (the pump drain, collapsed)
-     *  and whose re-push reports fixed counts. */
-    private static PaperRequestProcessingService inlineTaskService(int[] repushCounts) {
+    private static PaperRequestProcessingService inlineTaskService(
+            java.util.concurrent.CompletableFuture<Void> adoption, int legacyReconnects) {
         var service = mock(PaperRequestProcessingService.class);
-        org.mockito.Mockito.doAnswer(inv -> {
-            ((Runnable) inv.getArgument(0)).run();
-            return null;
-        }).when(service).enqueueRuntimeTask(org.mockito.ArgumentMatchers.any());
-        when(service.repushSessionConfig()).thenReturn(repushCounts);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            try {
+                Object value = ((java.util.function.Supplier<?>) invocation.getArgument(0)).get();
+                return java.util.concurrent.CompletableFuture.completedFuture(value);
+            } catch (Throwable failure) {
+                return java.util.concurrent.CompletableFuture.failedFuture(failure);
+            }
+        }).when(service).submitSettingsControl(org.mockito.ArgumentMatchers.any());
+        var receipt = new java.util.concurrent.atomic.AtomicReference<PaperRequestProcessingService.SettingsFeedback>();
+        when(service.reconcileSettings(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation -> {
+                    long revision = invocation.getArgument(2);
+                    return adoption.thenRun(() -> receipt.set(new PaperRequestProcessingService.SettingsFeedback(
+                            revision, legacyReconnects, List.of("Generation disabled; 2 admitted job(s) draining"))));
+                });
+        when(service.settingsFeedback()).thenAnswer(invocation -> receipt.get());
         return service;
     }
 
-    @Test
-    void setWithNoArgsListsTheRegistryWithCurrentValues() {
-        var config = new PaperConfig();
-        config.validate();
-        assertTrue(run(commands(mock(PaperRequestProcessingService.class), config), "set"));
-        assertTrue(messages.get(0).startsWith("Runtime-settable keys"), String.valueOf(messages));
-        assertTrue(messages.contains("  lodDistanceChunks = 512"),
-                "listing shows current values: " + messages);
-        assertEquals(1 + dev.vox.lss.common.config.RuntimeSettings.keyNames().size(),
-                messages.size());
+    private void awaitMessage(java.util.function.Predicate<String> expected) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+        while (messages.stream().noneMatch(expected)) {
+            if (System.nanoTime() > deadline) throw new AssertionError("No terminal reload feedback: " + messages);
+            Thread.sleep(5);
+        }
     }
 
-    @Test
-    void setHappyPathAppliesRepushesAndRepliesWithTheEffectiveValue() {
-        var config = new PaperConfig();
-        config.validate();
-        var service = inlineTaskService(new int[]{2, 1});
-        assertTrue(run(commands(service, config), "set", "lodDistanceChunks", "128"));
-        assertEquals(128, config.lodDistanceChunks, "the mutation applied through the pump task");
-        assertEquals(1, messages.size());
-        assertTrue(messages.get(0).startsWith("lodDistanceChunks = 128 — "),
-                "reply carries the effective value + the applies note: " + messages);
-        assertTrue(messages.get(0).contains("re-pushed to 2 client(s) (1 legacy update on rejoin)"),
-                "the distance set must report the re-push counts: " + messages);
+    private static void yaml(PaperConfig config, String contents) throws Exception {
+        java.nio.file.Files.writeString(config.settingsPath(), "config_version: 1\n" + contents);
     }
 
-    @Test
-    void setZeroSemanticsSurviveTheCommandSurface() {
+    @Test void removedMutationVerbsCannotChangeSettings() {
         var config = new PaperConfig();
-        config.validate();
-        var service = inlineTaskService(new int[]{0, 0});
-        assertTrue(run(commands(service, config), "set", "dirtyBroadcastIntervalSeconds", "0"));
-        assertEquals(0, config.dirtyBroadcastIntervalSeconds,
-                "0 = dirty pushes off must survive end-to-end (the R-2 registry clamp rule)");
-        assertTrue(messages.get(0).startsWith("dirtyBroadcastIntervalSeconds = 0 — "));
-        messages.clear();
-        assertTrue(run(commands(service, config), "set", "maxConcurrentDiskReads", "0"));
-        assertEquals(0, config.maxConcurrentDiskReads, "0 = AUTO, never K=1");
+        var before = config.snapshot();
+        var command = commands(mock(PaperRequestProcessingService.class), config);
+        assertTrue(run(command, "set", "lodDistanceChunks", "128"));
+        assertTrue(run(command, "preset", "apply", "conservative"));
+        assertEquals(before, config.snapshot());
+        assertEquals(List.of(USAGE, USAGE), messages);
     }
 
-    @Test
-    void setParseErrorAndUnknownKeyReplyWithoutMutating() {
-        var config = new PaperConfig();
-        config.validate();
-        int before = config.lodDistanceChunks;
-        var service = inlineTaskService(new int[]{0, 0});
-        assertTrue(run(commands(service, config), "set", "lodDistanceChunks", "many"));
-        assertEquals(before, config.lodDistanceChunks, "a parse failure must assign nothing");
-        assertTrue(messages.get(0).contains("not an integer"), String.valueOf(messages));
-        messages.clear();
-        assertTrue(run(commands(service, config), "set", "noSuchKey", "5"));
-        assertTrue(messages.get(0).startsWith("Unknown key 'noSuchKey'"), String.valueOf(messages));
-        messages.clear();
-        assertTrue(run(commands(service, config), "set", "lodDistanceChunks"));
-        assertTrue(messages.get(0).startsWith("Usage: /lsslod set lodDistanceChunks"),
-                "a missing value shows per-key usage: " + messages);
+    @Test void reloadReadsDraftOnceAppliesZerosAndWorldReplacementWithoutWriting(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        try (var config = new PaperConfig(directory)) {
+            var service = inlineTaskService(java.util.concurrent.CompletableFuture.completedFuture(null), 1);
+            yaml(config, """
+                    # Keep my comment and exact bytes.
+                    lod:
+                      distance:
+                        default_chunks: 128
+                        by_dimension: {}
+                        by_world:
+                          creative: 96
+                    updates:
+                      dirty_broadcast_interval_ticks: 0
+                    storage:
+                      disk:
+                        max_concurrent_reads: 0
+                    """);
+            var bytes = java.nio.file.Files.readAllBytes(config.settingsPath());
+            assertEquals(512, config.lodDistanceChunks(), "a disk draft is inert");
+            assertTrue(run(commands(service, config), "reload"));
+            awaitMessage(line -> line.contains("job(s) draining"));
+            assertEquals(128, config.lodDistanceChunks());
+            assertTrue(config.snapshot().lod().distance().byDimension().isEmpty());
+            assertEquals(Map.of("creative", 96), config.snapshot().lod().distance().byWorld());
+            assertEquals(0, config.dirtyBroadcastIntervalTicks());
+            assertEquals(0, config.maxConcurrentDiskReads());
+            org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, java.nio.file.Files.readAllBytes(config.settingsPath()));
+            org.mockito.Mockito.verify(service).reconcileSettings(org.mockito.ArgumentMatchers.any(),
+                    org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyLong());
+            assertTrue(messages.stream().anyMatch(line -> line.startsWith("1 legacy client(s)")), messages.toString());
+            assertTrue(messages.stream().anyMatch(line -> line.contains("job(s) draining")), messages.toString());
+        }
     }
 
-    @Test
-    void setNonDistanceKeysDoNotRepush() {
-        var config = new PaperConfig();
-        config.validate();
-        var service = inlineTaskService(new int[]{9, 9});
-        assertTrue(run(commands(service, config), "set", "generationConcurrencyLimitGlobal", "64"));
-        assertFalse(messages.get(0).contains("re-pushed"),
-                "only lodDistanceChunks triggers the SessionConfig re-push: " + messages);
-        org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).repushSessionConfig();
+    @Test void reloadWaitsForAdoptionAndUnchangedFileDoesNotRepeatSideEffects(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        try (var config = new PaperConfig(directory)) {
+            var adoption = new java.util.concurrent.CompletableFuture<Void>();
+            var service = inlineTaskService(adoption, 1);
+            yaml(config, "lod:\n  distance:\n    default_chunks: 128\n");
+            var command = commands(service, config);
+            assertTrue(run(command, "reload"));
+            long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(15);
+            while (config.lodDistanceChunks() != 128 && System.nanoTime() < deadline) Thread.sleep(5);
+            assertEquals(128, config.lodDistanceChunks(), "publication precedes owner adoption");
+            assertTrue(messages.stream().noneMatch(line -> line.startsWith("Reloaded ")));
+            adoption.complete(null);
+            awaitMessage(line -> line.contains("job(s) draining"));
+            messages.clear();
+            assertTrue(run(command, "reload"));
+            awaitMessage(line -> line.contains("no active changes"));
+            org.mockito.Mockito.verify(service, org.mockito.Mockito.times(1)).reconcileSettings(
+                    org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyLong());
+            assertTrue(messages.stream().noneMatch(line -> line.contains("legacy client(s)")),
+                    "an unchanged reload must not reuse the previous transition's report");
+        }
     }
 
-    @Test
-    void setPerWorldLodDistanceMutatesMapAndTriggersRepush() {
-        var config = new PaperConfig();
-        config.validate();
-        var service = inlineTaskService(new int[]{1, 0});
-        assertTrue(run(commands(service, config), "set", "lodDistanceChunks", "creative", "128"));
-        assertEquals(512, config.lodDistanceChunks, "the default distance is unchanged");
-        assertEquals(128, config.lodDistanceChunksByWorld.get("creative"));
-        assertTrue(messages.get(0).contains("creative=128"),
-                "the reply names the per-world override: " + messages);
-        org.mockito.Mockito.verify(service).repushSessionConfig();
+    @Test void malformedUnknownAndMissingYamlKeepActiveStateAndDoNotWrite(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        try (var config = new PaperConfig(directory)) {
+            var service = inlineTaskService(java.util.concurrent.CompletableFuture.completedFuture(null), 0);
+            var before = config.snapshot();
+            var command = commands(service, config);
+            for (var malformed : List.of("lod: [", "made_up_key: true", "service:\n  enabled: true\n  enabled: false\n")) {
+                yaml(config, malformed);
+                byte[] bytes = java.nio.file.Files.readAllBytes(config.settingsPath());
+                messages.clear();
+                assertTrue(run(command, "reload"));
+                awaitMessage(line -> line.startsWith("Reload failed:"));
+                assertEquals(before, config.snapshot());
+                org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, java.nio.file.Files.readAllBytes(config.settingsPath()));
+            }
+            java.nio.file.Files.delete(config.settingsPath());
+            messages.clear();
+            assertTrue(run(command, "reload"));
+            awaitMessage(line -> line.startsWith("Reload failed:"));
+            assertFalse(java.nio.file.Files.exists(config.settingsPath()));
+            assertEquals(before, config.snapshot());
+            org.mockito.Mockito.verify(service, org.mockito.Mockito.never()).reconcileSettings(
+                    org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyLong());
+        }
     }
 
-    @Test void failedSaveStillRepushesAndReportsAppliedButUnsaved(
-            @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
-        var config = PaperConfig.load(dir);
-        var path = dir.resolve("lss-server-config.json");
-        String original = java.nio.file.Files.readString(path);
-        java.nio.file.Files.createDirectory(dir.resolve("lss-server-config.json.tmp"));
-        var service = inlineTaskService(new int[]{2, 0});
-        assertTrue(run(commands(service, config), "set", "lodDistanceChunks", "128"));
-        assertEquals(128, config.lodDistanceChunks);
-        org.mockito.Mockito.verify(service).repushSessionConfig();
-        assertTrue(messages.get(0).contains("applied, but not saved"));
-        assertTrue(messages.get(0).contains("re-pushed to 2 client(s)"));
-        assertEquals(original, java.nio.file.Files.readString(path));
+    @Test void disabledServiceCanReportRestartPendingAndRetainsEffectiveBootValues(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        java.nio.file.Files.writeString(directory.resolve("lss-server-config.yaml"), "config_version: 1\nservice:\n  enabled: false\n");
+        try (var config = new PaperConfig(directory)) {
+            int bootThreads = config.diskReaderThreads();
+            yaml(config, "service:\n  enabled: true\nstorage:\n  disk:\n    reader_threads: 2\n    max_concurrent_reads: 1\n");
+            assertTrue(run(commands(null, config), "reload"));
+            awaitMessage(line -> line.startsWith("Restart required:"));
+            assertFalse(config.enabled());
+            assertEquals(bootThreads, config.diskReaderThreads());
+            assertTrue(config.configuredSnapshot().service().enabled());
+            assertEquals(2, config.configuredSnapshot().storage().disk().readerThreads());
+            assertEquals(1, config.maxConcurrentDiskReads());
+        }
+    }
+
+    @Test void stoppedOwnerRejectsBeforePublicationAndRepliesTerminally(
+            @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+        try (var config = new PaperConfig(directory)) {
+            var service = mock(PaperRequestProcessingService.class);
+            when(service.submitSettingsControl(org.mockito.ArgumentMatchers.any())).thenReturn(
+                    java.util.concurrent.CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("Server stopped")));
+            yaml(config, "lod:\n  distance:\n    default_chunks: 128\n");
+            assertTrue(run(commands(service, config), "reload"));
+            awaitMessage(line -> line.startsWith("Reload failed:"));
+            assertEquals(512, config.lodDistanceChunks());
+            assertTrue(messages.stream().anyMatch(line -> line.contains("Server stopped")));
+        }
     }
 }

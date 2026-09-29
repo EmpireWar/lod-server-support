@@ -32,7 +32,7 @@ public interface PlayerServiceGate {
 
     /**
      * The denial hook, called under EXACTLY the {@code deniedByServiceGate}
-     * conjunction (outcome DISABLED ∧ config.enabled ∧ servicePresent) — never for
+     * conjunction (outcome DISABLED ∧ config.enabled() ∧ servicePresent) — never for
      * NO_CONSUMER/Via/version denials. Production implementations deposit the
      * denied-handshake memo (so a later grant can re-offer the session,
      * plan §2.3), count the denial TRANSITION, and unregister an already-registered

@@ -83,6 +83,15 @@ def run(root,command):
             if phase=='first':
                 wait(lambda:any('RigSubjectA lost connection:' in line for _,line in server_rows[start:]),server)
                 emit('disconnect_first',connection_id=client_handshake['connection_id'])
+                if command['recipe'].get('restart_between_sessions'):
+                    server.stdin.write('stop\n');server.stdin.flush();wait(lambda:server.poll() is not None)
+                    if server.returncode != 0:raise RuntimeError('first server exited uncleanly')
+                    server,server_rows=launch(command['server'],'smoke-server-reopened')
+                    wait(lambda:any('Done (' in line for _,line in server_rows),server)
+                    status=console(command.get('status_command','lsslod store status'))
+                    driver=command['recipe']['expected_store_driver']
+                    if 'state=ok' not in status or 'driver='+driver not in status:raise ValueError('private store did not reopen healthy')
+                    emit('server_reopened',state='ok',driver=driver,previous_exit_code=0)
         console('save-all flush');server.stdin.write('stop\n');server.stdin.flush();wait(lambda:server.poll() is not None)
     except Exception as error:failure=str(error)
     finally:

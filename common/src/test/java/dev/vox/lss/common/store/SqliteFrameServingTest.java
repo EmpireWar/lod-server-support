@@ -146,8 +146,7 @@ class SqliteFrameServingTest {
 
             // Flip one blob byte directly in the DB — the fhash check must catch it
             // WITHOUT a decompress and purge the row (the get() parity requirement).
-            var ds = new org.sqlite.SQLiteDataSource();
-            ds.setUrl("jdbc:sqlite:" + this.tmp.resolve("store").resolve("store.db"));
+            var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + this.tmp.resolve("store").resolve("store.db"));
             try (var conn = ds.getConnection(); Statement st = conn.createStatement()) {
                 String table;
                 try (var rs = st.executeQuery("SELECT name FROM sqlite_master"

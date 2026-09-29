@@ -1,6 +1,7 @@
 """Compose four exact primary native map lanes from an owned Prism base recipe."""
 import copy,sys
 from pathlib import Path
+from rig_settings import render, values
 from rig import sha,regular
 PROFILES={'mc1211-fabric-modern','mc1211-fabric-legacy','mc1211-neo-modern','mc1211-neo-legacy-xaero'}
 
@@ -16,8 +17,8 @@ def build(runtime,profile,map_fixture,connect_fixture):
  if result['generated_files'][config].count(marker)!=1:raise ValueError('known private JVM argument declaration required')
  result['generated_files'][config]=result['generated_files'][config].replace(marker,marker+' -Dlss.rig.initialEndpoint='+result['client_endpoint']+' -Dlss.xaeromap.stop={run}/evidence/xaero-map-stop-client -Dlss.xaeromap.pauseMaxMillis=15000 -Dlss.xaeromap.enabled=true -Dlss.xaeromap.evidence={run}/evidence/xaero-map.jsonl -Dlss.xaeromap.arm={run}/evidence/xaero-map-arm-save')
  import json
- client='instances/lss-rig-client/minecraft/config/lss-client-config.json';values=json.loads(result['generated_files'].get(client,'{}'));values.update(receiveServerLods=True,enableXaeroMapBridge=True,enableJoinSlowStart=False);result['generated_files'][client]=json.dumps(values)+'\n'
- server='server/config/lss-server-config.json';values=json.loads(result['generated_files'].get(server,'{}'));values.update(lodDistanceChunks=32,enableChunkGeneration=False);result['generated_files'][server]=json.dumps(values)+'\n'
+ client='instances/lss-rig-client/minecraft/config/lss-client-config.yaml';result['generated_files'][client]=render({'lod.receive':True,'integrations.xaero_map.enabled':True,'lod.download.slow_start_on_join':False},side='client',document=result['generated_files'].get(client))
+ server='server/config/lss-server-config.yaml';result['generated_files'][server]=render({'lod.distance.default_chunks':32,'generation.enabled':False},document=result['generated_files'].get(server))
  # Preserve native Options data-version and defaults; never add unversioned key overrides.
  options='instances/lss-rig-client/minecraft/options.txt';lines=result['generated_files'].get(options,'').splitlines();lines=[line for line in lines if not line.startswith(('renderDistance:','simulationDistance:','tutorialStep:'))];lines+=['renderDistance:4','simulationDistance:5','tutorialStep:none'];result['generated_files'][options]='\n'.join(lines)+'\n'
  result['generated_files']['server/server.properties']+='difficulty=peaceful\nview-distance=4\nsimulation-distance=4\n'

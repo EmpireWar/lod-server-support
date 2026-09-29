@@ -29,7 +29,6 @@ public final class ClientStatus {
             world = null;
             connection = null;
         }
-        ClientPresets.invalidate();
     }
     private static long checkLifecycle() {
         synchronized (EXPORT_FEEDBACK) {
@@ -96,11 +95,11 @@ public final class ClientStatus {
                 : "unknown".equals(xaero.resolution()) ? ClientStatusSnapshot.Availability.UNKNOWN
                 : "absent".equals(xaero.resolution()) ? ClientStatusSnapshot.Availability.ABSENT
                 : "unavailable".equals(xaero.resolution()) ? ClientStatusSnapshot.Availability.UNAVAILABLE
-                : !cfg.enableXaeroMapBridge ? ClientStatusSnapshot.Availability.DISABLED
+                : !cfg.enableXaeroMapBridge() ? ClientStatusSnapshot.Availability.DISABLED
                 : ClientStatusSnapshot.Availability.AVAILABLE;
-        var snapshot = new ClientStatusSnapshot(1, lifecycle, System.currentTimeMillis(),
+        var snapshot = new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, lifecycle, System.currentTimeMillis(),
                 mc.getConnection() != null, ClientNetGlue.hasReceivedSessionConfig(),
-                cfg.receiveServerLods, ClientNetGlue.isServerEnabled(), LSSApi.hasVoxelConsumers(),
+                cfg.receiveServerLods(), ClientNetGlue.isServerEnabled(), LSSApi.hasVoxelConsumers(),
                 FarPlayerRenderer.RENDER_AVAILABLE, ClientNetGlue.getSessionVersion(),
                 ClientNetGlue.getServerLodDistance(), active ? manager.getEffectiveLodDistanceChunks() : 0,
                 active ? Math.max(0, ClientNetGlue.getColumnsReceived() - baseColumns) : 0,
@@ -108,10 +107,10 @@ public final class ClientStatus {
                 active ? ClientNetGlue.getQueuedColumnCount() : 0,
                 active ? manager.getLastIngestBacklog() : -1,
                 active ? Math.max(0, manager.getTotalIngestFailures() - baseFailures) : 0,
-                cfg.lodColumnsPerSecondLimit, Math.max(0, rateGated - lastRateGated),
+                cfg.lodColumnsPerSecondLimit(), Math.max(0, rateGated - lastRateGated),
                 xaero.pendingRebuilds(), ClientNetGlue.discoveryStatus(), availability,
                 active ? captureDetails(manager) : null,
-                dev.vox.lss.platform.LoaderServices.get().diagnosticVersions());
+                dev.vox.lss.platform.LoaderServices.get().diagnosticVersions(), cfg.diagnosticSettings());
         lastRateGated = rateGated;
         CACHE.publish(lifecycle, snapshot);
     }
@@ -161,7 +160,7 @@ public final class ClientStatus {
                 ClientNetGlue.getColumnsDropped(),
                 ClientNetGlue.getConnectionStartMs(),
                 ClientNetGlue.getQueuedColumnCount(),
-                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit,
+                LSSClientConfig.CONFIG.lodColumnsPerSecondLimit(),
                 manager.describeCacheKey(),
                 farActive ? tracker.diagLine() : null,
                 farActive && FarPlayerRenderer.RENDER_AVAILABLE ? FarPlayerRenderer.diagLine() : null,

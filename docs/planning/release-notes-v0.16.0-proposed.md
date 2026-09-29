@@ -32,5 +32,5 @@ Prepared for review; not published. The shared changes below apply to all five m
 
 Folia remains experimental. NeoForge remains best-effort; distant-player rendering on NeoForge is available on 1.21.1 and unavailable on the other published lines. The whole 1.21.1 line remains best-effort.
 
-- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption; this release publishes LSS only.
+- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption.
 - **Known limitations** — Existing Xaero first-spawn gaps, region-boundary shading seams, and shader/LOD-depth limitations remain.

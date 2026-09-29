@@ -19,5 +19,5 @@
 ### Support and Compatibility
 
 - **Platforms** — Fabric, Paper/Purpur/Folia, and NeoForge for Minecraft 26.2; Folia is experimental, and NeoForge is best-effort without distant-player rendering.
-- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption; this release publishes LSS only.
+- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption.
 - **Known limitations** — Existing Xaero first-spawn gaps, region-boundary shading seams, and shader/LOD-depth limitations remain.

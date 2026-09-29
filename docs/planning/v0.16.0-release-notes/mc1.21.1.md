@@ -19,5 +19,5 @@
 ### Support and Compatibility
 
 - **Platforms** — Fabric, Paper/Purpur, and NeoForge for Minecraft 1.21.1; the line is best-effort, both mod loaders render distant players, and Folia is unavailable.
-- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption; this release publishes LSS only.
+- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption.
 - **Known limitations** — Existing Xaero first-spawn gaps, region-boundary shading seams, and shader/LOD-depth limitations remain.

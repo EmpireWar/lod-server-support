@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "8bc13a165220119320127a28188b138d54b45159",
-    "1.21.10": "c87db88b70ce8c61a0ff374a190a6e2bce5028fc",
-    "1.21.11": "14248370a219331279b98da6b52c3aacc71f6d76",
-    "26.1": "c30b83f75d0562a05ce6e2a620a4a0960690b097",
-    "26.2": "d0c2ebd620450fd88352ae43da72d583a4d7cc57"
+    "1.21.1": "a6bfb5f6000bd66cf7906bbf263b17c5e49e9f16",
+    "1.21.10": "10499e8306c118db651ef966f35c0d0eee961dc4",
+    "1.21.11": "7cfae92c7ac828e361f572f0ad6a4805516061e0",
+    "26.1": "38e1156e7581cc98541e5d773f586704b1e6c176",
+    "26.2": "8efca7adac7351cfde6d3b0a35b0fd7e1d9bdbb6"
   },
   "files": {
     ".github/line.env": {
@@ -26,13 +26,13 @@
     ".github/workflows/build.yml": {
       "axes": "Per-line Tier3 availability and game JDK selection remain intact; 26.x additionally installs Java 21 for fixed common tests. Shared fixture-exclusion validation and common-test failure evidence are mandatory across all five lines.",
       "kind": "adapted",
-      "review": "Original plan baseline-to-current workflow diff reviewed: only common Java 21 setup, fixture exclusion checks and common XML failure upload added. Existing gates, retry evidence and artifact uploads preserved. Final independent review remains pending.",
+      "review": "2026-09-29 release gate: identical settingsCliClasspath preparation added before harness fixtures on every line; existing line JDKs, Tier3 availability, all test gates and failure evidence preserved.",
       "reviewed_blobs": {
-        "1.21.1": "03d51bc003abd8aaddab25e88c038c45a8f9ed44",
-        "1.21.10": "4fb14652b07ca7883c330c2538d7d98920eefe3c",
-        "1.21.11": "4fb14652b07ca7883c330c2538d7d98920eefe3c",
-        "26.1": "1cf74e9e3b784c206ae6f59e4266eb103dd9c9ee",
-        "26.2": "569793575969f63c1fa8e09d72697a0692dc601d"
+        "1.21.1": "3c6d98212312a6be1db372b2ea2a74248e567581",
+        "1.21.10": "23d4159d085d721bf21c75653085d889c3d16d98",
+        "1.21.11": "23d4159d085d721bf21c75653085d889c3d16d98",
+        "26.1": "fb10d277aa7575841c2910488689bc7b5a5714ef",
+        "26.2": "34035c32256e92d2bf066ac855c999a762342f53"
       },
       "surface": "line-adaptation:.github/workflows/build.yml",
       "tests": [

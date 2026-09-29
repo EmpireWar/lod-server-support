@@ -142,7 +142,17 @@
       "after_engine": "JUnit Jupiter 5.11.4; Java 21",
       "properties": "none required; optional loader golden properties not used by these cases",
       "resource_provenance": "fabric/src/test/resources/nbt-corpus, common/src/main/java; explicit common:test inputs",
-      "source_unchanged": true
+      "source_unchanged": true,
+      "retired_after_migration": {
+        "introducing_commit": "7ff47e28fcab888bcb9568ec9ad2b687e0ff23f9",
+        "reason": "The structured YAML settings change intentionally removed RuntimeSettings and its set-command registry. The original migration row and case evidence remain historical; the replacement settings API has dedicated validation, reload, persistence and legacy migration suites.",
+        "replacement_sources": [
+          "common/src/test/java/dev/vox/lss/common/config/YamlSettingsCodecTest.java",
+          "common/src/test/java/dev/vox/lss/common/config/SettingsReloadTest.java",
+          "common/src/test/java/dev/vox/lss/common/config/SettingsStoreTest.java",
+          "common/src/test/java/dev/vox/lss/common/config/LegacySettingsMigrationTest.java"
+        ]
+      }
     },
     {
       "class": "dev.vox.lss.common.farplayers.FarPlayerBroadcastServiceTest",

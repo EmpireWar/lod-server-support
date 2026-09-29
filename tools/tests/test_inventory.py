@@ -46,6 +46,46 @@ class InventoryTest(unittest.TestCase):
             (root / 'old.java').write_text('test')
             self.assertTrue(inventory.validate_moves(root, moves))
 
+    def test_declared_retirement_requires_absence_and_replacement_sources(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            replacement = root / 'Replacement.java'
+            replacement.write_text('replacement tests')
+            retirement = dict(reason='Removed feature replaced by new settings API',
+                              introducing_commit='a' * 40,
+                              replacement_sources=['Replacement.java'])
+            moves = {'moves': [dict(self.moves['moves'][0], before='old.java', after='new.java',
+                                   retired_after_migration=retirement)]}
+            self.assertEqual([], inventory.validate_moves(root, moves))
+            # Retiring a feature later never excuses missing original migration evidence.
+            self.assertEqual([], inventory.compare(self.before, self.after, moves)['problems'])
+            self.after['cases'].pop()
+            self.assertTrue(inventory.compare(self.before, self.after, moves)['problems'])
+            for source in ('old.java', 'new.java'):
+                with self.subTest(source=source):
+                    (root / source).write_text('resurrected retired test')
+                    self.assertTrue(inventory.validate_moves(root, moves))
+                    (root / source).unlink()
+            replacement.unlink()
+            self.assertTrue(inventory.validate_moves(root, moves))
+
+    def test_missing_moved_source_cannot_be_silently_retired(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            move = dict(self.moves['moves'][0], before='old.java', after='new.java')
+            self.assertTrue(inventory.validate_moves(root, {'moves': [move]}))
+            valid = dict(reason='Feature removed', introducing_commit='a' * 40,
+                         replacement_sources=['Replacement.java'])
+            (root / 'Replacement.java').write_text('replacement tests')
+            for retirement in (True, {}, dict(valid, reason=''),
+                               dict(valid, introducing_commit='short'),
+                               dict(valid, replacement_sources=[]),
+                               dict(valid, replacement_sources=['../outside.java']),
+                               dict(valid, replacement_sources=[None])):
+                with self.subTest(retirement=retirement):
+                    move['retired_after_migration'] = retirement
+                    self.assertTrue(inventory.validate_moves(root, {'moves': [move]}))
+
 
     def declare_addition(self):
         self.moves['post_migration_additions'] = [dict(identity='a.Test#new()', task=':common:test',

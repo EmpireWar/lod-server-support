@@ -148,7 +148,7 @@ public final class StoreBackfill {
     private void startRequestedSuccessor() {
         if (!successorRequested || closed || manualPause || !desiredPolicy.enabled()) return;
         try {
-            if (!start()) throw new IllegalStateException("Backfill store is not healthy");
+            if (!startWhenReady()) throw new IllegalStateException("Backfill store is not healthy");
         } catch (RuntimeException | Error failure) {
             if (policyReceipt != null) {
                 policyReceipt.completeExceptionally(failure);
@@ -217,14 +217,15 @@ public final class StoreBackfill {
         this.policy = this.desiredPolicy = new Policy(true, Math.max(1, columnsPerSecond), 0);
     }
 
-    /** Idempotent start; returns false if already running. */
+    /** Returns false if already running, disabled, closed, or the store is not healthy. */
     public synchronized boolean start() { return startRun(false); }
 
     /** Startup may wait for the existing store's startup sweep; operator start requires health. */
     public synchronized boolean startWhenReady() { return startRun(true); }
 
     private boolean startRun(boolean awaitStartup) {
-        if (closed || !desiredPolicy.enabled() || (!awaitStartup && !store.isHealthy()) || running.get()) return false;
+        if (closed || !desiredPolicy.enabled() || running.get()
+                || ((!awaitStartup || !store.isStartupSweepPending()) && !store.isHealthy())) return false;
         manualPause = false;
         stopRequested.set(false);
         running.set(true);

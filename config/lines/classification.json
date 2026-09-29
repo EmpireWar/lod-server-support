@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "a1fa4a06dcd9d97eccd40790bf85b83b3b285b4d",
-    "1.21.10": "cb5d0e7f895b16fabe94e7dbe5bbb53bcd4ec2ea",
-    "1.21.11": "75467fed1620144166008593e77a78908acd44f5",
-    "26.1": "0b0634b915b1f4776b2ab4e13270841f379d9537",
-    "26.2": "93423310eb33d2f106869ecd9bea90eb0643566e"
+    "1.21.1": "3093d44e2df33d59756698d8779a7b4fb3b54dbd",
+    "1.21.10": "bff1004a13aa896cb36318209d8a5ac42675629c",
+    "1.21.11": "daafdc28886d0226d1a5cb013b82a6de20e4efd9",
+    "26.1": "d0be5be9a0ca2e2ae1540cb9ce6cca1d479f0ea8",
+    "26.2": "b794e5a0384b5c30113a7eeec3a3e2288a3dd076"
   },
   "files": {
     ".github/line.env": {
@@ -4567,13 +4567,13 @@
     "gradle.properties": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "v0.15.1 PR parity audit: current per-world implementation and later settings/preset changes reviewed against 26.2; only documented Minecraft API/loader seams retained. Exact-version builds and behavior gates are recorded with the release.",
+      "review": "2026-09-29 0.16.0 release preparation: reviewed diff changes only mod_version from 0.15.1 to 0.16.0 on every line; all Minecraft/JDK/dependency/loader facts unchanged.",
       "reviewed_blobs": {
-        "1.21.1": "77edecd284d176d13b073540e3a61d02f37c1358",
-        "1.21.10": "676e43c419ead754907340c607ec8cc8d583f656",
-        "1.21.11": "b3584a9bf76412ff2637ded57ccdb13340ad2235",
-        "26.1": "89f1771711e62301c25d4396c9107ea02316b430",
-        "26.2": "8b7b2387634689df8049ca069e95fc9b2cb594d3"
+        "1.21.1": "53755c612d8a46d0e75a10d102bdcf853cd54597",
+        "1.21.10": "b1211e10f0e47695f2ad55a30cdf81ca8c44c039",
+        "1.21.11": "3191b27ed5fa12cd027591dcd24c585ecfc5f958",
+        "26.1": "23658e8afd53632dc4317ec2d5ff8fd4610a1c8d",
+        "26.2": "d6fd4282aebfc63683ac313f40cf3ec8e39ae012"
       },
       "surface": "build-toolchain",
       "tests": [

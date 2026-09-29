@@ -1,6 +1,8 @@
 # Private SQLite driver isolation implementation plan
 
-Date: 2026-09-28. Status: **approved for implementation; revised after review**.
+Date: 2026-09-28. Status: **implemented and validated**.
+
+Completion: [implementation, review and validation ledger](../reviews/2026-09-28-sqlite-isolation-implementation.md). P0–P5 are complete; publication and external replies remain separate actions.
 
 Requested outcome: resolve LSS's SQLite package collisions before the next release,
 using a privately loaded bundled driver instead of relying on a shared library mod.
@@ -325,7 +327,11 @@ Classify new files in `config/lines/classification.json`; update adapted blob pi
 exact cross-line source refs, port-batch provenance and rendered catalog data.
 Run catalog CI against the five actual source commits. Forward-integrate the
 independent commits into the five YAML branches, resolve deliberately, and repeat
-catalog/policy checks there. A wholesale YAML rebase is not a prerequisite.
+catalog/policy checks there. The YAML overlays get all five loader builds,
+platform JUnit suites, targeted common isolation/ownership/policy/settings tests,
+and artifact checks; repeat Fabric/NeoForge server gametests on 1.21.1 and 26.2.
+The complete general common/server matrix gates the independent release patches;
+there is no second ten-branch general campaign. A wholesale YAML rebase is not a prerequisite.
 
 ### P4 — focused acceptance and independent review
 
@@ -360,7 +366,7 @@ Update the final ledger with actual results and any residual platform limits.
 Once isolation passes, recommend superseding #306: its required Modrinth dependency
 automatically brings the SQLite library mod into GriefLogger installs, where those
 two foreign providers conflict independently. Do not ship a temporary
-external dependency and removing it again immediately. Preserve attribution and
+external dependency only to remove it immediately. Preserve attribution and
 its verified reproductions/version-range lesson. If it merges meanwhile, explicitly
 remove its TOML/Modrinth dependencies, driver-absence bootstrap hooks, library-mod
 dev staging, toggles and obsolete install instructions on the affected line only.

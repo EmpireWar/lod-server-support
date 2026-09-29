@@ -154,8 +154,8 @@ public final class LegacySettingsMigration {
         if(kind==SettingsSchema.Kind.STRING&&stringPrimitive(value))return value.toString();
         if(value instanceof String s) {
             if(kind==SettingsSchema.Kind.BOOLEAN) {
-                if(s.equalsIgnoreCase("true")||s.equalsIgnoreCase("false"))return Boolean.valueOf(s);
-                throw new SettingsException("Legacy boolean must be true or false at "+path);
+                // Gson's old Boolean adapter accepted string values via parseBoolean.
+                return Boolean.valueOf(s);
             }
             if(kind==SettingsSchema.Kind.INTEGER||kind==SettingsSchema.Kind.NUMBER) {
                 if(s.length()>128)throw new SettingsException("Legacy numeric scalar is too large at "+path);
@@ -168,15 +168,16 @@ public final class LegacySettingsMigration {
         }
         return value;
     }
-    /** Streaming preflight rejects depth/node/duplicate violations before allocating the tree. */
+    /** Bounded legacy-Gson syntax; repeated root fields keep the old loader's last value. */
     public static Map<String,Object> readJson(byte[] bytes) {
         String text=YamlSettingsCodec.utf8(bytes);
-        strictLexemes(text);
         try {
             try(var reader=reader(text)) {
                 int depth=0,count=0;var keys=new ArrayDeque<Set<String>>();var objects=new ArrayDeque<Boolean>();
                 while(reader.peek()!=JsonToken.END_DOCUMENT) {
                     JsonToken token=reader.peek();
+                    if(depth==0&&(count!=0||token!=JsonToken.BEGIN_OBJECT))
+                        throw new SettingsException("Legacy JSON must contain one object");
                     switch(token) {
                         case BEGIN_OBJECT,BEGIN_ARRAY -> {
                             if(++depth>YamlSettingsCodec.MAX_DEPTH)throw new SettingsException("JSON nesting exceeds "+YamlSettingsCodec.MAX_DEPTH);
@@ -185,7 +186,7 @@ public final class LegacySettingsMigration {
                             if(object)reader.beginObject();else reader.beginArray();
                         }
                         case END_OBJECT,END_ARRAY -> { depth--;objects.pop();keys.pop();if(token==JsonToken.END_OBJECT)reader.endObject();else reader.endArray(); }
-                        case NAME -> { if(++count>YamlSettingsCodec.MAX_NODES)throw new SettingsException("JSON node count exceeds "+YamlSettingsCodec.MAX_NODES);if(!keys.peek().add(reader.nextName()))throw new SettingsException("Duplicate JSON key"); }
+                        case NAME -> { if(++count>YamlSettingsCodec.MAX_NODES)throw new SettingsException("JSON node count exceeds "+YamlSettingsCodec.MAX_NODES);if(!keys.peek().add(reader.nextName())&&depth>1)throw new SettingsException("Duplicate legacy mapping key"); }
                         case STRING,NUMBER -> { String scalar=reader.nextString();if(token==JsonToken.NUMBER&&scalar.length()>128)throw new SettingsException("JSON numeric scalar is too large");if(++count>YamlSettingsCodec.MAX_NODES)throw new SettingsException("JSON node count exceeds "+YamlSettingsCodec.MAX_NODES); }
                         case BOOLEAN -> { reader.nextBoolean();if(++count>YamlSettingsCodec.MAX_NODES)throw new SettingsException("JSON node count exceeds "+YamlSettingsCodec.MAX_NODES); }
                         case NULL -> { reader.nextNull();if(++count>YamlSettingsCodec.MAX_NODES)throw new SettingsException("JSON node count exceeds "+YamlSettingsCodec.MAX_NODES); }
@@ -200,39 +201,7 @@ public final class LegacySettingsMigration {
             }
         }catch(SettingsException e){throw e;}catch(IOException|IllegalStateException|NumberFormatException e){throw new SettingsException("Invalid legacy JSON; repair it before migration",e);}
     }
-    /** Gson 2.10 is bundled on older supported lines; close its legacy-strict lexical gaps. */
-    private static void strictLexemes(String text) {
-        for(int i=0;i<text.length();) {
-            char c=text.charAt(i++);
-            if(c==' '||c=='\t'||c=='\r'||c=='\n'||"{}[]:,".indexOf(c)>=0)continue;
-            if(c=='"') {
-                boolean closed=false;
-                while(i<text.length()) {
-                    c=text.charAt(i++);
-                    if(c=='"'){closed=true;break;}
-                    if(c<0x20)throw new SettingsException("Invalid control character in legacy JSON string");
-                    if(c=='\\') {
-                        if(i==text.length())throw new SettingsException("Unterminated legacy JSON escape");
-                        char escaped=text.charAt(i++);
-                        if(escaped=='u') {
-                            if(i+4>text.length())throw new SettingsException("Invalid legacy JSON Unicode escape");
-                            for(int end=i+4;i<end;i++)if(Character.digit(text.charAt(i),16)<0||text.charAt(i)>127)throw new SettingsException("Invalid legacy JSON Unicode escape");
-                        } else if("\"\\/bfnrt".indexOf(escaped)<0)throw new SettingsException("Invalid legacy JSON escape");
-                    }
-                }
-                if(!closed)throw new SettingsException("Unterminated legacy JSON string");
-            } else {
-                int start=i-1;
-                while(i<text.length()&&"{}[]:, \t\r\n".indexOf(text.charAt(i))<0)i++;
-                if(i-start>128)throw new SettingsException("Invalid or oversized legacy JSON scalar");
-                String token=text.substring(start,i);
-                if(!Set.of("true","false","null").contains(token)
-                        && !token.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?"))
-                    throw new SettingsException("Invalid legacy JSON scalar");
-            }
-        }
-    }
-    private static JsonReader reader(String text) { var r=new JsonReader(new StringReader(text));r.setLenient(false);return r; }
+    private static JsonReader reader(String text) { var r=new JsonReader(new StringReader(text));r.setLenient(true);return r; }
     private static Object jsonValue(JsonReader r)throws IOException {
         return switch(r.peek()) {
             case BEGIN_OBJECT -> {var m=new LinkedHashMap<String,Object>();r.beginObject();while(r.hasNext())m.put(r.nextName(),jsonValue(r));r.endObject();yield m;}

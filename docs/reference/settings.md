@@ -18,7 +18,10 @@ dimension overrides. Paper lookup is exact world name, dimension identifier, the
 
 Existing preferred-brand YAML wins; otherwise the other brand's YAML is adopted.
 Only when neither exists is JSON migrated, preserving its source stem and exact-byte
-backup. Invalid authoritative YAML never falls back to JSON. Reload does not write files.
+backup. Migration accepts the old Gson loader's comments and lenient JSON syntax.
+Migration is one-way: v0.15.x reads the retained JSON and ignores YAML edits;
+copy any desired changes back into JSON before downgrading.
+Invalid authoritative YAML never falls back to JSON. Reload does not write files.
 
 ## Fabric / NeoForge server
 

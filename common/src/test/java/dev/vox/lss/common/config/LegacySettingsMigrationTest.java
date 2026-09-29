@@ -49,7 +49,7 @@ class LegacySettingsMigrationTest {
     @Test void explicitLegacyQuotedPrimitiveCompatibility(){var s=server("{\"enabled\":\"FALSE\",\"lodDistanceChunks\":\"123.0\",\"mbPerSecondLimitGlobal\":\"4.25\"}");assertFalse(s.service().enabled());assertEquals(123,s.lod().distance().defaultChunks());assertEquals(4.25,s.network().bandwidth().globalMibPerSecond());}
     @Test void malformedAliasGroupsDropWithoutTouchingGoodSpelling(){var c=client("{\"cacheAddressAliases\":[[\"Keep.CASE\",\"second\"],null,[\"bad\",null],7],\"unknownBlockFallback\":\"   \"}");assertEquals(List.of(List.of("Keep.CASE","second")),c.cache().addressAliases());assertEquals("minecraft:stone",c.compatibility().blockFallbacks().defaultBlock());}
     @Test void ignoredKeysReportedByCountOnly(){var r=LegacySettingsMigration.migrate(bytes("{\"private unknown\":1,\"another\":false}"),SettingsSchema.server(false));assertEquals(2,r.ignoredKeys());assertTrue(r.warnings().stream().noneMatch(w->w.contains("private unknown")));}
-    @ParameterizedTest @ValueSource(strings={"", "[]", "null", "{bad:1}", "{\"enabled\":true,\"enabled\":false}", "{\"enabled\":\"yes\"}", "{\"lodDistanceChunks\":\"1.5\"}", "{\"lodDistanceChunks\":2147483648}", "{\"mbPerSecondLimitGlobal\":\"NaN\"}", "{} {}", "// comment\n{}"})
+    @ParameterizedTest @ValueSource(strings={"", "[]", "null", "{broken", "{enabled:}", "{\"lodDistanceChunks\":\"1.5\"}", "{\"lodDistanceChunks\":2147483648}", "{\"mbPerSecondLimitGlobal\":\"NaN\"}", "{} {}", "{} trailing", "/* unfinished"})
     void rejectsCorruptOrUnsupportedJson(String json){assertThrows(SettingsException.class,()->server(json));}
     @Test void streamBudgetsApplyBeforeJsonTreeAllocation(){
         assertDoesNotThrow(()->LegacySettingsMigration.readJson(bytes("{\"x\":"+"[".repeat(31)+"0"+"]".repeat(31)+"}")));
@@ -114,12 +114,38 @@ class LegacySettingsMigrationTest {
         assertEquals("1e3",client("{\"unknownBlockFallback\":1e3}").compatibility().blockFallbacks().defaultBlock());
         assertEquals(List.of(List.of("12345","true","1e3")),client("{\"cacheAddressAliases\":[[12345,true,1e3]]}").cache().addressAliases());
     }
-    @Test void strictJsonLexemesRemainStrictOnOlderBundledGson() {
-        for(String value:List.of("TRUE","False","NULL","+1","01",".5","1.","NaN","Infinity"))
-            assertThrows(SettingsException.class,()->server("{\"enabled\":"+value+"}"),value);
-        for(String value:List.of("raw\nline","bad\\'escape","bad\\x20","bad\\u１２３４"))
-            assertThrows(SettingsException.class,()->server("{\"farPlayersExclude\":[\""+value+"\"]}"),value);
-        assertEquals(List.of("line\nnext","\"\\/"),server("{\"farPlayersExclude\":[\"line\\nnext\",\"\\\"\\\\\\/\"]}").farPlayers().excludedPlayers());
+    static final class LegacyFields {
+        boolean enabled=true;
+        int lodDistanceChunks=512;
+        List<String> farPlayersExclude=new ArrayList<>();
+        boolean farPlayersShareSelf=true;
+    }
+    @ParameterizedTest @ValueSource(strings={
+            "// old config\n{enabled:false,lodDistanceChunks:128}",
+            "{/* old config */ 'enabled':false, 'lodDistanceChunks':128}",
+            "{# old config\nenabled:false;lodDistanceChunks=128}",
+            "{enabled=>false;lodDistanceChunks:'128.0'}",
+            "{enabled:FALSE,lodDistanceChunks:+128}",
+            "{enabled:'yes',lodDistanceChunks:0128}",
+            "{enabled:true,enabled:false,lodDistanceChunks:128}",
+            "{farPlayersExclude:[Alice,'Bob',,],farPlayersShareSelf:false}",
+            "{farPlayersExclude:['raw\nline',\"bad\\'escape\"]}",
+            ")]}'\n{enabled:false,lodDistanceChunks:128}",
+            "\uFEFF{enabled:false,lodDistanceChunks:128}"})
+    void looseSyntaxMatchesTheOldGsonLoader(String json) {
+        var old=new com.google.gson.GsonBuilder().setPrettyPrinting().create().fromJson(json,LegacyFields.class);
+        for(var schema:List.of(SettingsSchema.server(false),SettingsSchema.server(true))) {
+            var migrated=LegacySettingsMigration.migrate(bytes(json),schema).settings();
+            assertEquals(old.enabled,migrated.service().enabled());
+            assertEquals(old.lodDistanceChunks,migrated.lod().distance().defaultChunks());
+            assertEquals(old.farPlayersExclude.stream().filter(Objects::nonNull).toList(),migrated.farPlayers().excludedPlayers());
+        }
+        assertEquals(old.farPlayersShareSelf,client(json).farPlayers().sharing().enabled());
+    }
+    @Test void malformedLooseSyntaxAndDuplicateTypedMapsStillFail() {
+        for(String json:List.of("{farPlayersExclude:['bad\\x20']}","{farPlayersExclude:['bad\\uQQQQ']}",
+                "{lodDistanceChunksByWorld:{'minecraft:overworld':128,'minecraft:overworld':256}}"))
+            assertThrows(SettingsException.class,()->server(json));
     }
     @Test void curatedMapPreservesLegacyPrimitiveStringCoercionButRejectsStructures() {
         var c=client("{\"crossVersionBlockFallbacks\":{\"numeric\":5,\"boolean\":true}}");

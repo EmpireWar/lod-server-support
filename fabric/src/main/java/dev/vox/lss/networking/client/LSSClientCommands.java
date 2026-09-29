@@ -26,7 +26,7 @@ public class LSSClientCommands {
                     // xplat and shared with NeoForge — do not re-hand-roll it here.
                     .then(ClientCommandActions.resetSubtree(
                             ClientCommands::literal, source -> source::sendFeedback))
-                    .then(ClientCommandActions.presetSubtree(ClientCommands::literal, source -> source::sendFeedback))
+                    .then(ClientCommandActions.reloadSubtree(ClientCommands::literal, source -> source::sendFeedback))
                     .then(ClientCommandActions.statusSubtree(ClientCommands::literal))
                     .then(ClientCommandActions.diagnosticsSubtree(ClientCommands::literal, source -> source::sendFeedback))
                     .then(ClientCommands.literal("diag")

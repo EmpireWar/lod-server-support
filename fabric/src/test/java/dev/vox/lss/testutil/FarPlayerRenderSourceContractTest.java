@@ -115,7 +115,7 @@ class FarPlayerRenderSourceContractTest {
         // Fold (b): the tag gap past vanilla's own cap — tracked players past it get the LSS tag
         // under vanilla's ladder, camera-distance based, only where vanilla drew a body. On this
         // line vanilla's cap is the literal 64 blocks of EntityRenderer.extractRenderState.
-        assertTrue(src.contains("boolean nameTags = config.farPlayersNameTags && Minecraft.renderNames();"),
+        assertTrue(src.contains("boolean nameTags = config.nameTags() && Minecraft.renderNames();"),
                 tree + ": every tag (proxy or real) must honour the hide-GUI key (fold D3)");
         assertTrue(src.contains("for (var realPlayer : level.players())")
                         && src.contains("if (active.contains(realPlayer.getUUID())) continue;")

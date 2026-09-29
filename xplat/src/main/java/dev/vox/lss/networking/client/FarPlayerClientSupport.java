@@ -14,9 +14,9 @@ import dev.vox.lss.config.LSSClientConfig;
  * compiled false (the v0.10.0 transport-yield default-FALSE pattern).
  *
  * <p>R-5 (decided at E1): the tracker lives HERE, outside the request-manager
- * lifecycle — a mid-session SessionConfig re-push (stage C's {@code /lsslod set})
+ * lifecycle — a mid-session SessionConfig re-push ({@code /lsslod reload})
  * rebuilds the manager while the server's subscription state survives untouched, so
- * rebuild-and-resubscribe would turn one {@code set lodDistanceChunks} on an N-player
+ * rebuild-and-resubscribe would turn one distance reload on an N-player
  * server into N roster floods. Death sites: disconnect + the R-3 reset re-subscribe.
  */
 public final class FarPlayerClientSupport {
@@ -31,7 +31,30 @@ public final class FarPlayerClientSupport {
     static final boolean CLIENT_ARMED = true;
 
     private static final FarPlayerClientTracker TRACKER = new FarPlayerClientTracker();
-    private static volatile FarPlayerWire.Prefs lastSentPrefs;
+    private static final FarPlayerPreferenceDelivery PREFERENCES = new FarPlayerPreferenceDelivery();
+
+    static Object connectionIdentity() {
+        var listener = net.minecraft.client.Minecraft.getInstance().getConnection();
+        return listener == null ? null : listener.getConnection();
+    }
+
+    static void onSessionReady() {
+        PREFERENCES.sessionReady(connectionIdentity());
+        maybeSendPrefs();
+    }
+
+    static void tickPreferenceRetry() {
+        PREFERENCES.tick(connectionIdentity(), FarPlayerClientSupport::enqueuePreference);
+    }
+
+    public static dev.vox.lss.platform.LoaderServices.EnqueueOutcome preferenceOutcome() {
+        return dev.vox.lss.platform.LoaderServices.EnqueueOutcome.valueOf(PREFERENCES.outcome().name());
+    }
+
+    private static FarPlayerPreferenceDelivery.Outcome enqueuePreference(FarPlayerWire.Prefs prefs) {
+        return FarPlayerPreferenceDelivery.Outcome.valueOf(dev.vox.lss.platform.LoaderServices.get().enqueueToServer(
+                new dev.vox.lss.networking.payloads.FarPlayerPrefsC2SPayload(FarPlayerWire.encodePrefs(prefs))).name());
+    }
 
     /** The handshake-composition term. The soak/benchmark property gate (FARP §3.3):
      *  those clients are full Loom clients distinguished only by the system
@@ -53,77 +76,21 @@ public final class FarPlayerClientSupport {
         return LSSConstants.CAPABILITY_FAR_PLAYERS;
     }
 
-    /**
-     * Called by the Sodium screen's storage handler for the far-player options (E2
-     * review m4): a mid-session "Share My Position" flip must reach the server NOW,
-     * not on the next rejoin — maybeSendPrefs's changed-guard makes this free when
-     * nothing changed. Sessions that never handshook (receiveServerLods off, no LOD
-     * consumer) have no channel to send on; the tooltip documents that residue.
-     */
+    /** Explicit reload attempts privacy delivery before retiring acquisition. */
     public static void onClientConfigChanged() {
         maybeSendPrefs();
     }
 
     /** Monotonic millis for motion state (E2 review m6): wall clock steps freeze or
-     *  teleport every proxy; nanoTime is the SeeU-proven source. All motion writers
+     *  teleport every proxy; nanoTime is the monotonic source. All motion writers
      *  and samplers must use THIS. */
     public static long monotonicMillis() {
         return System.nanoTime() / 1_000_000L;
     }
 
-    private static volatile Boolean seeuPresent;
-    private static volatile boolean seeuInfoLogged;
-
-    /**
-     * The SeeU-coexist gate (E3, FARP plan §6 as amended — decisions log): both mods
-     * rendering the same distant player = double proxies, so SeeU's presence disables
-     * the LSS renderer/receive half UNLESS `farPlayersWithSeeU` overrides (a separate
-     * key because `farPlayersEnabled` defaults true — "set it true" cannot express an
-     * explicit preference). This gates the EFFECTIVE enabled term only: the capability
-     * bit stays composed and prefs still deliver (the prefs-carrier rule survives —
-     * `enabled=false` in the prefs stops the server streaming frames; the shareSelf
-     * opt-out still arrives). An INFO names the override once so the fix is
-     * discoverable from the log; the Sodium tooltip carries it too.
-     */
+    /** Local visibility is an explicit setting, independent of sharing consent. */
     public static boolean effectiveFarPlayersEnabled() {
-        var config = LSSClientConfig.CONFIG;
-        boolean gate = effectiveEnabledFor(config.farPlayersEnabled, isSeeuPresent(),
-                config.farPlayersWithSeeU);
-        if (!gate && config.farPlayersEnabled && isSeeuPresent() && !seeuInfoLogged) {
-            seeuInfoLogged = true;
-            LSSLogger.info("SeeU detected — " + dev.vox.lss.common.Brand.shortName()
-                    + " stops drawing far players to avoid"
-                    + " double proxies (your own Share My Position setting still"
-                    + " applies); set farPlayersWithSeeU=true in "
-                    + dev.vox.lss.common.Brand.lowerShortName() + "-client-config.json"
-                    + " (the 'Prefer " + dev.vox.lss.common.Brand.shortName()
-                    + " Far Players' option in the Sodium screen)"
-                    + " to use " + dev.vox.lss.common.Brand.shortName() + " instead");
-        }
-        return gate;
-    }
-
-    /** Pure form for the Tier 1 coexist pin. */
-    static boolean effectiveEnabledFor(boolean configEnabled, boolean seeuPresent,
-                                       boolean withSeeUOverride) {
-        return configEnabled && (!seeuPresent || withSeeUOverride);
-    }
-
-    public static boolean isSeeuPresent() {
-        Boolean present = seeuPresent;
-        if (present == null) {
-            try {
-                var loader = dev.vox.lss.platform.LoaderServices.get();
-                // "voxyseeu" is the pre-rename mod id (the vendored clone's config
-                // migration shows the rename) — an old SeeU build must trip the
-                // gate too (E3 review NIT-3).
-                present = loader.isModLoaded("seeu") || loader.isModLoaded("voxyseeu");
-            } catch (Throwable t) {
-                present = false; // loader-less unit contexts: no SeeU
-            }
-            seeuPresent = present;
-        }
-        return present;
+        return LSSClientConfig.CONFIG.farPlayersEnabled();
     }
 
     /**
@@ -135,18 +102,11 @@ public final class FarPlayerClientSupport {
      */
     static void maybeSendPrefs() {
         if (capabilityBit() == 0) return;
-        var config = LSSClientConfig.CONFIG;
-        var prefs = new FarPlayerWire.Prefs(effectiveFarPlayersEnabled(),
-                config.farPlayersMaxDistanceBlocks, config.farPlayersMinDistanceBlocks,
-                config.farPlayersShareSelf, config.farPlayersShareDistanceBlocks);
-        if (prefs.equals(lastSentPrefs)) return;
-        try {
-            dev.vox.lss.platform.LoaderServices.get().sendToServer(new dev.vox.lss.networking.payloads
-                    .FarPlayerPrefsC2SPayload(FarPlayerWire.encodePrefs(prefs)));
-            lastSentPrefs = prefs;
-        } catch (Exception e) {
-            LSSLogger.debug("Far-player prefs send failed (legacy server?): " + e.getMessage());
-        }
+        var config = LSSClientConfig.CONFIG.snapshot().farPlayers();
+        var prefs = new FarPlayerWire.Prefs(config.enabled(),
+                config.distance().maxBlocks(), config.distance().minBlocks(),
+                config.sharing().enabled(), config.sharing().maxDistanceBlocks());
+        PREFERENCES.accept(connectionIdentity(), prefs, FarPlayerClientSupport::enqueuePreference);
     }
 
     /** Roster frame, main client thread (the receiver hops before calling). */
@@ -183,7 +143,7 @@ public final class FarPlayerClientSupport {
      * once-unless-changed guard scoped to ONE server session, which is its contract.
      */
     static void onHandshakeSent() {
-        lastSentPrefs = null;
+        PREFERENCES.handshake();
     }
 
     /** Disconnect: the tracker + the prefs-sent latch + the renderer's proxy set die
@@ -197,7 +157,7 @@ public final class FarPlayerClientSupport {
      *  no-op variant — satisfies this). */
     static void onSessionEnd() {
         TRACKER.clear();
-        lastSentPrefs = null;
+        PREFERENCES.clear();
         FarPlayerRenderer.clearInstance();
     }
 
@@ -210,7 +170,7 @@ public final class FarPlayerClientSupport {
      */
     public static void resetAndResubscribe() {
         TRACKER.clear();
-        lastSentPrefs = null;
+        PREFERENCES.invalidateSent();
         maybeSendPrefs();
     }
 

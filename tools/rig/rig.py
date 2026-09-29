@@ -233,9 +233,9 @@ def create(profile, runtime, scenario, state):
     write(root / 'scenario.json', scenario)
     # Runtime contains local launch context paths, but never account contents.
     write(root / 'runtime.json', runtime)
-    from toolchain import snapshot
+    from toolchain import snapshot, settings_codec
     run_manifest = {'storage_estimate':storage['estimate'],'profile_hash': digest(profile), 'scenario_hash': digest(scenario), 'runtime_hash': digest(runtime),
-                    'runtime_tools': snapshot(REPO),
+                    'runtime_tools': snapshot(REPO), 'settings_codec': settings_codec(runtime),
                     'runner_sha256': sha(Path(__file__)), 'checker_sha256': digest({name: sha(Path(__file__).with_name(name)) for name in ('proof.py', 'check_source_seed.py', 'check_regions.py', 'check_workload.py', 'performance.py', 'metrics.py', 'measure.py')}),
                     'staged_inputs': [{k: row[k] for k in ('sha256', 'target')} for row in runtime.get('stage_files', [])],
                     'generated_config_hash': digest(runtime.get('generated_files', {}))}
@@ -392,6 +392,8 @@ def run(root):
     from toolchain import verify
     verify(REPO, manifest.get('run_manifest', {}).get('runtime_tools'))
     verify(root/'tool-sources',manifest['run_manifest']['runtime_tools'])
+    from toolchain import verify_settings_codec
+    verify_settings_codec(runtime, manifest['run_manifest'].get('settings_codec'))
     from runtime_trees import verify as verify_trees
     verify_trees(root, runtime.get('immutable_trees', {}))
     if manifest['profile_hash'] != digest(profile) or manifest['scenario_hash'] != digest(scenario) or manifest['runtime_hash'] != digest(runtime):
@@ -506,6 +508,22 @@ def run(root):
                 time.sleep(.1)
         from commands import Commands
         commands = Commands(root, launched)
+        if scenario.get('checker') == 'yaml-reload':
+            # The driver edits only this run's adopted file and uses the same command
+            # queue as manual owned-console tools. Keep polling on the supervisor.
+            import threading
+            def settings_exercise():
+                from drive_yaml_reload import ReloadDriver
+                driver = None
+                try:
+                    spec = runtime['settings_observer']
+                    driver = ReloadDriver(root, inside(root, spec['config_relative']), scenario['server_platform'])
+                    driver.execute()
+                except Exception as error:
+                    if driver is not None: driver.finish_native(error)
+                    else: write(root/'evidence/yaml-reload.json', {'status':'failed','error':str(error)})
+                else: driver.finish_native()
+            threading.Thread(target=settings_exercise, name='rig-yaml-driver', daemon=True).start()
         from measure import Sampler
         sampler = Sampler({launch['id']: identity(proc.pid) if Path(launch['argv'][0]).name == 'java' else None for launch, proc in launched})
         rss_stream = open(root / 'evidence/rss-samples.jsonl', 'x')
@@ -516,12 +534,12 @@ def run(root):
             for observation in sampler.sample():
                 rss_stream.write(json.dumps(observation) + '\n')
             rss_stream.flush()
-            if (root / 'proof.json').exists():
+            if (root / 'proof.json').exists() or (scenario.get('checker') == 'yaml-reload' and (root/'evidence/yaml-reload.json').exists()):
                 break
             if any(p.poll() is not None for p in children):
                 raise ValueError('startup/process exited before semantic proof')
             time.sleep(.1)
-        observation_completed = time.monotonic() >= deadline and not stopped and not (root / 'stop').exists()
+        observation_completed = (time.monotonic() >= deadline or (scenario.get('checker') == 'yaml-reload' and (root/'evidence/yaml-reload.json').exists())) and not stopped and not (root / 'stop').exists()
         from proof import check_proof
         errors = check_proof(read(root / 'proof.json') if (root / 'proof.json').exists() else {}, manifest, scenario, root)
         if (root/'proof.json').is_file():
@@ -630,6 +648,19 @@ def run(root):
             except Exception as error:
                 write(root/'evidence/source-correctness.json',{'status':'failed','run_hash':manifest['run_hash'],'errors':['mixed-source checker failed: '+str(error)]})
                 manifest.update(status='failed',errors=['mixed-source checker failed: '+str(error)])
+        if scenario.get('checker') == 'yaml-reload' and observation_completed:
+            try:
+                from check_yaml_reload import inspect
+                outcome = inspect(root)
+                write(root/'evidence/yaml-reload-result.json', outcome)
+                proof = {key:manifest[key] for key in ('run_id','profile_hash','scenario_hash','run_hash')}
+                proof.update(ready=outcome['status']=='passed', handshake=outcome['status']=='passed', test_count=outcome['test_count'],
+                             assertions={key:outcome['status']=='passed' for key in scenario['assertions']}, failures=outcome['errors'])
+                write(root/'proof.json',proof)
+                errors = check_proof(proof,manifest,scenario,root)
+                manifest.update(status='failed' if errors else 'passed',errors=errors)
+            except Exception as error:
+                manifest.update(status='failed',errors=['native YAML reload checker failed: '+str(error)])
         if scenario.get('checker') == 'folia-regions' and observation_completed:
             try:
                 from check_regions import check, load_rows, handshakes
@@ -706,6 +737,8 @@ def main():
             try:
                 verify(REPO, manifest.get('run_manifest', {}).get('runtime_tools'))
                 verify(root/'tool-sources',manifest['run_manifest']['runtime_tools'])
+                from toolchain import verify_settings_codec
+                verify_settings_codec(read(root/'runtime.json'), manifest['run_manifest'].get('settings_codec'))
             except ValueError as error:
                 errors.append(str(error))
             runtime = read(root / 'runtime.json')

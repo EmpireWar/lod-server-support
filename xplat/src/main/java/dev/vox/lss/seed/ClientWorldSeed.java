@@ -30,7 +30,7 @@ public final class ClientWorldSeed {
 
     /** The live context, with the {@code useWorldSubBuckets} switch folded in. */
     public static WorldSubKey.Context context() {
-        return context(LSSClientConfig.CONFIG.useWorldSubBuckets);
+        return context(LSSClientConfig.CONFIG.useWorldSubBuckets());
     }
 
     /** Seam for the switch (config-independent tests). */

@@ -22,11 +22,13 @@ compatibility and far-player rendering are separate checks.
 | 26.1 | true | Intentional stub |
 | 26.2 | true | Intentional stub |
 
-On every line, `neoforge/build.gradle` shades common code and nests **both
-sqlite-jdbc and zstd-jni as stock jarJar libraries** under `META-INF/jarjar/`.
-`scripts/release_check.py` checks both metadata entries and rejects flat
-`org/sqlite/`, `com/github/luben/` and native-library entries. Paper's flat native
-packaging and Fabric's stripped nested jars are different artifact contracts.
+On every line, common carries SQLite 3.49.1.0 in an opaque capsule trimmed to the
+supported native matrix (`dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin`), loaded by a private
+platform-parent loader. No loader exposes SQLite classes or declares it as a nested
+mod/library. NeoForge retains stock **zstd-jni** jarJar under `META-INF/jarjar/`;
+Paper retains flat native-stripped zstd; Fabric retains its stripped nested zstd
+mod. `release_check.py` and `tools/packaging/sqlite_capsule.py` pin all three shapes,
+independent capsule identity, eight SQLite natives and LSS/VSS resource equality.
 
 Use [the current live-profile inventory](../testing/astra-live-profiles.md) for
 candidate Voxy/Connector/Sodium/Xaero stacks and their validation limits. A renderer

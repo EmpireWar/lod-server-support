@@ -163,7 +163,7 @@ class ClientColumnProcessor {
     }
 
     void scheduleProcessing(boolean serverEnabled) {
-        if (!serverEnabled || !LSSClientConfig.CONFIG.receiveServerLods || !LSSApi.hasVoxelConsumers()) {
+        if (!serverEnabled || !LSSClientConfig.CONFIG.receiveServerLods() || !LSSApi.hasVoxelConsumers()) {
             reportAndClearBacklog();
             return;
         }

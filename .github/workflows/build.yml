@@ -76,6 +76,7 @@ jobs:
 
       - name: Isolated harness ownership + result fixtures
         run: |
+          ./gradlew :common:settingsCliClasspath --no-parallel
           python3 scripts/test_harness.py
           bash -n scripts/lib/harness-lock.sh
           bash -n scripts/lib/mc-run.sh

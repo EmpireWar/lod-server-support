@@ -54,9 +54,21 @@ final class ClientIdentityResolver {
     ClientIdentityResolver(Registry<Biome> biomeRegistry, IdMap<Holder<Biome>> biomeIdMap) {
         this.biomeRegistry = biomeRegistry;
         this.biomeIdMap = biomeIdMap;
-        this.curated = Map.copyOf(LSSClientConfig.CONFIG.crossVersionBlockFallbacks);
-        this.terminalBlockId = resolveTerminalBlock(LSSClientConfig.CONFIG.unknownBlockFallback);
+        var fallback = LSSClientConfig.CONFIG.snapshot().compatibility().blockFallbacks();
+        this.curated = fallback.overrides();
+        this.terminalBlockId = resolveTerminalBlock(fallback.defaultBlock());
         this.fallbackBiomeId = resolveFallbackBiome();
+    }
+
+    /** Owner-thread validation keeps unknown modded identifiers on the documented fallback path. */
+    static void validateConfiguredFallbacks(dev.vox.lss.common.config.ClientSettings candidate) {
+        var configured = candidate.compatibility().blockFallbacks();
+        var terminal = resolveExact(configured.defaultBlock());
+        if (terminal == null || terminal.isAir())
+            LSSLogger.warn("compatibility.block_fallbacks.default: unknown or air block; using minecraft:stone for decoding");
+        long unresolved = configured.overrides().values().stream().filter(value -> resolveExact(value) == null).count();
+        if (unresolved > 0) LSSLogger.warn("compatibility.block_fallbacks.overrides: " + unresolved
+                + " unresolved local mappings will use the normal fallback ladder");
     }
 
     /** Translates one v20 section-array body to the CLIENT's native layout (§2.3). */
@@ -178,7 +190,7 @@ final class ClientIdentityResolver {
         BlockState state = configured == null ? null : resolveExact(configured);
         if (state == null || state.isAir()) {
             if (state != null) {
-                LSSLogger.warn("unknownBlockFallback '" + configured
+                LSSLogger.warn("compatibility.block_fallbacks.default '" + configured
                         + "' resolves to air — air punches holes in distant terrain;"
                         + " using minecraft:stone");
             }

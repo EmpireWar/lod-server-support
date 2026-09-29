@@ -26,8 +26,8 @@ class PaperXrayMaskManagerTest {
     }
 
     private static PaperConfig config(String mode) {
-        var c = new PaperConfig();
-        c.xrayObfuscation = mode;
+        var c = new MutablePaperSettings();
+        MutablePaperSettings.set(c, "privacy.xray.mode", mode);
         return c;
     }
 

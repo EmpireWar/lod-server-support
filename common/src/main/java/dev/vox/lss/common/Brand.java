@@ -13,7 +13,7 @@ import java.util.Properties;
  * and payload formats are all untouched by branding, so an LSS client and a VSS server
  * (or vice versa) stay fully wire-compatible regardless of which brand each side carries.
  * Branding affects text a human reads plus a small set of LOCAL names — config filenames
- * ({@code JsonConfig.brandedConfigCandidates}), the LOD-store directory
+ * ({@code SettingsStore} YAML selection and legacy migration), the LOD-store directory
  * ({@code LodStores.brandedStoreDir}), and the client cache dot-dir — each with
  * adopt-the-other-brand's-existing-file fallback so a jar swap keeps its data.
  */

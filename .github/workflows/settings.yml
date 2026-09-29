@@ -9,6 +9,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Settings tools execute the product Java codec; Gradle configures every
+      # platform, so install both the common runtime and this line's build JDK.
+      - name: Source line env
+        run: grep -vE '^\s*(#|$)' .github/line.env >> "$GITHUB_ENV"
+      - name: Install Java 21 for settings tools
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install line build JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.LINE_JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
       - name: Check descriptor inventory and generated reference
         run: |
           python3 tools/settings/inventory.py --check

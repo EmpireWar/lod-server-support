@@ -427,8 +427,7 @@ class LodStoreExperimentTool {
             // NOT DriverManager: under Fabric's Knot classloader the ServiceLoader-registered
             // driver is invisible to java.sql.DriverManager ("No suitable driver") — the
             // DataSource route is classloader-clean. The production store must do the same.
-            var ds = new org.sqlite.SQLiteDataSource();
-            ds.setUrl("jdbc:sqlite:" + this.file);
+            var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + this.file);
             this.conn = ds.getConnection();
             try (Statement st = this.conn.createStatement()) {
                 st.execute("PRAGMA page_size=" + this.pageSize);

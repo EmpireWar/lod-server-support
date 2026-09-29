@@ -29,16 +29,21 @@ class StatusScreenDrawOrderTest {
         try (var input = getClass().getClassLoader().getResourceAsStream("dev/vox/lss/networking/client/ClientStatusScreen.class")) {
             assertNotNull(input);
             var calls = new ArrayList<String>();
+            var delegates = new ArrayList<String>();
             new ClassReader(input).accept(new ClassVisitor(Opcodes.ASM9) {
                 @Override public MethodVisitor visitMethod(int access,String name,String descriptor,String signature,String[] exceptions) {
-                    if (!name.equals("feedback")) return null;
+                    if (!name.equals("feedback") && !name.equals("sendChatFeedback")) return null;
                     return new MethodVisitor(Opcodes.ASM9) {
                         @Override public void visitMethodInsn(int opcode,String owner,String method,String descriptor,boolean iface) {
-                            if (owner.equals("net/minecraft/client/gui/components/ChatComponent")) calls.add(method + descriptor);
+                            if (name.equals("feedback") && owner.equals("dev/vox/lss/networking/client/ClientStatusScreen"))
+                                delegates.add(method + descriptor);
+                            if (name.equals("sendChatFeedback") && owner.equals("net/minecraft/client/gui/components/ChatComponent"))
+                                calls.add(method + descriptor);
                         }
                     };
                 }
             },0);
+            assertEquals(java.util.List.of("sendChatFeedback(Lnet/minecraft/network/chat/Component;)V"), delegates);
             assertEquals(java.util.List.of("addClientSystemMessage(Lnet/minecraft/network/chat/Component;)V"), calls);
         }
     }

@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "3093d44e2df33d59756698d8779a7b4fb3b54dbd",
-    "1.21.10": "bff1004a13aa896cb36318209d8a5ac42675629c",
-    "1.21.11": "daafdc28886d0226d1a5cb013b82a6de20e4efd9",
-    "26.1": "d0be5be9a0ca2e2ae1540cb9ce6cca1d479f0ea8",
-    "26.2": "b794e5a0384b5c30113a7eeec3a3e2288a3dd076"
+    "1.21.1": "a5a5223bdf71e9c86ec5f7e31813f3a97f42e73f",
+    "1.21.10": "a7804eb089cfee8d874b41c86b6c624ee23cfebb",
+    "1.21.11": "5de8a3de6af533578c85f0d2ec9ae236e2f7ce28",
+    "26.1": "37f0c2daf89c0c2e073eba9d69473f000af56ac3",
+    "26.2": "89d0418bd9f46af456c1456a657efc235b191888"
   },
   "files": {
     ".github/line.env": {
@@ -6285,13 +6285,13 @@
     "scripts/release_check.py": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
+      "review": "2026-09-29 release housekeeping: identical semantic delta on all five lines, limited to corrected SQLite/zstd packaging docstrings, diagnostics, comments and removal of unused private fixture arguments; all gate predicates and line-specific checks preserved. Existing negative selftests and final artifacts rechecked.",
       "reviewed_blobs": {
-        "1.21.1": "8e6c0c75815595b67d0465d1cec7c53e6cb553d6",
-        "1.21.10": "16beab9e0481ec4491e8e9368e2b60e519f6e9fc",
-        "1.21.11": "20bf70e35c42b0c886d86cad85397508e3f9d710",
-        "26.1": "a524634bc1a58ed1c3773b93608e6f58e6f22f24",
-        "26.2": "9425e0a6422b5cedcc4e658b2945379b5c1cfa12"
+        "1.21.1": "ff3e8f33b41d654b2197f7f4006f348788861e67",
+        "1.21.10": "19c8a96eceeeb844e9cbb100504f7d0577f1cfc3",
+        "1.21.11": "ec1f0044c2e15843a8684a1a0092bd0cb557049c",
+        "26.1": "d6d796cf0c3942241405be51d693e73e9428fe10",
+        "26.2": "1e3718e5e556963a39efa24c13223032ef2e2af1"
       },
       "surface": "line-adaptation:scripts/release_check.py",
       "tests": [

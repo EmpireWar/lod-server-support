@@ -44,7 +44,7 @@ class JsonConfigLoadTest {
         assertEquals(bad, Files.readString(directory.resolve("lss-server-config.yaml")));
     }
     @Test void malformedLegacyPreservedAndRepairRequiresRestart() throws Exception {
-        for (String bad : new String[]{"", "null", "{", "{\"enabled\":\"yes\"}"}) {
+        for (String bad : new String[]{"", "null", "{", "{\"enabled\":[]}"}) {
             Path dir = Files.createTempDirectory(directory, "bad-");
             Files.writeString(dir.resolve("lss-server-config.json"), bad);
             var c = new LSSServerConfig(dir);
@@ -53,5 +53,16 @@ class JsonConfigLoadTest {
             assertEquals(bad, Files.readString(dir.resolve("lss-server-config.json")));
             assertFalse(Files.exists(dir.resolve("lss-server-config.yaml")));
         }
+    }
+    @Test void lenientLegacySyntaxAndOldBooleanCoercionMigrateAtStartup() throws Exception {
+        String legacy="// legacy Gson input\n{enabled:'yes';lodDistanceChunks:96}";
+        Path json=directory.resolve("lss-server-config.json");
+        Files.writeString(json,legacy);
+        var config=new LSSServerConfig(directory);
+        assertNull(config.startupError());
+        assertFalse(config.enabled(),"the old Gson boolean string adapter treated yes as false");
+        assertEquals(96,config.lodDistanceForWorld("minecraft:the_nether"));
+        assertEquals(legacy,Files.readString(json));
+        assertTrue(Files.exists(directory.resolve("lss-server-config.yaml")));
     }
 }

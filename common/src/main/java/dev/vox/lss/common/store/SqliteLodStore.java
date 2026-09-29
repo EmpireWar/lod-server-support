@@ -1116,6 +1116,11 @@ public final class SqliteLodStore implements LodStoreService {
         return this.serving && !this.latchedOff;
     }
 
+    /** Only a live startup sweep can recover health without another operator action. */
+    boolean isStartupSweepPending() {
+        return this.sweepDone.getCount() != 0 && !this.shutdown.get() && !this.latchedOff;
+    }
+
     /** Row-existence check WITHOUT the blob fetch + decompress + integrity hash a full
      *  get() pays — the backfill's skip rung (review finding: a warm region walk was
      *  1024 back-to-back full-row reads). Tombstones honored like get(). */

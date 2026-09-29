@@ -90,6 +90,45 @@ class StorePolicyReloadTest {
         } finally { release.countDown(); worker.shutdown(); store.shutdown(); }
         assertTrue(worker.updatePolicy(true, 100, 5).isCompletedExceptionally());
     }
+    @Test void enablingBackfillDuringStartupWaitsForSweepWithoutAnotherReload() throws Exception {
+        region();
+        var seed=store();
+        try {
+            assertTrue(seed.deposit("minecraft:overworld",0,new byte[]{1,2,3},1,1));
+            assertTrue(seed.awaitDepositQueueEmpty(10_000));
+        } finally { seed.shutdown(); }
+        var sweepEntered=new CountDownLatch(1);
+        var releaseSweep=new CountDownLatch(1);
+        var readEntered=new CountDownLatch(1);
+        var releaseRead=new CountDownLatch(1);
+        var store=SqliteLodStore.createOrNull(LodStoreMode.FULL,
+                new SqliteLodStore.Environment(directory.resolve("store"),"reload-test",18,dim->{
+                    sweepEntered.countDown();
+                    try { if(!releaseSweep.await(10,TimeUnit.SECONDS))throw new AssertionError("sweep release timed out"); }
+                    catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}
+                    return directory.resolve("region");
+                },dim->"",0),new LodStoreDiagnostics());
+        assertNotNull(store);
+        var worker=new StoreBackfill(store,dim->directory.resolve("region"),dim->new long[]{0,0},
+                List.of("minecraft:overworld"),(dim,x,z)->{
+                    readEntered.countDown();
+                    assertTrue(releaseRead.await(10,TimeUnit.SECONDS));
+                    return new byte[]{1,2,3};
+                },()->true,()->true,1000);
+        try {
+            assertTrue(sweepEntered.await(10,TimeUnit.SECONDS));
+            assertTrue(store.isStartupSweepPending());
+            assertFalse(store.isHealthy());
+            worker.updatePolicy(false,1000,1).get(10,TimeUnit.SECONDS);
+            assertFalse(worker.start(),"an operator start still requires a healthy store");
+            worker.updatePolicy(true,1000,2).get(10,TimeUnit.SECONDS);
+            assertTrue(worker.isRunning(),"reload must queue the startup wait instead of losing enable intent");
+            assertEquals(1,readEntered.getCount(),"backfill must not read before the sweep finishes");
+            releaseSweep.countDown();
+            assertTrue(readEntered.await(10,TimeUnit.SECONDS),"backfill must resume without another reload");
+            assertTrue(store.isHealthy());
+        } finally { releaseSweep.countDown();releaseRead.countDown();worker.shutdown();store.shutdown(); }
+    }
     @Test void failedBackfillEnableRetainsStartIntentForSameRevisionRetry() throws Exception {
         region();
         var store = store();
@@ -105,7 +144,7 @@ class StorePolicyReloadTest {
         serving.setAccessible(true);
         try {
             worker.updatePolicy(false, 1000, 1).get(10, TimeUnit.SECONDS);
-            // Reproduce the startup-sweep health boundary without timing a real sweep.
+            // A completed sweep plus unhealthy serving state is a real failure, not startup.
             serving.setBoolean(store, false);
             assertThrows(java.util.concurrent.ExecutionException.class,
                     () -> worker.updatePolicy(true, 1000, 2).get(10, TimeUnit.SECONDS));

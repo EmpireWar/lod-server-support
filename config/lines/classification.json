@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "8dc7381f1dca866bcfb2fd6015da82c255bb721f",
-    "1.21.10": "5c5adb3bac4f5ed3a4d764d6f7447d7482ea85a3",
-    "1.21.11": "f7d2458bac4cb1451764bca6ae4ddbaa92cf07b6",
-    "26.1": "9705af70d6c2a6e99ef93a439d268e52f853d5ad",
-    "26.2": "eaf0856188b013171aa4bda372c53a2e0376c809"
+    "1.21.1": "027c3690ea66dbc1b9e166d216f8610a530ecd2a",
+    "1.21.10": "ec6cc3e85d05b91c6cf684c8f795f1f6e6a103b4",
+    "1.21.11": "866e29fa5c69872fc3fcee3018ebc85a13557298",
+    "26.1": "63a242eceabc2a921e7942a92966b5a1e1647c6a",
+    "26.2": "4396b26b523c3d7a626b5a3e56c773f3c50481a2"
   },
   "files": {
     ".github/line.env": {
@@ -9517,13 +9517,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": {
       "axes": "Preserved MC line APIs: ResourceKey identifier/location, ChunkPos fields/accessors, section bounds, registry and spawn access, ticket and background IO calls; Paper 1.21.x split world directories, payload buffer/priority APIs; Fabric chunk-event arity; plugin.yml retains each line\u2019s Folia declaration. Only axes present in this exact file apply.",
       "kind": "adapted",
-      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
+      "review": "2026-09-29 release follow-up: identical four-line failed-start branch on every line reports failure/zero when StoreBackfill.start declines and no worker runs; existing Minecraft command/permission adaptations preserved.",
       "reviewed_blobs": {
-        "1.21.1": "c3b139364a2c09179b74f0e659e64efffdeeb989",
-        "1.21.10": "316618fa3197428095b856155179e649ad27018e",
-        "1.21.11": "7601bf5db2a119999637d3a918a253ca1d15e4cc",
-        "26.1": "7601bf5db2a119999637d3a918a253ca1d15e4cc",
-        "26.2": "7601bf5db2a119999637d3a918a253ca1d15e4cc"
+        "1.21.1": "d040010d53b6d2e541a0aa7ad3d582a00f209040",
+        "1.21.10": "da6ce121d3c48b03bfec47ddfe350006d873ba54",
+        "1.21.11": "21a398c626565b4640ec42fcee4a5876713fa42e",
+        "26.1": "21a398c626565b4640ec42fcee4a5876713fa42e",
+        "26.2": "21a398c626565b4640ec42fcee4a5876713fa42e"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
       "tests": [

@@ -21,6 +21,5 @@
 ### Support and Compatibility
 
 - **Platforms** — Fabric, Paper/Purpur, and NeoForge on Minecraft 1.21.1. The whole line is best-effort; Fabric and NeoForge distant-player rendering are available. Folia is unavailable on this line.
-
 - **Compatibility** — Preserves the existing network protocol and LSS/VSS adoption behavior. This release publishes LSS only. SQLite isolation does not fix conflicts between two unrelated third-party SQLite providers.
 - **Known limitations** — Existing Xaero first-spawn gaps, region-boundary shading seams, and shader/LOD-depth limitations remain.

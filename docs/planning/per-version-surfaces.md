@@ -22,8 +22,8 @@ compatibility and far-player rendering are separate checks.
 | 26.1 | true | Intentional stub |
 | 26.2 | true | Intentional stub |
 
-On every line, common carries SQLite 3.49.1.0 in an opaque, native-stripped
-capsule (`dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin`), loaded by a private
+On every line, common carries SQLite 3.49.1.0 in an opaque capsule trimmed to the
+supported native matrix (`dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin`), loaded by a private
 platform-parent loader. No loader exposes SQLite classes or declares it as a nested
 mod/library. NeoForge retains stock **zstd-jni** jarJar under `META-INF/jarjar/`;
 Paper retains flat native-stripped zstd; Fabric retains its stripped nested zstd

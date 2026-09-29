@@ -70,6 +70,11 @@ file once and retains both the original and an exact-byte backup. Existing dista
 choices are preserved; fresh servers use **512 chunks in the Overworld and End,
 64 in the Nether**.
 
+Migration accepts comments and the old loader's loose JSON syntax. It is one-way:
+v0.15.x reads the retained JSON and ignores YAML edits, so copy any desired changes
+back into JSON before downgrading. `/lsslod set` was removed; edit YAML and run
+`/lsslod reload` instead.
+
 Edit the file and run `/lsslod reload` on the server or `/lss reload` on the client.
 Sodium Apply **saves and reloads automatically**. Direct YAML edits still need the
 reload command. The menus support English, Simplified Chinese and Traditional Chinese.

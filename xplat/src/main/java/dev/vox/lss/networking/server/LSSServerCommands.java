@@ -209,6 +209,10 @@ public class LSSServerCommands {
                     return 0;
                 }
                 boolean started = backfill.start();
+                if (!started && !backfill.isRunning()) {
+                    source.sendFailure(Component.literal("Store backfill could not start; check store status and try again"));
+                    return 0;
+                }
                 source.sendSuccess(() -> Component.literal(started
                         ? "Store backfill started (background, yields to players)"
                         : "Store backfill already running"), true);

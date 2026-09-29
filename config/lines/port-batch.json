@@ -1,10 +1,10 @@
 {
   "baseline": {
-    "1.21.1": "6d5f2b00b5af2512177cf9c2b8cf29435d22d3b0",
-    "1.21.10": "c048f1079a281b18fd1e50dcfb44b6e1727ed267",
-    "1.21.11": "18805068462ce5ef38337fc08a9680ff01e195b1",
-    "26.1": "fd48a48c8c24132c5c51c519659c6e547583246d",
-    "26.2": "ce2533c9a13dd8599beb2e380843888a3a45b3d3"
+    "1.21.1": "8bc13a165220119320127a28188b138d54b45159",
+    "1.21.10": "c87db88b70ce8c61a0ff374a190a6e2bce5028fc",
+    "1.21.11": "14248370a219331279b98da6b52c3aacc71f6d76",
+    "26.1": "c30b83f75d0562a05ce6e2a620a4a0960690b097",
+    "26.2": "d0c2ebd620450fd88352ae43da72d583a4d7cc57"
   },
   "final_shared_invariants": [
     "common/build.gradle",
@@ -40,6 +40,8 @@
   ],
   "reviewed_candidate_blobs": {
     "1.21.1": {
+      ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
+      ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
       "common/src/main/java/dev/vox/lss/common/config/LegacySettingsMigration.java": "017c06cf55789badc19edeb6d43e3f533c3f6d64",
       "common/src/main/java/dev/vox/lss/common/store/SqliteDriverRuntime.java": "b002b264933f1a7c01732dd426f47c551b5c3d85",
@@ -72,6 +74,8 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "d040010d53b6d2e541a0aa7ad3d582a00f209040"
     },
     "1.21.10": {
+      ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
+      ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
       "common/src/main/java/dev/vox/lss/common/config/LegacySettingsMigration.java": "017c06cf55789badc19edeb6d43e3f533c3f6d64",
       "common/src/main/java/dev/vox/lss/common/store/SqliteDriverRuntime.java": "b002b264933f1a7c01732dd426f47c551b5c3d85",
@@ -104,6 +108,8 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "da6ce121d3c48b03bfec47ddfe350006d873ba54"
     },
     "1.21.11": {
+      ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
+      ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
       "common/src/main/java/dev/vox/lss/common/config/LegacySettingsMigration.java": "017c06cf55789badc19edeb6d43e3f533c3f6d64",
       "common/src/main/java/dev/vox/lss/common/store/SqliteDriverRuntime.java": "b002b264933f1a7c01732dd426f47c551b5c3d85",
@@ -136,6 +142,8 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "21a398c626565b4640ec42fcee4a5876713fa42e"
     },
     "26.1": {
+      ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
+      ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
       "common/src/main/java/dev/vox/lss/common/config/LegacySettingsMigration.java": "017c06cf55789badc19edeb6d43e3f533c3f6d64",
       "common/src/main/java/dev/vox/lss/common/store/SqliteDriverRuntime.java": "b002b264933f1a7c01732dd426f47c551b5c3d85",
@@ -168,6 +176,8 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "21a398c626565b4640ec42fcee4a5876713fa42e"
     },
     "26.2": {
+      ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
+      ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
       "common/src/main/java/dev/vox/lss/common/config/LegacySettingsMigration.java": "017c06cf55789badc19edeb6d43e3f533c3f6d64",
       "common/src/main/java/dev/vox/lss/common/store/SqliteDriverRuntime.java": "b002b264933f1a7c01732dd426f47c551b5c3d85",

@@ -1,10 +1,10 @@
 {
   "basis": {
-    "1.21.1": "22085da6a75f94bfda272a7e7fd7a7d28e49155e",
-    "1.21.10": "127cd0aa58ab700aafdab956bba1ee5660422e69",
-    "1.21.11": "c707178ec30c39efd6b6e842a6314f3a4b8b9d15",
-    "26.1": "520f5d16d5121fd8a055abf90153bef5196fce80",
-    "26.2": "6a88cf3e78a2e0855947eef6ae26569f03efa25e"
+    "1.21.1": "a46f2519dd5138aebad27b2944a3e3fc4a794fa2",
+    "1.21.10": "cb5d0e7f895b16fabe94e7dbe5bbb53bcd4ec2ea",
+    "1.21.11": "75467fed1620144166008593e77a78908acd44f5",
+    "26.1": "0b0634b915b1f4776b2ab4e13270841f379d9537",
+    "26.2": "93423310eb33d2f106869ecd9bea90eb0643566e"
   },
   "files": {
     ".github/line.env": {
@@ -383,6 +383,9 @@
     "common/src/main/java/dev/vox/lss/common/store/RegistryFingerprint.java": {
       "kind": "identical"
     },
+    "common/src/main/java/dev/vox/lss/common/store/SqliteDriverRuntime.java": {
+      "kind": "identical"
+    },
     "common/src/main/java/dev/vox/lss/common/store/SqliteLodStore.java": {
       "kind": "identical"
     },
@@ -390,6 +393,9 @@
       "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/store/StoreCodec.java": {
+      "kind": "identical"
+    },
+    "common/src/main/java/dev/vox/lss/common/store/StoreDirectoryLease.java": {
       "kind": "identical"
     },
     "common/src/main/java/dev/vox/lss/common/tracking/DirtyColumnTracker.java": {
@@ -463,6 +469,9 @@
       "kind": "identical"
     },
     "common/src/main/resources/dev/vox/lss/settings/server.yaml": {
+      "kind": "identical"
+    },
+    "common/src/sqliteBridge/java/dev/vox/lss/jdbc/PrivateSqliteBridge.java": {
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/BrandTest.java": {
@@ -738,6 +747,9 @@
     "common/src/test/java/dev/vox/lss/common/store/SqliteFrameServingTest.java": {
       "kind": "identical"
     },
+    "common/src/test/java/dev/vox/lss/common/store/SqliteIsolationTest.java": {
+      "kind": "identical"
+    },
     "common/src/test/java/dev/vox/lss/common/store/SqliteLodStoreMaskShutdownTest.java": {
       "kind": "identical"
     },
@@ -745,6 +757,12 @@
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/store/SqliteLodStoreTest.java": {
+      "kind": "identical"
+    },
+    "common/src/test/java/dev/vox/lss/common/store/SqliteOwnershipTest.java": {
+      "kind": "identical"
+    },
+    "common/src/test/java/dev/vox/lss/common/store/SqliteRuntimeProbe.java": {
       "kind": "identical"
     },
     "common/src/test/java/dev/vox/lss/common/store/StoreBackfillTest.java": {
@@ -1567,13 +1585,13 @@
     "fabric/build.gradle": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. Feature delta is identical on every line: gametest setup stages annotated YAML with store/backfill disabled and disk gate 64. Existing loader/JDK/Tier3/dependency differences are unchanged. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "a49f2b453924836b2d89d32192c97cecf1258cac",
-        "1.21.10": "fe1f33f654f57490b00ce2ee28bc923c45a644fe",
-        "1.21.11": "c299c97aa0d68194a5c33818f92f9c3c5fee59fc",
-        "26.1": "0743d0b0553fab7af36c057b4d93680408e34572",
-        "26.2": "6dc2d6f3774b7c2a247476f377c397e65a96ee43"
+        "1.21.1": "9ce793afd5eb8378c1f4ff31040fd9cbb72aed9d",
+        "1.21.10": "f1873b230c8fd4faed9b8881270bbee16491b312",
+        "1.21.11": "bfb26efb89f7dbe6ecb18e7943c726eb04772d33",
+        "26.1": "981545ba1cb5a8c34a8cc9951b94abdc3610a0c1",
+        "26.2": "dec9d1c12128532ee791f3b3e0aa76017b6b396c"
       },
       "surface": "build-toolchain",
       "tests": [
@@ -1752,17 +1770,17 @@
       "kind": "identical"
     },
     "fabric/src/gametest/java/dev/vox/lss/test/SettingsReloadGameTests.java": {
-      "kind": "adapted",
-      "surface": "yaml-settings:fabric/src/gametest/java/dev/vox/lss/test/SettingsReloadGameTests.java",
       "axes": "1.21.1 vanilla GameTest batch/template/timeout annotation replaces Fabric environment/structure/maxTicks; 1.21.10 uses Gt assertion adapter; older ResourceKey location accessor. Reload workflow, pending/rejected publication and cleanup assertions otherwise identical.",
+      "kind": "adapted",
       "review": "2026-09-28 reviewed exact five-line source differences; see cross-line implementation report.",
       "reviewed_blobs": {
-        "26.2": "f57d4fb2e5678cadbf2a4349d7b8e98cafdd9d5c",
-        "26.1": "f57d4fb2e5678cadbf2a4349d7b8e98cafdd9d5c",
-        "1.21.11": "f57d4fb2e5678cadbf2a4349d7b8e98cafdd9d5c",
+        "1.21.1": "ae196ef10c51e64021db0d19df3692bdc1c0f9c1",
         "1.21.10": "a19ae97f1ee623ceda96b9aa92803bdb1ef9a0ab",
-        "1.21.1": "ae196ef10c51e64021db0d19df3692bdc1c0f9c1"
+        "1.21.11": "f57d4fb2e5678cadbf2a4349d7b8e98cafdd9d5c",
+        "26.1": "f57d4fb2e5678cadbf2a4349d7b8e98cafdd9d5c",
+        "26.2": "f57d4fb2e5678cadbf2a4349d7b8e98cafdd9d5c"
       },
+      "surface": "yaml-settings:fabric/src/gametest/java/dev/vox/lss/test/SettingsReloadGameTests.java",
       "tests": [
         "SettingsReloadGameTests; GameTestEntrypointContractTest; per-line gametest compilation"
       ]
@@ -1801,33 +1819,33 @@
       ]
     },
     "fabric/src/gametest/resources/data/lss/test_environment/region_fault.json": {
-      "kind": "adapted",
-      "surface": "gametest-region-fault-isolation",
       "axes": "Four modern lines declare lss:region_fault as all_of minecraft:default; 1.21.1 has no environment-resource API and selects lss_region_fault in its vanilla batch annotation.",
+      "kind": "adapted",
       "review": "Independent Astra review: exact resource shape matches established settings_reload environment; entrypoints and all assertion bodies retained.",
       "reviewed_blobs": {
-        "26.2": "7aa902637543ea43f30152498f085eff0b26f4cd",
-        "26.1": "7aa902637543ea43f30152498f085eff0b26f4cd",
-        "1.21.11": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "1.21.1": null,
         "1.21.10": "7aa902637543ea43f30152498f085eff0b26f4cd",
-        "1.21.1": null
+        "1.21.11": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "26.1": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "26.2": "7aa902637543ea43f30152498f085eff0b26f4cd"
       },
+      "surface": "gametest-region-fault-isolation",
       "tests": [
         "RegionFaultGameTests isolated existing-world and fresh-world controls; full per-line Fabric Tier2 gates"
       ]
     },
     "fabric/src/gametest/resources/data/lss/test_environment/settings_reload.json": {
-      "kind": "adapted",
-      "surface": "yaml-settings:fabric/src/gametest/resources/data/lss/test_environment/settings_reload.json",
       "axes": "Modern lines use the named default test environment; 1.21.1 lacks this environment-resource API and isolates the same test with the lss_settings_reload annotation batch instead.",
+      "kind": "adapted",
       "review": "2026-09-28 reviewed exact five-line source differences; see cross-line implementation report.",
       "reviewed_blobs": {
-        "26.2": "7aa902637543ea43f30152498f085eff0b26f4cd",
-        "26.1": "7aa902637543ea43f30152498f085eff0b26f4cd",
-        "1.21.11": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "1.21.1": null,
         "1.21.10": "7aa902637543ea43f30152498f085eff0b26f4cd",
-        "1.21.1": null
+        "1.21.11": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "26.1": "7aa902637543ea43f30152498f085eff0b26f4cd",
+        "26.2": "7aa902637543ea43f30152498f085eff0b26f4cd"
       },
+      "surface": "yaml-settings:fabric/src/gametest/resources/data/lss/test_environment/settings_reload.json",
       "tests": [
         "SettingsReloadGameTests; GameTestEntrypointContractTest; per-line gametest compilation"
       ]
@@ -2071,11 +2089,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "70ba166a873fba540fe28b0b27fdaed5bdc7140a",
-        "26.1": "2dc1b7ce464446418eec9c551a98f63c24372ffc",
-        "1.21.11": "530b0d7c0af74041586dc85700d7433020dc961a",
+        "1.21.1": "918cddb97e329a439031f42a61cc57dfe701c9cf",
         "1.21.10": "14ba31195d751b8cd7673d3f3b401ba84eda7513",
-        "1.21.1": "918cddb97e329a439031f42a61cc57dfe701c9cf"
+        "1.21.11": "530b0d7c0af74041586dc85700d7433020dc961a",
+        "26.1": "2dc1b7ce464446418eec9c551a98f63c24372ffc",
+        "26.2": "70ba166a873fba540fe28b0b27fdaed5bdc7140a"
       },
       "surface": "line-adaptation:fabric/src/main/java/dev/vox/lss/networking/server/LSSServerNetworking.java",
       "tests": [
@@ -2152,13 +2170,13 @@
     "fabric/src/main/resources/fabric.mod.json": {
       "axes": "Loader/game/version entrypoint identity, declared gametests and packaging metadata.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "0febafd2fb95e018c1baca86cf34f287aaf9977c",
-        "1.21.10": "a0a46adb95b7f16c9ff94bd4a5313918113d625b",
-        "1.21.11": "6ca40a077132675c146ce782bdd5d10ba0e92dfe",
-        "26.1": "2034bd88cc32f7b4fbb17aa3d7a18cb266fb5c2f",
-        "26.2": "a94aa93733299128dba6ae90770d98c516b57f5d"
+        "1.21.1": "bd6c2dd921e45d996f123ac7154a457fba161e35",
+        "1.21.10": "32d65e1ffe684b67b309d58ec9244c82fbcfe332",
+        "1.21.11": "f7988a868953afed568955b53071ec1e7979da03",
+        "26.1": "f8f5f9c99bc04d250657404cc6e347e68e0e57f0",
+        "26.2": "df3d66ae3b8a720c898519aff4eae611d02896a2"
       },
       "surface": "loader-entrypoint-metadata",
       "tests": [
@@ -4577,6 +4595,12 @@
         "Full platform build and existing version-surface/behavior contracts"
       ]
     },
+    "gradle/sqlite-runtime.gradle": {
+      "kind": "identical"
+    },
+    "gradle/sqlite-runtime.properties": {
+      "kind": "identical"
+    },
     "gradle/wrapper/gradle-wrapper.jar": {
       "kind": "identical"
     },
@@ -4592,13 +4616,13 @@
     "neoforge/build.gradle": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "19ff90e7cfb602fa03da809235a7bc7269c91655",
-        "1.21.10": "f294e80bdd5727bc9f86cd111b98e7a2306ca773",
-        "1.21.11": "24a6311f36e6da2cbaacc65dd5c38ff0c02b032f",
-        "26.1": "c75b4e56dd4ceb99851bc15c4a3a6ec2b106b9d6",
-        "26.2": "4dad8b69c6240a057575d6bd67b27fab79e364a0"
+        "1.21.1": "c20b480076bcade2bf8b448fa3ae380f1fde5ce6",
+        "1.21.10": "c31b518b0e8dc71bf4fc2f73dc80ae492142833b",
+        "1.21.11": "34acb5fafc8e4f92f0a76888541a18a489b0c67c",
+        "26.1": "342c58f6b738419cc3c0681a0949223101ddb4d4",
+        "26.2": "dc27f03e8079673f0d2147d407cb9d0f52706d46"
       },
       "surface": "build-toolchain",
       "tests": [
@@ -5202,13 +5226,13 @@
     "paper/build.gradle": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "3f5cb93d4c3fde11c8843566050ca38f6b184751",
-        "1.21.10": "95bf4128e2afaa706fd797ca77758f5fd6f87d31",
-        "1.21.11": "13a012427c078fe690d4133a94c1b8ce6a72b85a",
-        "26.1": "b28c087c17f416b8284988a68aec9e6c54dbfcf4",
-        "26.2": "97ee1184d55252773597009db9b46c4344de292c"
+        "1.21.1": "6d8c195729c5683b14187b82ba47bfeaeb21dc56",
+        "1.21.10": "347039265352255eca18b16e6dd1d64b0c9f12f7",
+        "1.21.11": "665bece63ff6c81e3a1bade189cbfea6dfbf16c3",
+        "26.1": "54b1f3d96313465ce4f3c4c63ed12cb53625d2ad",
+        "26.2": "dd9dcc69beb8099173eeaed967635012e79c5bb1"
       },
       "surface": "build-toolchain",
       "tests": [
@@ -5232,11 +5256,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "fca1428bee523d952ad0ecee3505cb9850dc9841",
-        "26.1": "fca1428bee523d952ad0ecee3505cb9850dc9841",
-        "1.21.11": "fca1428bee523d952ad0ecee3505cb9850dc9841",
+        "1.21.1": "910728605d53700595016219042ac33f91937544",
         "1.21.10": "fca1428bee523d952ad0ecee3505cb9850dc9841",
-        "1.21.1": "910728605d53700595016219042ac33f91937544"
+        "1.21.11": "fca1428bee523d952ad0ecee3505cb9850dc9841",
+        "26.1": "fca1428bee523d952ad0ecee3505cb9850dc9841",
+        "26.2": "fca1428bee523d952ad0ecee3505cb9850dc9841"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperChunkDiskReader.java",
       "tests": [
@@ -5249,11 +5273,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
       "reviewed_blobs": {
-        "26.2": "22f253cdeaab30da513688277686f0c49b5ae334",
-        "26.1": "22f253cdeaab30da513688277686f0c49b5ae334",
-        "1.21.11": "22f253cdeaab30da513688277686f0c49b5ae334",
+        "1.21.1": "bbad11cb023dc55f50c917cbecf3d0a2af00cb13",
         "1.21.10": "827c3f0ec51c494d7fb8db7a2de2731ecc4971f9",
-        "1.21.1": "bbad11cb023dc55f50c917cbecf3d0a2af00cb13"
+        "1.21.11": "22f253cdeaab30da513688277686f0c49b5ae334",
+        "26.1": "22f253cdeaab30da513688277686f0c49b5ae334",
+        "26.2": "22f253cdeaab30da513688277686f0c49b5ae334"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperChunkGenerationService.java",
       "tests": [
@@ -5272,11 +5296,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "64db11dd1a7715830b93e652dff5934956309f11",
-        "26.1": "64db11dd1a7715830b93e652dff5934956309f11",
-        "1.21.11": "64db11dd1a7715830b93e652dff5934956309f11",
+        "1.21.1": "ed07f2db716758f35326e22f5230f37029a9800c",
         "1.21.10": "ed07f2db716758f35326e22f5230f37029a9800c",
-        "1.21.1": "ed07f2db716758f35326e22f5230f37029a9800c"
+        "1.21.11": "64db11dd1a7715830b93e652dff5934956309f11",
+        "26.1": "64db11dd1a7715830b93e652dff5934956309f11",
+        "26.2": "64db11dd1a7715830b93e652dff5934956309f11"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperDirtyColumnBroadcaster.java",
       "tests": [
@@ -5365,11 +5389,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "2252f464b697ef1393af64e5742e8f20d1503e58",
-        "26.1": "2252f464b697ef1393af64e5742e8f20d1503e58",
-        "1.21.11": "08ad7d09494a0d1302d1eafbed41108ad4dbc6ed",
+        "1.21.1": "0cca5be68bc163500edaca2a60a8a360cb35ec3a",
         "1.21.10": "bff592b8d05822ca28f96047f04eee5547193c81",
-        "1.21.1": "0cca5be68bc163500edaca2a60a8a360cb35ec3a"
+        "1.21.11": "08ad7d09494a0d1302d1eafbed41108ad4dbc6ed",
+        "26.1": "2252f464b697ef1393af64e5742e8f20d1503e58",
+        "26.2": "2252f464b697ef1393af64e5742e8f20d1503e58"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java",
       "tests": [
@@ -5426,11 +5450,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "8bac45c286bc6b7fa9e0b4800952fbb3166cbea9",
-        "26.1": "8bac45c286bc6b7fa9e0b4800952fbb3166cbea9",
-        "1.21.11": "8bac45c286bc6b7fa9e0b4800952fbb3166cbea9",
+        "1.21.1": "9227cb7e46d72195c8d3a1de7f2f0db9901095b0",
         "1.21.10": "9227cb7e46d72195c8d3a1de7f2f0db9901095b0",
-        "1.21.1": "9227cb7e46d72195c8d3a1de7f2f0db9901095b0"
+        "1.21.11": "8bac45c286bc6b7fa9e0b4800952fbb3166cbea9",
+        "26.1": "8bac45c286bc6b7fa9e0b4800952fbb3166cbea9",
+        "26.2": "8bac45c286bc6b7fa9e0b4800952fbb3166cbea9"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperWorldLod.java",
       "tests": [
@@ -5462,11 +5486,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "a3b42ca7d11de2fb39a2fbdcfda7e3033c5e92a3",
-        "26.1": "a3b42ca7d11de2fb39a2fbdcfda7e3033c5e92a3",
-        "1.21.11": "a3b42ca7d11de2fb39a2fbdcfda7e3033c5e92a3",
+        "1.21.1": "7b73b4b783177d2e4565e62fc0dbf1669226c11b",
         "1.21.10": "7b73b4b783177d2e4565e62fc0dbf1669226c11b",
-        "1.21.1": "7b73b4b783177d2e4565e62fc0dbf1669226c11b"
+        "1.21.11": "a3b42ca7d11de2fb39a2fbdcfda7e3033c5e92a3",
+        "26.1": "a3b42ca7d11de2fb39a2fbdcfda7e3033c5e92a3",
+        "26.2": "a3b42ca7d11de2fb39a2fbdcfda7e3033c5e92a3"
       },
       "surface": "line-adaptation:paper/src/main/java/dev/vox/lss/paper/PaperXrayMaskManager.java",
       "tests": [
@@ -5504,11 +5528,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "a0f337f4522ec579519975f013a2dc393b21d1b6",
-        "26.1": "d497e3c7c0b09f2f1c94144a24dc2ba1354fb3d2",
-        "1.21.11": "dd53582a6409129f8a6011c17a58cac2f6a97728",
+        "1.21.1": "a5272a9f42968f06a6f3172925fd7ffba9a607d3",
         "1.21.10": "6df62b60560fcd1c37681897338aa48ed002b1e8",
-        "1.21.1": "a5272a9f42968f06a6f3172925fd7ffba9a607d3"
+        "1.21.11": "dd53582a6409129f8a6011c17a58cac2f6a97728",
+        "26.1": "d497e3c7c0b09f2f1c94144a24dc2ba1354fb3d2",
+        "26.2": "a0f337f4522ec579519975f013a2dc393b21d1b6"
       },
       "surface": "folia-declaration",
       "tests": [
@@ -5757,13 +5781,13 @@
     "paper/src/test/java/dev/vox/lss/paper/ReleaseWorkflowContractTest.java": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "Implementation candidate; independent final change review must cover residual logic before handoff.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "bffe9982775cf8d150ec8a26cb130afa4289b4a0",
-        "1.21.10": "4245bcd659033a1c397058f0869ad5af92b4eeec",
-        "1.21.11": "b1a3ec242eed9cdde8943822a6ccb2b5a9194215",
-        "26.1": "23c2d51f1ba33ddf4d13a08e4891211deeee70a1",
-        "26.2": "ddd641462f1b26fa59cf4daf07c28a490bf46ca8"
+        "1.21.1": "41049bfef08aa519e9bd4c27d136dbcab4ecd1ad",
+        "1.21.10": "739509c0238555949038a874b064c999c8a9e5f3",
+        "1.21.11": "f067f742631cb40abe90d8b0e18db072e29bfdcf",
+        "26.1": "5fe51f02899fcdc879a002a0652739947354c9b0",
+        "26.2": "62ee3fe14c5e18e83496c9cdbe02029062ed6a7b"
       },
       "surface": "line-adaptation:paper/src/test/java/dev/vox/lss/paper/ReleaseWorkflowContractTest.java",
       "tests": [
@@ -6257,13 +6281,13 @@
     "scripts/release_check.py": {
       "axes": "Exact file flavor; residual shared logic is not normalized or exempted.",
       "kind": "adapted",
-      "review": "2026-09-28 cross-line YAML residual review. YAML staging/codec helpers, platform-specific soak YAML, historical JSON-only comparison arms, parser relocation/resource/license assertions and loader discovery reviewed. Feature deltas match exactly across all five pre-existing script flavors; inherited platform/version guards remain intact. Corrected canonical v16 generation echo. Exact reviewed refs and resolved findings recorded in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md. This binds source review; build/live evidence is recorded in the implementation progress ledger.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "1.21.1": "9fbaf22db3f2c43e57c6dad6e865d8238c6d98ba",
-        "1.21.10": "a497150c07c871b3af84ee206615da89afd6157e",
-        "1.21.11": "1f250557492af6a2229bc55903cb60335622a0ff",
-        "26.1": "78e610f69a31fd9622f5fce362fc08bdfef509b0",
-        "26.2": "8ed63e8314c810a1c4520ff87b021ae77ce3122f"
+        "1.21.1": "8e6c0c75815595b67d0465d1cec7c53e6cb553d6",
+        "1.21.10": "16beab9e0481ec4491e8e9368e2b60e519f6e9fc",
+        "1.21.11": "20bf70e35c42b0c886d86cad85397508e3f9d710",
+        "26.1": "a524634bc1a58ed1c3773b93608e6f58e6f22f24",
+        "26.2": "9425e0a6422b5cedcc4e658b2945379b5c1cfa12"
       },
       "surface": "line-adaptation:scripts/release_check.py",
       "tests": [
@@ -7799,6 +7823,15 @@
     "tools/lines/test_resume_skip.py": {
       "kind": "identical"
     },
+    "tools/packaging/classfile.py": {
+      "kind": "identical"
+    },
+    "tools/packaging/sqlite_capsule.py": {
+      "kind": "identical"
+    },
+    "tools/packaging/test_sqlite_capsule.py": {
+      "kind": "identical"
+    },
     "tools/rig/acquire_neo_installers.py": {
       "kind": "identical"
     },
@@ -8716,9 +8749,8 @@
       "kind": "identical"
     },
     "xplat/src/main/java/dev/vox/lss/config/menu/ClientSettingsSaveScreen.java": {
-      "kind": "adapted",
-      "surface": "yaml-settings:client-save-recovery-screen",
       "axes": "26.2 uses gui.screen/setScreenAndShow; 26.1 uses screen/setScreen. 1.21.x uses GuiGraphics/render/drawString instead of extractRenderState/text, and 1.21.1 uses integer key event arguments instead of KeyEvent. Save/conflict/discard actions and paired Escape consumption remain shared.",
+      "kind": "adapted",
       "review": "2026-09-28 read exact final five-line residuals against 03469b99 and compared key ownership with existing ClientStatusScreen. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. 2026-09-28 automatic Sodium Apply reload: reviewed all five lines; locale changes are limited to Apply/reconnect and privacy wording, save-recovery calls use the shared Apply path, and native chat descriptors remain behind the existing per-line screen adapter. Modern/legacy adapter tests and exact 26.1 chat-call contract updated; focused common/config/menu/NeoForge tests, builds and all artifact checks passed.",
       "reviewed_blobs": {
         "1.21.1": "ca32a75a5a970e86b4cf565936417eb9b8771bab",
@@ -8727,6 +8759,7 @@
         "26.1": "b520ace65d552dfe4787ecab6562dd6b9e722e6a",
         "26.2": "376fe09a0ddde8bb68432446ae01616a319d92d5"
       },
+      "surface": "yaml-settings:client-save-recovery-screen",
       "tests": [
         "ClientSettingsEditSessionTest; ScreenEscapeReleaseTest; per-line client compilation; native Sodium recovery smoke remains separate acceptance"
       ]
@@ -8908,11 +8941,11 @@
       "kind": "adapted",
       "review": "2026-09-28 final YAML client cross-line residual review at 03469b99/4ac9d976/30e6cf9a/934c9832/ae293834: notice reservation, translation-ready status and settings export logic shared; per-line render/text/screen/chat/key APIs and inherited name-tag-distance locale wording inspected. Modern Sodium rebuild bytecode confirms clearWidgets precedes layout calculation. Source/API review, not live UI acceptance. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs.",
       "reviewed_blobs": {
-        "26.2": "a221c8b4aa6bd41f388c59ff43e1ce9edf7897fa",
-        "26.1": "a221c8b4aa6bd41f388c59ff43e1ce9edf7897fa",
-        "1.21.11": "78df5988f20f32a0337146ae9161eb098f7313da",
+        "1.21.1": "78df5988f20f32a0337146ae9161eb098f7313da",
         "1.21.10": "78df5988f20f32a0337146ae9161eb098f7313da",
-        "1.21.1": "78df5988f20f32a0337146ae9161eb098f7313da"
+        "1.21.11": "78df5988f20f32a0337146ae9161eb098f7313da",
+        "26.1": "a221c8b4aa6bd41f388c59ff43e1ce9edf7897fa",
+        "26.2": "a221c8b4aa6bd41f388c59ff43e1ce9edf7897fa"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/client/ClientCommandActions.java",
       "tests": [
@@ -8981,11 +9014,11 @@
       "kind": "adapted",
       "review": "2026-09-28 final YAML client cross-line residual review at 03469b99/4ac9d976/30e6cf9a/934c9832/ae293834: notice reservation, translation-ready status and settings export logic shared; per-line render/text/screen/chat/key APIs and inherited name-tag-distance locale wording inspected. Modern Sodium rebuild bytecode confirms clearWidgets precedes layout calculation. Source/API review, not live UI acceptance.",
       "reviewed_blobs": {
-        "26.2": "ece77ac4013eb7d514afbf64519a1307057b2eb3",
-        "26.1": "2100311a83da3426b927bd683e47af6b0257e118",
-        "1.21.11": "2100311a83da3426b927bd683e47af6b0257e118",
+        "1.21.1": "2100311a83da3426b927bd683e47af6b0257e118",
         "1.21.10": "2100311a83da3426b927bd683e47af6b0257e118",
-        "1.21.1": "2100311a83da3426b927bd683e47af6b0257e118"
+        "1.21.11": "2100311a83da3426b927bd683e47af6b0257e118",
+        "26.1": "2100311a83da3426b927bd683e47af6b0257e118",
+        "26.2": "ece77ac4013eb7d514afbf64519a1307057b2eb3"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/client/ClientStatus.java",
       "tests": [
@@ -9371,11 +9404,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "3a151c001a0af1f3c5dc7179c647cab7747669f3",
-        "26.1": "950fa83d7c3ed9f9b471776770dba2990e687287",
-        "1.21.11": "8045a0ee8c61b5895141a3dd45ace28214d57639",
+        "1.21.1": "bf7371091e81c4837055d25d48f3e009b9875624",
         "1.21.10": "8045a0ee8c61b5895141a3dd45ace28214d57639",
-        "1.21.1": "bf7371091e81c4837055d25d48f3e009b9875624"
+        "1.21.11": "8045a0ee8c61b5895141a3dd45ace28214d57639",
+        "26.1": "950fa83d7c3ed9f9b471776770dba2990e687287",
+        "26.2": "3a151c001a0af1f3c5dc7179c647cab7747669f3"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ChunkDiskReader.java",
       "tests": [
@@ -9388,11 +9421,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
       "reviewed_blobs": {
-        "26.2": "88f90114300d1085fb26a8274127106f32d050b0",
-        "26.1": "88f90114300d1085fb26a8274127106f32d050b0",
-        "1.21.11": "82ef01519cc37f5dedbca4e4cbf2d37770822c46",
+        "1.21.1": "ee199073d9570393cb1a2167c852280c8c4cc7d7",
         "1.21.10": "fd44909dbf8f9c8fe571689256e017a2515476fb",
-        "1.21.1": "ee199073d9570393cb1a2167c852280c8c4cc7d7"
+        "1.21.11": "82ef01519cc37f5dedbca4e4cbf2d37770822c46",
+        "26.1": "88f90114300d1085fb26a8274127106f32d050b0",
+        "26.2": "88f90114300d1085fb26a8274127106f32d050b0"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ChunkGenerationService.java",
       "tests": [
@@ -9408,11 +9441,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "c8830ad38a52d0ae721b71fb25bed2d96391f666",
-        "26.1": "c8830ad38a52d0ae721b71fb25bed2d96391f666",
-        "1.21.11": "c8830ad38a52d0ae721b71fb25bed2d96391f666",
+        "1.21.1": "9ef9c5a5e6fe057f8b6978640808bdbefb291a3a",
         "1.21.10": "9ef9c5a5e6fe057f8b6978640808bdbefb291a3a",
-        "1.21.1": "9ef9c5a5e6fe057f8b6978640808bdbefb291a3a"
+        "1.21.11": "c8830ad38a52d0ae721b71fb25bed2d96391f666",
+        "26.1": "c8830ad38a52d0ae721b71fb25bed2d96391f666",
+        "26.2": "c8830ad38a52d0ae721b71fb25bed2d96391f666"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/DirtyColumnBroadcaster.java",
       "tests": [
@@ -9480,13 +9513,13 @@
     "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": {
       "axes": "Preserved MC line APIs: ResourceKey identifier/location, ChunkPos fields/accessors, section bounds, registry and spawn access, ticket and background IO calls; Paper 1.21.x split world directories, payload buffer/priority APIs; Fabric chunk-event arity; plugin.yml retains each line\u2019s Folia declaration. Only axes present in this exact file apply.",
       "kind": "adapted",
-      "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately. Final followup review through c91c3a65/87b575a4: localized recovery/reload/export messages preserve owner-thread translation and export-ticket capture; dev-only 1.21.1 parser classpath does not alter packaged dependencies; operator guidance uses YAML paths. Exact residual source deltas reviewed across all five refs. Final diagnostic delta reviewed across all five lines: owner-only admission getter and whole-service-gated capture, with lifecycle assertions; existing native API variants remain unchanged.",
+      "review": "2026-09-28 SQLite isolation port reviewed across all five lines by Astra: identical semantic changes, preserved MC/JDK/shipping facts and loader-specific zstd dev visibility. YAML parser, settings CLI, policy ownership and both packaging checkers preserved; runtime integration independently reviewed.",
       "reviewed_blobs": {
-        "26.2": "09c2288cc368da08d6a647b2ae0044a2ce55e2c6",
-        "26.1": "09c2288cc368da08d6a647b2ae0044a2ce55e2c6",
-        "1.21.11": "09c2288cc368da08d6a647b2ae0044a2ce55e2c6",
-        "1.21.10": "1b4272d035019b0e23d1d454a5521bda2deeecc0",
-        "1.21.1": "9568f4ec404f793039ee267519aadc324af8f41b"
+        "1.21.1": "c3b139364a2c09179b74f0e659e64efffdeeb989",
+        "1.21.10": "316618fa3197428095b856155179e649ad27018e",
+        "1.21.11": "7601bf5db2a119999637d3a918a253ca1d15e4cc",
+        "26.1": "7601bf5db2a119999637d3a918a253ca1d15e4cc",
+        "26.2": "7601bf5db2a119999637d3a918a253ca1d15e4cc"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java",
       "tests": [
@@ -9540,11 +9573,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "bd0e308d885665095890f427b0b048adb9beca0c",
-        "26.1": "bd0e308d885665095890f427b0b048adb9beca0c",
-        "1.21.11": "219a4e52760ece9dc4f9dd71012a73b254acfcb7",
+        "1.21.1": "a64b134084f6f2d94a4d93acd599ebac4ac63b3a",
         "1.21.10": "29fb31513eb4cb95e954175a7dcf675bf06cd4a8",
-        "1.21.1": "a64b134084f6f2d94a4d93acd599ebac4ac63b3a"
+        "1.21.11": "219a4e52760ece9dc4f9dd71012a73b254acfcb7",
+        "26.1": "bd0e308d885665095890f427b0b048adb9beca0c",
+        "26.2": "bd0e308d885665095890f427b0b048adb9beca0c"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/RequestProcessingService.java",
       "tests": [
@@ -9594,11 +9627,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "24410a588413887cef53daa8827b2c4783c19836",
-        "26.1": "24410a588413887cef53daa8827b2c4783c19836",
-        "1.21.11": "344737a31b3fab406643853ac1c11fd266061a11",
+        "1.21.1": "4c601f1d27acce9af33176f0270775da621ca1aa",
         "1.21.10": "d1b97b034273fbe87c026b02aba50fb598fbb2ef",
-        "1.21.1": "4c601f1d27acce9af33176f0270775da621ca1aa"
+        "1.21.11": "344737a31b3fab406643853ac1c11fd266061a11",
+        "26.1": "24410a588413887cef53daa8827b2c4783c19836",
+        "26.2": "24410a588413887cef53daa8827b2c4783c19836"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ServerReceiverGlue.java",
       "tests": [
@@ -9614,11 +9647,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "98034b92906dfb92a9bfab3952ced3349fb74b6c",
-        "26.1": "98034b92906dfb92a9bfab3952ced3349fb74b6c",
-        "1.21.11": "98034b92906dfb92a9bfab3952ced3349fb74b6c",
+        "1.21.1": "2f7cd24df9fb0bd414ce261c3bf71ded8a0fb209",
         "1.21.10": "2f7cd24df9fb0bd414ce261c3bf71ded8a0fb209",
-        "1.21.1": "2f7cd24df9fb0bd414ce261c3bf71ded8a0fb209"
+        "1.21.11": "98034b92906dfb92a9bfab3952ced3349fb74b6c",
+        "26.1": "98034b92906dfb92a9bfab3952ced3349fb74b6c",
+        "26.2": "98034b92906dfb92a9bfab3952ced3349fb74b6c"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/ServerWorldLod.java",
       "tests": [
@@ -9653,11 +9686,11 @@
       "kind": "adapted",
       "review": "2026-09-28 YAML runtime cross-line review at explicit refs in docs/implementation/2026-09-28-yaml-settings-cross-line-review.md: policy capture, owner admission/receipts, session ordering and retry semantics retained across lines; residual differences are reviewed MC/platform APIs, not exempt shared logic. Source review only; build/live evidence is recorded separately.",
       "reviewed_blobs": {
-        "26.2": "636710df61e84ee49aa09f0ac725fa44a1659a06",
-        "26.1": "636710df61e84ee49aa09f0ac725fa44a1659a06",
-        "1.21.11": "636710df61e84ee49aa09f0ac725fa44a1659a06",
+        "1.21.1": "ad61e07db8f3607c3f22b4942b6492082d8a4dc8",
         "1.21.10": "ad61e07db8f3607c3f22b4942b6492082d8a4dc8",
-        "1.21.1": "ad61e07db8f3607c3f22b4942b6492082d8a4dc8"
+        "1.21.11": "636710df61e84ee49aa09f0ac725fa44a1659a06",
+        "26.1": "636710df61e84ee49aa09f0ac725fa44a1659a06",
+        "26.2": "636710df61e84ee49aa09f0ac725fa44a1659a06"
       },
       "surface": "line-adaptation:xplat/src/main/java/dev/vox/lss/networking/server/XrayMaskManager.java",
       "tests": [

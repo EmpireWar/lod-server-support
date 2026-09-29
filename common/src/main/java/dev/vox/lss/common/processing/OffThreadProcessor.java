@@ -39,7 +39,11 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     /** Request for the main thread to submit a generation ticket (requires MC world state). */
     public record GenerationTicketRequest(UUID playerUuid, RequestRegistration registration, int cx, int cz, String dimension,
-                                           long submissionOrder) {
+                                           long submissionOrder, long policyRevision) {
+        public GenerationTicketRequest(UUID playerUuid, RequestRegistration registration, int cx, int cz,
+                                       String dimension, long submissionOrder) {
+            this(playerUuid, registration, cx, cz, dimension, submissionOrder, 0);
+        }
         public GenerationTicketRequest {
             java.util.Objects.requireNonNull(registration, "registration");
         }
@@ -81,7 +85,62 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private final AbstractChunkDiskReader diskReader;
     private final SendActionBatcher sendActionBatcher = new SendActionBatcher();
 
-    private final boolean generationAvailable;
+    private boolean generationAvailable;
+    private volatile long adoptedSettingsRevision;
+    private final java.util.concurrent.atomic.AtomicBoolean settingsStopped = new java.util.concurrent.atomic.AtomicBoolean();
+    private record PolicyUpdate(boolean generation, long cacheBytes, long missTtlNanos, long revision,
+                                java.util.concurrent.CompletableFuture<Void> receipt) {}
+    private final ConcurrentLinkedQueue<PolicyUpdate> settingsUpdates = new ConcurrentLinkedQueue<>();
+
+    public java.util.concurrent.CompletableFuture<Void> updateSettingsPolicy(boolean generation,
+            long cacheBytes, long missTtlNanos, long revision) {
+        var receipt = new java.util.concurrent.CompletableFuture<Void>();
+        synchronized (mailboxLock) {
+            if (settingsStopped.get() || !processingThread.isAlive()) {
+                receipt.completeExceptionally(new IllegalStateException("Processing owner is inactive"));
+            } else {
+                settingsUpdates.add(new PolicyUpdate(generation, cacheBytes, missTtlNanos, revision, receipt));
+                mailboxLock.notifyAll();
+            }
+        }
+        return receipt;
+    }
+
+    public long adoptedSettingsRevision() { return adoptedSettingsRevision; }
+
+    private void adoptSettingsPolicies() {
+        PolicyUpdate update;
+        while ((update = settingsUpdates.poll()) != null) {
+            try {
+                if (settingsStopped.get() || update.revision() < adoptedSettingsRevision)
+                    throw new java.util.concurrent.CancellationException("Settings policy superseded or stopped");
+                if (update.generation() && !generationAvailable) {
+                    for (var state : players.values()) state.resetGenerationPolicyTerminals();
+                    // Outcomes admitted before the refresh may drain, but cannot issue a
+                    // permanent failure or publish a done bit into the refreshed session.
+                    for (var entry : generationInFlight.entrySet())
+                        for (var dimension : entry.getValue().entrySet())
+                            generationStale.computeIfAbsent(entry.getKey(), k -> new HashMap<>())
+                                    .computeIfAbsent(dimension.getKey(), k -> new LongOpenHashSet())
+                                    .addAll(dimension.getValue());
+                }
+                generationAvailable = update.generation();
+                requestRouter.updateGenerationPolicy(update.generation());
+                timestampCache.adoptPolicy(update.cacheBytes(), update.missTtlNanos());
+                adoptedSettingsRevision = update.revision();
+                update.receipt().complete(null);
+            } catch (Throwable failure) { update.receipt().completeExceptionally(failure); }
+        }
+    }
+
+    private void cancelSettingsPolicies() {
+        synchronized (mailboxLock) {
+            settingsStopped.set(true);
+            PolicyUpdate update;
+            while ((update = settingsUpdates.poll()) != null)
+                update.receipt().completeExceptionally(new java.util.concurrent.CancellationException("Processing owner stopped"));
+        }
+    }
 
     // Collaborators
     private final ProcessingContext ctx;
@@ -255,11 +314,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 (player, dim, packed) -> this.stampSource.stampSecond(player, dim, packed));
         this.requestRouter = new IncomingRequestRouter<>(this, this.players, this.timestampCache,
                 this.dedupTracker, diskReader != null, generationAvailable, this.ctx);
-        this.processingThread = new Thread(this::processingLoop, Brand.shortName() + " Processing Thread");
+        this.processingThread = new Thread(() -> {
+            try { processingLoop(); } finally { cancelSettingsPolicies(); }
+        }, Brand.shortName() + " Processing Thread");
         this.processingThread.setDaemon(true);
         this.processingThread.setPriority(Thread.NORM_PRIORITY - 1);
         this.processingThread.setUncaughtExceptionHandler((th, ex) ->
-                LSSLogger.error(Brand.shortName() + " processing thread died unexpectedly", ex));
+                { cancelSettingsPolicies(); LSSLogger.error(Brand.shortName() + " processing thread died unexpectedly", ex); });
     }
 
     public void start() {
@@ -465,6 +526,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             // state — actions produced for the old session must not reach the new one.
             if (state == null || state != action.producerState()
                     || !state.hasCompletedHandshake()) continue;
+            if (action instanceof SendAction.ColumnNotGenerated terminal
+                    && terminal.policyEpoch() != state.terminalPolicyEpoch()) continue;
             // Probe-suppress choke point (review P1): an up_to_date answer means every
             // re-declaration of the position resolves at the router's earlier rungs, so a
             // probe for it is guaranteed-unused — up_to_date-resolved resync positions
@@ -691,9 +754,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
 
     private void processingLoop() {
         while (true) {
+            adoptSettingsPolicies();
             MailboxTake take;
             synchronized (this.mailboxLock) {
-                while (this.pendingSnapshot == null) {
+                while (this.pendingSnapshot == null && this.settingsUpdates.isEmpty()) {
                     try {
                         this.mailboxLock.wait(SNAPSHOT_POLL_MS);
                     } catch (InterruptedException e) {
@@ -709,6 +773,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                         }
                     }
                 }
+                if (this.pendingSnapshot == null) continue;
                 take = new MailboxTake(this.pendingSnapshot, this.pendingGenerationReady,
                         this.pendingRemovals, this.pendingInvalidations, this.pendingDirtyClears);
                 this.pendingSnapshot = null;
@@ -834,9 +899,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         applyLateDirtyEvents();
         routeIncomingRequests(take.snapshot());
 
+        this.timestampCache.trimOversized(64);
         if (++this.evictionCounter >= EVICTION_INTERVAL_CYCLES) {
             this.evictionCounter = 0;
-            int evicted = this.timestampCache.evictIfOversized();
+            int evicted = this.timestampCache.trimOversized(64);
             if (evicted > 0 && LSSLogger.isDebugEnabled()) {
                 LSSLogger.debug("Evicted " + evicted + " oversized timestamp cache entries (" + this.timestampCache.size() + " remaining)");
             }
@@ -1605,7 +1671,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "admit");
             addGenerationInFlight(state.registration(), dimension, packed);
             this.ctx.generationTicketRequests().add(new GenerationTicketRequest(
-                    playerUuid, state.registration(), cx, cz, dimension, this.ctx.sequence().next()));
+                    playerUuid, state.registration(), cx, cz, dimension, this.ctx.sequence().next(), this.adoptedSettingsRevision));
         } else {
             // Transient: the gen slot cap is momentarily full — never a wire answer.
             if (ADMISSION_TRACE) traceAdmission(state, cx, cz, via, "slot_full");
@@ -1696,7 +1762,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                                           PendingRequest pending, boolean genStale, int cx, int cz,
                                           long packed) {
         if (entry.columnData() == null) {
-            if (entry.transientFailure()) {
+            if (entry.transientFailure() || genStale) {
                 // Transient outcome (timeout / capacity reject): never a wire answer —
                 // NOT_GENERATED is session-permanent on the client, so transient pressure
                 // must drop silently (counted superseded) and heal by re-declaration.
@@ -1843,6 +1909,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     }
 
     public void shutdown() {
+        cancelSettingsPolicies();
         this.postSnapshot(TickSnapshot.shutdownSentinel(), List.of());
         try {
             this.processingThread.interrupt();

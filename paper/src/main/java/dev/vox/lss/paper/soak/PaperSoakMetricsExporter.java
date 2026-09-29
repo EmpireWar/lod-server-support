@@ -237,8 +237,8 @@ public final class PaperSoakMetricsExporter {
             genMap.put("active", genService.getActiveCount());
             genMap.put("active_hw", GEN_ACTIVE_HW.get());
         } else {
-            // enableChunkGeneration=false leaves the service null; the soak checker schema
-            // requires every generation.* field, so zero-fill instead of emitting {}.
+            // Before controller initialization the soak schema still requires every field.
+            // Dormant controllers retain their admitted/draining work counters above.
             genMap.put("submitted", 0L);
             genMap.put("completed", 0L);
             genMap.put("timeouts", 0L);

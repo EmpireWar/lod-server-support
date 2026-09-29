@@ -271,9 +271,9 @@ class XaeroMapCompatTest {
         org.junit.jupiter.api.Assertions.assertNull(XaeroMapCompat.diagLine(),
                 "no Xaero detected → no diag line");
         var cfg = dev.vox.lss.config.LSSClientConfig.CONFIG;
-        boolean old = cfg.enableXaeroMapBridge;
+        boolean old = cfg.enableXaeroMapBridge();
         try {
-            cfg.enableXaeroMapBridge = true;
+            dev.vox.lss.config.ClientConfigTestSupport.set("integrations.xaero_map.enabled", true);
             assertTrue(XaeroMapCompat.init(), "init must succeed against the stubs");
             assertTrue(dev.vox.lss.api.LSSApi.hasVoxelConsumers(),
                     "init must register the column consumer");
@@ -281,10 +281,10 @@ class XaeroMapCompatTest {
         } finally {
             // Deregister the production consumer: session end with the toggle off — the
             // registration settle is the MAIN-THREAD half (sweep C), i.e. the next tick.
-            cfg.enableXaeroMapBridge = false;
+            dev.vox.lss.config.ClientConfigTestSupport.set("integrations.xaero_map.enabled", false);
             XaeroMapCompat.onDisconnect();
             XaeroMapCompat.clientTick();
-            cfg.enableXaeroMapBridge = old;
+            dev.vox.lss.config.ClientConfigTestSupport.set("integrations.xaero_map.enabled", old);
             XaeroSession.resetFacadeForTest();
             assertFalse(dev.vox.lss.api.LSSApi.hasVoxelConsumers(),
                     "the production consumer must not leak into other suites");

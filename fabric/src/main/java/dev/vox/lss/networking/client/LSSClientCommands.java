@@ -28,7 +28,7 @@ public class LSSClientCommands {
                     // ClientCommandManager, not ClientCommands.)
                     .then(ClientCommandActions.resetSubtree(
                             ClientCommandManager::literal, source -> source::sendFeedback))
-                    .then(ClientCommandActions.presetSubtree(ClientCommandManager::literal, source -> source::sendFeedback))
+                    .then(ClientCommandActions.reloadSubtree(ClientCommandManager::literal, source -> source::sendFeedback))
                     .then(ClientCommandActions.statusSubtree(ClientCommandManager::literal))
                     .then(ClientCommandActions.diagnosticsSubtree(ClientCommandManager::literal, source -> source::sendFeedback))
                     .then(ClientCommandManager.literal("diag")

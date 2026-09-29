@@ -5,6 +5,7 @@ Only offline fixture identities; immutable regular-file snapshots. Does not laun
 import argparse
 import json
 from pathlib import Path
+from rig_settings import render, values
 import shutil
 import zipfile
 from rig import sha, write, require_lock
@@ -103,7 +104,7 @@ def main():
         runtime['cache'][checksum]=str(client_fixture.resolve())
         libs.append('{run}/artifacts/lss-rig-concurrent-client.jar')
         runtime['launches'][0]['argv'][1:1]=['-Dlss.rig.workload=true','-Dlss.rig.offerSeconds='+str(max(1,a.observe_seconds-120)),'-Dlss.rig.churnAfterSeconds='+str(a.churn_after_seconds),'-Dlss.rig.slowAfterSeconds='+str(a.slow_after_seconds),'-Dlss.rig.admissionAfterSeconds='+str(a.admission_after_seconds)]
-        runtime['generated_files']['server/plugins/LodServerSupport/lss-server-config.json']=json.dumps({'lodDistanceChunks':32,'enableChunkGeneration':False,'generationConcurrencyLimitGlobal':4,'generationConcurrencyLimitPerPlayer':1})
+        runtime['generated_files']['server/plugins/LodServerSupport/lss-server-config.yaml']=render({'lod.distance.default_chunks':32,'generation.enabled':False,'generation.concurrency.global':4,'generation.concurrency.per_player':1},platform='paper')
         runtime['ready_conditions']=[{'launch_id':'server','marker':'LSS_RIG_WORKLOAD_READY','timeout_seconds':120}]
     for letter in letters:
         game='client-'+letter

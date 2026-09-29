@@ -376,8 +376,7 @@ class StoreBackfillTest {
     /** Raw src_stamp for one overworld row (bypasses get() so nothing masks it);
      *  null while the row is missing or not yet committed. */
     private Long sqlSrcStampOrNull(long pos) throws Exception {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + this.tmp.resolve("store").resolve("store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + this.tmp.resolve("store").resolve("store.db"));
         try (var c = ds.getConnection(); var st = c.createStatement()) {
             st.execute("PRAGMA busy_timeout=3000");
             int dimId;

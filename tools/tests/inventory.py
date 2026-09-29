@@ -100,7 +100,25 @@ def validate_moves(root, moves):
             continue
         if old.exists():
             problems.append('Migrated source reappeared at old owner: ' + move['before'])
-        if not new.is_file():
+        retirement = move.get('retired_after_migration')
+        if retirement is not None:
+            if new.exists():
+                problems.append('Retired migrated source reappeared: ' + move['after'])
+            if (not isinstance(retirement, dict)
+                    or not isinstance(retirement.get('reason'), str)
+                    or not retirement['reason'].strip()
+                    or not isinstance(retirement.get('introducing_commit'), str)
+                    or re.fullmatch(r'[0-9a-f]{40}', retirement['introducing_commit']) is None
+                    or not isinstance(retirement.get('replacement_sources'), list)
+                    or not retirement['replacement_sources']):
+                problems.append('Invalid migration retirement: ' + move['class'])
+                continue
+            for path in retirement['replacement_sources']:
+                if (not isinstance(path, str) or not path
+                        or not (root / path).resolve().is_relative_to(root.resolve())
+                        or not (root / path).is_file()):
+                    problems.append('Missing or unsafe retirement replacement: ' + repr(path))
+        elif not new.is_file():
             problems.append('Migrated source missing at new owner: ' + move['after'])
     return problems
 

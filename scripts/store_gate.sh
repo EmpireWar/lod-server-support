@@ -31,6 +31,7 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$PROJECT_ROOT/scripts/lib/harness-lock.sh"
 harness_acquire
+source "$HARNESS_LIB_DIR/settings.sh"
 OUT_ROOT="${OUT_ROOT:-$PROJECT_ROOT/store-gate-results}"
 STAMP="${RUN_STAMP:-$(date +%Y%m%d-%H%M%S)}"
 SRV_CFG_DIR="$PROJECT_ROOT/fabric/build/run/benchmark-server/config"
@@ -60,20 +61,14 @@ stage_config() { # <lodStore-value>
     # cold mode keeps the huge disc: sustained-throughput measurement wants no idle tail.
     local distance=256
     [[ "$MODE" == "warm" ]] && distance=96
-    cat > "$SRV_CFG_DIR/lss-server-config.json" <<EOF
-{
-  "enabled": true,
-  "lodDistanceChunks": $distance,
-  "diskReaderThreads": 5,
-  "maxConcurrentDiskReads": 5,
-  "enableChunkGeneration": false,
-  "missMemoTtlSeconds": 30,
-  "useBackgroundReadPriority": true,
-  "useNbtTranscode": true,
-  "lodStore": "$1",
-  "lodStoreBackfill": false
-}
-EOF
+    local store_enabled=false
+    [[ "$1" == on || "$1" == full ]] && store_enabled=true
+    harness_stage_yaml "$SRV_CFG_DIR/lss-server-config.yaml" server \
+        'service.enabled=true' "lod.distance.default_chunks=$distance" 'lod.distance.by_dimension={}' \
+        'storage.disk.reader_threads=5' 'storage.disk.max_concurrent_reads=5' 'generation.enabled=false' \
+        'storage.miss_memo_ttl_seconds=30' 'storage.disk.background_priority=true' \
+        'serialization.nbt_transcode=true' "storage.lod_store.enabled=$store_enabled" \
+        'storage.lod_store.backfill.enabled=false'
 }
 
 collect() { # <run-out-dir>

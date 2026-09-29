@@ -1,80 +1,43 @@
 package dev.vox.lss.common;
 
-import dev.vox.lss.common.config.JsonConfig;
+import dev.vox.lss.common.config.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.*;
+import static org.junit.jupiter.api.Assertions.*;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-
-/**
- * Pins the brand-driven config-filename ORDER: the running brand's own file first, the other
- * brand's file as a fallback. This is the wiring that makes a VSS jar prefer {@code vss-*-config.json}
- * while still adopting an existing {@code lss-*-config.json} on a jar swap (the load/adopt mechanism
- * that consumes this order is pinned separately in {@code dev.vox.lss.config.JsonConfigLoadTest}).
- *
- * <p>Lives in package {@code dev.vox.lss.common} for access to the package-private {@link Brand#apply}
- * test seam, and reaches the {@code protected static} resolver through a {@link JsonConfig} subclass.
- */
 class ConfigBrandCandidatesTest {
-
-    /** Minimal JsonConfig subclass: only there to expose the protected static candidate resolver. */
-    static final class Probe extends JsonConfig {
-        @Override protected String getFileName() { return "unused.json"; }
-        static String[] candidates(String kind) { return brandedConfigCandidates(kind); }
-    }
-
-    @AfterEach
-    void resetBrand() {
-        // Restore the default (LSS) so brand state never leaks into another test in this JVM.
-        Brand.apply("LSS", "LOD Server Support", "lss", "lsslod");
-    }
-
-    @Test
-    void serverKindFollowsTheBrandOrderToo() {
-        // The server config joined the branded-candidates mechanism 2026-08-13 (XANTHA's
-        // release patch): a VSS server prefers vss-server-config.json and adopts an
-        // existing lss- file (the load/adopt mechanism is pinned in JsonConfigLoadTest).
+    @TempDir Path directory;
+    @AfterEach void resetBrand() { Brand.apply("LSS", "LOD Server Support", "lss", "lsslod"); }
+    @Test void vssAdoptsLssYamlAndNeverForksAnotherFile() throws Exception {
+        var original = new SettingsStore<>(directory, "lss", SettingsSchema.client());
+        original.initialize();
         Brand.apply("VSS", "Voxy Server Side", "vss", "vsslod");
-        assertArrayEquals(
-                new String[]{"vss-server-config.json", "lss-server-config.json"},
-                Probe.candidates("server"));
+        var adopted = new SettingsStore<>(directory, Brand.lowerShortName(), SettingsSchema.client());
+        adopted.initialize();
+        assertEquals(original.path(), adopted.path());
+        assertFalse(Files.exists(directory.resolve("vss-client-config.yaml")));
+        var doc = adopted.read();
+        adopted.saveDraft(doc.hash(), java.util.Map.of("far_players.sharing.enabled", false));
+        assertFalse(original.read().normalized().farPlayers().sharing().enabled());
     }
-
-    @Test
-    void lssBrandPrefersItsOwnFileThenFallsBackToVss() {
-        Brand.apply("LSS", "LOD Server Support", "lss", "lsslod");
-        assertArrayEquals(
-                new String[]{"lss-client-config.json", "vss-client-config.json"},
-                Probe.candidates("client"));
+    @Test void runningBrandWinsWhenBothYamlsExist() throws Exception {
+        Files.writeString(directory.resolve("lss-server-config.yaml"), "config_version: 1\nlod:\n  distance:\n    default_chunks: 64\n");
+        Files.writeString(directory.resolve("vss-server-config.yaml"), "config_version: 1\nlod:\n  distance:\n    default_chunks: 128\n");
+        for (String brand : new String[]{"lss", "vss"}) {
+            var store = new SettingsStore<>(directory, brand, SettingsSchema.server(false));
+            assertEquals(brand.equals("lss") ? 64 : 128, store.initialize().normalized().lod().distance().defaultChunks());
+            assertEquals(brand + "-server-config.yaml", store.path().getFileName().toString());
+        }
     }
-
-    @Test
-    void vssBrandPrefersItsOwnFileThenFallsBackToLss() {
-        Brand.apply("VSS", "Voxy Server Side", "vss", "vsslod");
-        assertArrayEquals(
-                new String[]{"vss-client-config.json", "lss-client-config.json"},
-                Probe.candidates("client"));
-    }
-
-    @Test
-    void kindIsInterpolatedIntoBothCandidates() {
-        // Exercises the helper's generic {kind} interpolation only. NOTE: no config actually loads
-        // the "server" kind through this helper — ServerConfigBase is deliberately brand-invariant
-        // (lss-server-config.json on both brands). This asserts the string-building contract, not
-        // that server config uses the fallback.
-        Brand.apply("VSS", "Voxy Server Side", "vss", "vsslod");
-        assertArrayEquals(
-                new String[]{"vss-server-config.json", "lss-server-config.json"},
-                Probe.candidates("server"));
-    }
-
-    @Test
-    void unknownBrandFallsBackToLssPrimaryOrdering() {
-        // Brand defaults/normalizes anything non-VSS to the LSS ordering — a garbled brand token
-        // must not strand a real install on a file it will never create.
-        Brand.apply("LSS", "LOD Server Support", "lss", "lsslod");
-        assertArrayEquals(
-                new String[]{"lss-client-config.json", "vss-client-config.json"},
-                Probe.candidates("client"));
+    @Test void crossBrandJsonMigrationKeepsTheSourceStemAndExactOriginal() throws Exception {
+        String json = "{\"lodDistanceChunks\":32,\"enableChunkGeneration\":false}";
+        Files.writeString(directory.resolve("lss-server-config.json"), json);
+        var store = new SettingsStore<>(directory, "vss", SettingsSchema.server(false));
+        assertFalse(store.initialize().normalized().generation().enabled());
+        assertEquals("lss-server-config.yaml", store.path().getFileName().toString());
+        assertEquals(json, Files.readString(directory.resolve("lss-server-config.json")));
+        assertFalse(Files.exists(directory.resolve("vss-server-config.yaml")));
     }
 }

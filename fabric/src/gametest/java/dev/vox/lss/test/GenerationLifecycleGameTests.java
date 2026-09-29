@@ -92,11 +92,16 @@ public class GenerationLifecycleGameTests {
     }
 
     private static ChunkGenerationService newGenService(int globalCap, int perPlayerCap, int timeoutSeconds) {
-        var config = new LSSServerConfig();
-        config.generationConcurrencyLimitGlobal = globalCap;
-        config.generationConcurrencyLimitPerPlayer = perPlayerCap;
-        config.generationTimeoutSeconds = timeoutSeconds;
-        return new ChunkGenerationService(config);
+        return new ChunkGenerationService(generationConfig(globalCap, perPlayerCap, timeoutSeconds));
+    }
+
+    private static LSSServerConfig generationConfig(int globalCap, int perPlayerCap, int timeoutSeconds) {
+        var values = new java.util.LinkedHashMap<>(dev.vox.lss.common.config.SettingsSchema.server(false).defaultValues());
+        values.put("generation.enabled", true);
+        values.put("generation.concurrency.global", globalCap);
+        values.put("generation.concurrency.per_player", perPlayerCap);
+        values.put("generation.timeout_ticks", timeoutSeconds * 20);
+        return new LSSServerConfig(dev.vox.lss.common.config.SettingsSchema.server(false).fromValues(values).normalized());
     }
 
     private static TicketStorage ticketStorage(ServerLevel level) {
@@ -557,7 +562,7 @@ public class GenerationLifecycleGameTests {
                     // Drive the processing thread without running the main-thread drain.
                     service.getOffThreadProcessor().postSnapshot(new TickSnapshot(
                             Map.of(uuid, LSSConstants.DIM_STR_OVERWORLD), Map.of(),
-                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer, false), List.of());
+                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer(), false), List.of());
                     Gt.assertTrue(helper, false,
                             "waiting for the disk-notfound -> generation conversion (heldGenSlots=1)");
                 }
@@ -634,7 +639,7 @@ public class GenerationLifecycleGameTests {
                 if (state.getHeldGenSlots() != 1) {
                     service.getOffThreadProcessor().postSnapshot(new TickSnapshot(
                             Map.of(uuid, LSSConstants.DIM_STR_OVERWORLD), Map.of(),
-                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer, false), List.of());
+                            LSSServerConfig.CONFIG.sendQueueLimitPerPlayer(), false), List.of());
                     Gt.assertTrue(helper, false,
                             "waiting for the disk-notfound -> generation conversion (heldGenSlots=1)");
                 }
@@ -815,10 +820,7 @@ public class GenerationLifecycleGameTests {
         int cx = origin.x + SERIALIZER_FAULT_CHUNK_OFFSET;
         int cz = origin.z + 5;
         var tickets = ticketStorage(level);
-        var config = new LSSServerConfig();
-        config.generationConcurrencyLimitGlobal = 3;
-        config.generationConcurrencyLimitPerPlayer = 2;
-        config.generationTimeoutSeconds = 60;
+        var config = generationConfig(3, 2, 60);
         var gen = new ChunkGenerationService(config,
                 (lvl, chunk, x, z) -> {
                     throw new AssertionError("injected serialization failure");
@@ -936,4 +938,29 @@ public class GenerationLifecycleGameTests {
         }
         return false;
     }
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    public void generationReloadRetainsTicketOwnershipWhileDisabled(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
+        int cx = origin.x + 251, cz = origin.z + 7;
+        var gen = newGenService(2, 2, 60);
+        var player = UUID.randomUUID();
+        var tickets = ticketStorage(level);
+        gen.updatePolicy(false, 2, 2, 1200, 1);
+        Gt.assertTrue(helper, !gen.submitGeneration(player, registration(player), level, cx, cz, 1), "dormant admission is closed");
+        Gt.assertTrue(helper, lssTicketCount(tickets, cx, cz) == 0, "disabled service owns no ticket");
+        gen.updatePolicy(true, 2, 2, 1200, 2);
+        Gt.assertTrue(helper, gen.submitGeneration(player, registration(player), level, cx, cz, 2), "enable admits without replacing controller");
+        gen.updatePolicy(false, 1, 1, 20, 3);
+        Gt.assertTrue(helper, lssTicketCount(tickets, cx, cz) == 1, "disable retains the admitted ticket");
+        Gt.assertTrue(helper, !gen.submitGeneration(player, registration(player), level, cx + 1, cz, 3), "disable rejects later work");
+        helper.succeedWhen(() -> {
+            var outcomes = gen.tick();
+            Gt.assertTrue(helper, !outcomes.isEmpty(), "waiting for admitted generation to drain");
+            Gt.assertTrue(helper, outcomes.getFirst().columnData() != null, "old job retains its original deadline");
+            Gt.assertTrue(helper, lssTicketCount(tickets, cx, cz) == 0, "drain releases ticket while disabled");
+            gen.shutdown();
+        });
+    }
+
 }

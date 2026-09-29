@@ -71,8 +71,8 @@ class PaperServiceGateSweepTest {
 
     @BeforeEach
     void buildRig() {
-        config = new PaperConfig();
-        config.validate();
+        config = new MutablePaperSettings();
+        MutablePaperSettings.normalize(config);
         players = new ConcurrentHashMap<>();
         diskReader = new PaperChunkDiskReader(1, false);
         var processor = new PaperRequestProcessingServiceTest.RecordingProcessor(players, diskReader);
@@ -125,7 +125,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void revocationNeedsTwoConsecutiveFailingSweepsThenPushesDisarmAndUnregisters() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         var p = registerCurrent(uuid, 5);
         // The revoked player stays ONLINE: the same sweep pass's grant leg re-resolves
@@ -162,7 +162,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void aFlappingGrantNeverRevokes() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         registerCurrent(uuid, 1);
 
@@ -180,7 +180,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void legacySessionsAreNeverLiveRevoked() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         var p = playerIn(uuid);
         service.getDialectTracker().onHandshake(uuid, HandshakeGate.WireDialect.V16);
@@ -199,7 +199,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void stillDeniedIsIdempotentZeroWorkZeroCounts() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         registerCurrent(uuid, 1);
         denied.add(uuid);
@@ -220,7 +220,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void perPlayerThrowIsContainedAndCountsAsHolding() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var throwingUuid = UUID.randomUUID();
         var deniedUuid = UUID.randomUUID();
         registerCurrent(throwingUuid, 1);
@@ -240,7 +240,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void aGrantReplaysTheRememberedHandshakeThroughTheProductionBody() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         // A v16 client denied at handshake: the memo carries ITS dialect verbatim.
         service.getServiceGateState().rememberDenied(uuid, "steve", 16, 1);
@@ -267,7 +267,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void grantSweepWaitsWhileStillDeniedThenHealsOnGrant() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         service.getServiceGateState().rememberDenied(uuid, "steve", 20, 5);
         var online = playerIn(uuid);
@@ -285,7 +285,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void grantReplayIsInertForOfflineAndRegisteredPlayers() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var offline = UUID.randomUUID();
         service.getServiceGateState().rememberDenied(offline, "gone", 20, 1);
         when(playerList.getPlayer(offline)).thenReturn(null);
@@ -312,7 +312,7 @@ class PaperServiceGateSweepTest {
     void disarmingTheGateDrainsTheMemo() {
         // The staged rollout's final step: `set requireServicePermission false` must
         // re-offer every denied player, not strand them (§8 unanimous MAJOR).
-        config.requireServicePermission = false;
+        MutablePaperSettings.set(config, "service.require_permission", false);
         var uuid = UUID.randomUUID();
         service.getServiceGateState().rememberDenied(uuid, "steve", 20, 5);
         var online = playerIn(uuid);
@@ -342,7 +342,7 @@ class PaperServiceGateSweepTest {
         // Implementation review MAJOR: takeDenied ran BEFORE the null-replayer check,
         // so a broken replay wiring silently drained the memo — a re-granted player
         // would be stranded with nothing left to re-offer.
-        config.requireServicePermission = false;
+        MutablePaperSettings.set(config, "service.require_permission", false);
         service.setHandshakeReplayer(null);
         var uuid = UUID.randomUUID();
         service.getServiceGateState().rememberDenied(uuid, "steve", 20, 5);
@@ -360,7 +360,7 @@ class PaperServiceGateSweepTest {
         // Implementation review: registerPlayer is also the dimension-change reuse
         // path — a streak reset there would let a frequently-portalling player outrun
         // the two-sweep hysteresis forever.
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         var p = registerCurrent(uuid, 1);
         when(playerList.getPlayer(uuid)).thenReturn(p);
@@ -378,16 +378,16 @@ class PaperServiceGateSweepTest {
 
     @Test
     void disarmingClearsStreaksSoReArmRestartsTheHysteresis() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         var p = registerCurrent(uuid, 1);
         when(playerList.getPlayer(uuid)).thenReturn(p);
         denied.add(uuid);
 
         service.runServiceGateSweeps();          // streak = 1
-        config.requireServicePermission = false;
+        MutablePaperSettings.set(config, "service.require_permission", false);
         service.runServiceGateSweeps();          // disarmed sweep clears streaks
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         service.runServiceGateSweeps();          // re-armed: this is failure ONE again
 
         assertNotNull(players.get(uuid),
@@ -399,7 +399,7 @@ class PaperServiceGateSweepTest {
 
     @Test
     void theTickCadenceReadsOnlyEveryNthTick() {
-        config.requireServicePermission = true;
+        MutablePaperSettings.set(config, "service.require_permission", true);
         var uuid = UUID.randomUUID();
         registerCurrent(uuid, 1);
 
@@ -419,7 +419,8 @@ class PaperServiceGateSweepTest {
         // set re-push. Source pin, same style as the wiring contract tests.
         Path src = Path.of("src/main/java/dev/vox/lss/paper/PaperRequestProcessingService.java");
         if (!Files.exists(src)) src = Path.of("paper").resolve(src);
-        String tick = Files.readString(src);
+        String source = Files.readString(src);
+        String tick = source.substring(source.indexOf("public void tick()"));
         int drain = tick.indexOf("drainLifecycleMailbox();");
         int sweep = tick.indexOf("runServiceGateSweeps();");
         assertTrue(drain > 0 && sweep > drain,

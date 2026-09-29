@@ -17,8 +17,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * The R-10 graceful-degrade ladder pins (mega plan E3 row): the injected-resolver
  * rung behaviors + per-type once-latch, PLUS the one NON-injected pin against the
  * REAL registry — {@code BuiltInRegistries.ENTITY_TYPE} is a DefaultedRegistry whose
- * plain {@code getValue} returns PIG for unknown ids (SeeU's exact bug; their
- * null-check is dead code), so rung 1 MUST resolve via {@code getOptional}. Injected
+ * plain {@code getValue} returns PIG for unknown ids, so rung 1 MUST resolve via {@code getOptional}. Injected
  * tests alone could mask a regression back to {@code getValue}.
  */
 class FarPlayerMountLadderTest {

@@ -32,9 +32,6 @@
   ],
   "jars": [
     {
-      "file": "META-INF/jars/sqlite-jdbc-slim.jar"
-    },
-    {
       "file": "META-INF/jars/zstd-jni-slim.jar"
     }
   ],

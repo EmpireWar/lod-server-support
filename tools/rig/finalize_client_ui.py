@@ -11,9 +11,9 @@ def finalize(root,visuals_checked):
     if (root/'proof.json').exists():raise ValueError('refusing to replace an existing attempt proof')
     manifest,profile,runtime,scenario=[read(root/(name+'.json'))for name in ('manifest','profile','runtime','scenario')]
     if manifest.get('status')!='running':raise ValueError('only the active owned UI attempt can be finalized')
-    config=inside(root,'instances/lss-rig-client/minecraft/config/lss-client-config.json')
-    baseline=regular(root/'evidence/canonical-restored-baseline.json').read_bytes()
-    if regular(config).read_bytes()!=baseline or config.with_name(config.name+'.tmp').exists():raise ValueError('actual settings or save-failure blocker not restored')
+    config=inside(root,'instances/lss-rig-client/minecraft/config/lss-client-config.yaml')
+    baseline=regular(root/'evidence/canonical-restored-baseline.yaml').read_bytes()
+    if regular(config).read_bytes()!=baseline or not config.parent.stat().st_mode & 0o200:raise ValueError('actual settings or save-failure blocker not restored')
     target='instances/lss-rig-client/minecraft/mods/lod-server-support-'+profile['platform']+'.jar'
     candidates=[row for row in runtime['stage_files']if row['target']==target]
     if len(candidates)!=1 or sha(regular(inside(root,target)))!=candidates[0]['sha256']:raise ValueError('actual candidate differs from owned runtime')
@@ -24,7 +24,7 @@ def finalize(root,visuals_checked):
                screenshots={name:sha(regular(root/'evidence'/name))for name in SCREENS},
                limitations=['Seven client UI assertions only; no map, lifecycle, far-player rendering or performance claim.']+runtime.get('ui_limitations',[]))
     write(root/'evidence/ui-actions.json',notes)
-    evidence={p.name:sha(regular(p))for p in sorted((root/'evidence').iterdir())if p.suffix in ('.png','.json')and p.name!='result.json'}
+    evidence={p.name:sha(regular(p))for p in sorted((root/'evidence').iterdir())if p.suffix in ('.png','.json','.yaml')and p.name!='result.json'}
     proof={key:manifest[key]for key in ('run_id','run_hash','profile_hash','scenario_hash')}
     proof.update(ready=True,handshake=scenario.get('execution_route')!='client-ui-no-consumer',test_count=7,
                  assertions=dict.fromkeys(ASSERTIONS,True),failures=[],evidence=evidence,limitations=notes['limitations'])

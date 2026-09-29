@@ -72,8 +72,7 @@ class SqliteLodStoreMaskShutdownTest {
             while (original.get(DIM, 0L) == null && System.nanoTime() < deadline) Thread.sleep(10);
             assertNotNull(original.get(DIM, 0L));
         } finally { original.shutdown(); }
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + tmp.resolve("store/store.db"));
+        var ds = dev.vox.lss.common.store.SqliteDriverRuntime.dataSource("jdbc:sqlite:" + tmp.resolve("store/store.db"));
         try (var c = ds.getConnection(); var st = c.createStatement()) {
             c.setAutoCommit(false);
             // More than DROP_BATCH_ROWS; the first batch commits before the listener.

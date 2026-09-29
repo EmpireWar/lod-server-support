@@ -155,9 +155,23 @@ public class RequestProcessingService {
     private static final AtomicInteger PENDING_SEND_DROPS = new AtomicInteger();
     private static final AtomicLong TOTAL_SEND_DROPS_INJECTED = new AtomicLong();
 
+    private final LSSServerConfig serviceConfig;
+
+    /** Stable configuration facade belonging to this service lifecycle. */
+    public LSSServerConfig settingsConfig() { return serviceConfig; }
+
     public RequestProcessingService(MinecraftServer server) {
+        this(server, LSSServerConfig.CONFIG);
+    }
+
+    public RequestProcessingService(MinecraftServer server, LSSServerConfig config) {
         this.server = server;
-        var config = LSSServerConfig.CONFIG;
+        this.serviceConfig = java.util.Objects.requireNonNull(config);
+        this.advertisedGeneration = config.enableChunkGeneration();
+        this.refreshedGeneration = this.advertisedGeneration;
+        this.advertisedLod = config.snapshot().lod();
+        this.adoptedServicePolicy = config.snapshot().service();
+        this.adoptedFarPlayerPolicy = config.snapshot().farPlayers();
         // The Melius Vanish bridge (WI-7b), per (viewer, target): resolved through the
         // constructor's own `server` (non-null by construction). A departed viewer answers
         // hidden — nothing is sendable to it anyway; absent mod = visible.
@@ -200,25 +214,21 @@ public class RequestProcessingService {
         // tier. Sizing it off Moonrise presence alone gave an admin who disabled background
         // priority — precisely because LSS reads were hurting vanilla chunk loading — up to
         // 8 FOREGROUND readers where the historic default was 5. (v0.9.0 review.)
-        boolean prioritizedReads = config.useBackgroundReadPriority
+        boolean prioritizedReads = config.useBackgroundReadPriority()
                 && dev.vox.lss.compat.MoonriseReadCompat.resolveOrNull() != null;
         int readerThreads = config.effectiveDiskReaderThreads(prioritizedReads);
         this.diskReader = new ChunkDiskReader(readerThreads,
-                config.useBackgroundReadPriority, config.useNbtTranscode,
-                config.useBackgroundReadSplit, config.useSelectiveNbtParse);
-        if (config.enableChunkGeneration) {
-            this.generationService = new ChunkGenerationService(config);
-            this.generationService.setDirtyContentFilter(this.dirtyContentFilter);
-        } else {
-            this.generationService = null;
-        }
+                config.useBackgroundReadPriority(), config.useNbtTranscode(),
+                config.useBackgroundReadSplit(), config.useSelectiveNbtParse());
+        this.generationService = new ChunkGenerationService(config);
+        this.generationService.setDirtyContentFilter(this.dirtyContentFilter);
         this.bandwidthLimiter = new SharedBandwidthLimiter(config.bytesPerSecondGlobal());
 
         var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
         this.offThreadProcessor = new FabricOffThreadProcessor(
                 this.players,
-                this.diskReader, this.generationService != null, dataDir,
-                config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds,
+                this.diskReader, config.enableChunkGeneration(), dataDir,
+                config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds(),
                 config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                         + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
         // C2: the per-recipient enqueue consults the session dialect to translate
@@ -233,7 +243,7 @@ public class RequestProcessingService {
         // capable client against a natives-less default-on server would throw at every
         // payload build, forever. Independent of the store's own probe below.
         boolean wireCompressionLive = false;
-        if (config.useCompressedColumns) {
+        if (config.useCompressedColumns()) {
             var wireCodec = dev.vox.lss.common.store.StoreCodec.zstdOrNull();
             if (wireCodec == null) {
                 LSSLogger.warn("useCompressedColumns is enabled but the "
@@ -269,18 +279,18 @@ public class RequestProcessingService {
         // read any of it. Unreachable until v0.9.0 defaulted lodStore=full +
         // lodStoreBackfill=true; the enabled-false soak scenario cannot catch it,
         // because its config pins lodStore=off. (v0.9.0 review.)
-        var storeMode = config.enabled
-                ? dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore)
+        var storeMode = config.enabled()
+                ? dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
                 : dev.vox.lss.common.store.LodStoreMode.OFF;
-        if (!config.enabled && !dev.vox.lss.common.store.LodStoreMode
-                .normalize(config.lodStore).equals(dev.vox.lss.common.store.LodStoreMode.OFF)) {
+        if (!config.enabled() && !dev.vox.lss.common.store.LodStoreMode
+                .normalize(config.lodStore()).equals(dev.vox.lss.common.store.LodStoreMode.OFF)) {
             LSSLogger.info(dev.vox.lss.common.Brand.shortName() + " is disabled (enabled=false) — the LOD store and its "
                     + "backfill stay off; no store is created and no regions are walked");
         }
         if (storeMode == dev.vox.lss.common.store.LodStoreMode.OFF) {
             // Never on Folia — this is the Fabric service. Null when enabled=false.
             var advice = dev.vox.lss.common.store.LodStores
-                    .offRecommendationOrNull(config.enabled, false);
+                    .offRecommendationOrNull(config.enabled(), false);
             if (advice != null) {
                 LSSLogger.info(advice);
             }
@@ -316,7 +326,7 @@ public class RequestProcessingService {
         // handler (kill switch checked there).
         this.regionSummaries = new dev.vox.lss.common.region.RegionSummaryService(
                 this.regionStamps::tileStampSeconds,
-                () -> LSSServerConfig.CONFIG.maxConfiguredLodDistanceChunks());
+                () -> serviceConfig.maxConfiguredLodDistanceChunks());
         // Every hash-confirmed change mark (the save hook) bumps the region's live save
         // mark, closing the save-submitted-but-write-pending mtime lag before the header
         // rung can claim freshness across it. May run off-main — the bump is atomic.
@@ -369,7 +379,7 @@ public class RequestProcessingService {
             var env = new dev.vox.lss.common.store.SqliteLodStore.Environment(
                     dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
                     LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
-                    config.lodStoreResweepSeconds, config.lodStoreMaxBytes(),
+                    config.lodStoreResweepSeconds(), config.lodStoreMaxBytes(),
                     dev.vox.lss.common.store.RegistryFingerprint.of(
                             registryIds.states(), registryIds.biomes()),
                     dev.vox.lss.common.store.RegistryFingerprint.contentOf(
@@ -426,9 +436,10 @@ public class RequestProcessingService {
                         // tick time is over the configured MSPT gate.
                         () -> server.getCurrentSmoothedTickTime()
                                 < LSSConstants.LOD_STORE_BACKFILL_TICK_CEILING_MS,
-                        config.lodStoreBackfillColumnsPerSecond);
-                if (config.lodStoreBackfill) {
-                    this.storeBackfill.start();
+                        config.lodStoreBackfillColumnsPerSecond());
+                this.storeBackfill.updatePolicy(config.lodStoreBackfill(), config.lodStoreBackfillColumnsPerSecond(), 0);
+                if (config.lodStoreBackfill()) {
+                    this.storeBackfill.startWhenReady();
                 }
             } else {
                 this.storeBackfill = null;
@@ -461,7 +472,7 @@ public class RequestProcessingService {
     }
 
     public PlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
-        var config = LSSServerConfig.CONFIG;
+        var config = serviceConfig;
         // One-way latch for the save hook's skip gate (review P3): until the first LSS
         // client handshakes, no session state (timestamp cache, client-held columns)
         // exists for the dirty-content hash to protect.
@@ -548,7 +559,7 @@ public class RequestProcessingService {
     }
 
     int lodDistanceFor(ServerPlayer player) {
-        return ServerWorldLod.distance(LSSServerConfig.CONFIG, player);
+        return ServerWorldLod.distance(serviceConfig, player);
     }
 
     public void handleBatchRequest(ServerPlayer player, BatchChunkRequestC2SPayload payload) {
@@ -595,12 +606,149 @@ public class RequestProcessingService {
         state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
     }
 
+    // Per-owner progress survives failure in another owner. Publication's previous
+    // snapshot cannot describe partial adoption, especially when the next edit reverts.
+    private dev.vox.lss.common.config.ServerSettings.Lod advertisedLod;
+    private dev.vox.lss.common.config.ServerSettings.Service adoptedServicePolicy;
+    private dev.vox.lss.common.config.ServerSettings.FarPlayers adoptedFarPlayerPolicy;
+    private boolean refreshedGeneration;
+    private volatile boolean advertisedGeneration;
+    public boolean generationEnabledForSession() { return advertisedGeneration; }
+
+    private volatile boolean settingsStopped;
+    private volatile long settingsRevision;
+    private volatile int settingsLegacyReconnects;
+    public record SettingsFeedback(long revision, int legacyReconnects, java.util.List<String> draining) {
+        public SettingsFeedback { draining = java.util.List.copyOf(draining); }
+    }
+    private volatile SettingsFeedback settingsFeedback = new SettingsFeedback(0, 0, java.util.List.of());
+    public SettingsFeedback settingsFeedback() { return settingsFeedback; }
+    public int lastSettingsLegacyReconnects() { return settingsLegacyReconnects; }
+    public java.util.List<String> settingsDrainingStatus() {
+        var status = new java.util.ArrayList<String>();
+        if (!generationEnabledForSession() && generationService != null && generationService.getActiveCount() > 0)
+            status.add("Generation disabled; " + generationService.getActiveCount() + " admitted job(s) draining");
+        if (storeBackfill != null && storeBackfill.isRunning() && !serviceConfig.lodStoreBackfill())
+            status.add("Backfill stop requested; current column draining");
+        return java.util.List.copyOf(status);
+    }
+    private volatile boolean generationRefreshPending;
+    private final java.util.Set<java.util.concurrent.CompletableFuture<?>> settingsReceipts =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Owner dispatch with a terminal shutdown outcome, unlike fire-and-forget tasks. */
+    public <T> java.util.concurrent.CompletableFuture<T> submitSettingsControl(java.util.function.Supplier<T> action) {
+        var receipt = new java.util.concurrent.CompletableFuture<T>();
+        settingsReceipts.add(receipt);
+        receipt.whenComplete((value, failure) -> settingsReceipts.remove(receipt));
+        Runnable task = () -> {
+            if (receipt.isDone()) return;
+            if (settingsStopped) { receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped")); return; }
+            try { receipt.complete(action.get()); }
+            catch (Throwable failure) { receipt.completeExceptionally(failure); }
+        };
+        try {
+            if (settingsStopped) throw new java.util.concurrent.RejectedExecutionException("Server stopped");
+            server.execute(task);
+            if (settingsStopped) receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped"));
+        } catch (Throwable failure) { receipt.completeExceptionally(failure); }
+        return receipt;
+    }
+
+    private void cancelSettingsReceipts() {
+        settingsStopped = true;
+        for (var receipt : settingsReceipts)
+            receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped"));
+    }
+
+    /** Called on the service owner after one immutable publication. No cross-owner waits. */
+    public java.util.concurrent.CompletableFuture<Void> reconcileSettings(
+            dev.vox.lss.common.config.ServerSettings previous,
+            dev.vox.lss.common.config.ServerSettings next, long revision) {
+        if (settingsStopped) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Server stopped"));
+        if (revision < settingsRevision) return java.util.concurrent.CompletableFuture.failedFuture(
+                new java.util.concurrent.CancellationException("Superseded settings revision"));
+        // Keep the session owner's reconnect count while retrying an operation
+        // that another owner failed; a successful prior report starts fresh.
+        if (settingsFeedback.revision() == settingsRevision) settingsLegacyReconnects = 0;
+        settingsRevision = revision;
+        var view = new dev.vox.lss.common.config.ServerConfigBase(next, false);
+        boolean generationChanged = refreshedGeneration != next.generation().enabled();
+        if (generationChanged) generationRefreshPending = true;
+        var generation = next.generation();
+        if (generationService != null) generationService.updatePolicy(generation.enabled(),
+                generation.concurrency().global(), generation.concurrency().perPlayer(), generation.timeoutTicks(), revision);
+        for (var state : players.values()) state.updateGenSlotCap(generation.concurrency().perPlayer());
+        bandwidthLimiter.reconfigure(view.bytesPerSecondGlobal());
+        diskReader.reapplyGateCapacity(view);
+        diskReader.updateSerializationPolicy(next.serialization().nbtTranscode(), next.serialization().selectiveNbtParse());
+        offThreadProcessor.updateSweepRadius(view.maxConfiguredLodDistanceChunks()
+                + LSSConstants.LOD_DISTANCE_BUFFER + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
+        var processor = offThreadProcessor.updateSettingsPolicy(generation.enabled(),
+                view.effectiveTimestampCacheMB() * 1024L * 1024L,
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(next.storage().missMemoTtlSeconds()), revision);
+        java.util.concurrent.CompletableFuture<Void> store = java.util.concurrent.CompletableFuture.completedFuture(null);
+        var newStore = next.storage().lodStore();
+        long desiredCap = view.lodStoreMaxBytes() <= 0 ? Long.MAX_VALUE : view.lodStoreMaxBytes();
+        boolean capIncreased = false;
+        if (lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite) {
+            var adopted = sqlite.adoptedPolicy();
+            capIncreased = desiredCap > adopted.maxDbBytes();
+            if (desiredCap != adopted.maxDbBytes()
+                    || newStore.resweepIntervalSeconds() != adopted.resweepSeconds())
+                store = sqlite.updatePolicy(view.lodStoreMaxBytes(), newStore.resweepIntervalSeconds(), revision);
+        }
+        if (storeBackfill != null) {
+            boolean resumeCappedBackfill = capIncreased;
+            store = store.thenCompose(ignored -> {
+                if (revision != settingsRevision || settingsStopped)
+                    return java.util.concurrent.CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("Superseded settings revision"));
+                var backfill = newStore.backfill();
+                return storeBackfill.updatePolicy(backfill.enabled(), backfill.columnsPerSecond(),
+                        revision, resumeCappedBackfill);
+            });
+        }
+        // Generation/session ordering waits for its processing owner, never an unrelated
+        // long store sweep or backfill read. Overall reporting still awaits every owner.
+        var session = processor.thenCompose(ignored -> submitSettingsControl(() -> {
+            if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
+            advertisedGeneration = next.generation().enabled();
+            if (generationChanged || !advertisedLod.equals(next.lod()))
+                settingsLegacyReconnects = repushSessionConfig()[1];
+            refreshedGeneration = next.generation().enabled();
+            advertisedLod = next.lod();
+            generationRefreshPending = false;
+            if (!adoptedServicePolicy.equals(next.service())) {
+                runServiceGateSweeps(serviceConfig);
+                adoptedServicePolicy = next.service();
+            }
+            if (!adoptedFarPlayerPolicy.equals(next.farPlayers())) {
+                farPlayerTickCounter = Integer.MAX_VALUE - 1;
+                tickFarPlayers(serviceConfig);
+                adoptedFarPlayerPolicy = next.farPlayers();
+            }
+            return (Void) null;
+        }));
+        var result = java.util.concurrent.CompletableFuture.allOf(session, store)
+                .thenCompose(ignored -> submitSettingsControl(() -> {
+                    if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
+                    settingsFeedback = new SettingsFeedback(revision, settingsLegacyReconnects, settingsDrainingStatus());
+                    return (Void) null;
+                }));
+        settingsReceipts.add(result);
+        result.whenComplete((value, failure) -> {
+            settingsReceipts.remove(result);
+            if (revision == settingsRevision && failure != null) generationRefreshPending = false;
+        });
+        return result;
+    }
+
     public void tick() {
-        if (!LSSServerConfig.CONFIG.enabled) return;
+        if (!serviceConfig.enabled()) return;
 
         this.diag.reset(this.offThreadProcessor.getDiagnostics());
 
-        var config = LSSServerConfig.CONFIG;
+        var config = serviceConfig;
         applyRuntimeConfig(config);
         // Service gate (plan §2.3): permission rechecks are tick-cadenced — the reads
         // run on this thread only, every PERMISSION_RECHECK_TICKS.
@@ -689,7 +837,7 @@ public class RequestProcessingService {
      *  boot-set in practice (not in the {@code /lsslod set} registry — a flip needs a
      *  restart). */
     public void handleRegionSummaryRequest(ServerPlayer player, byte[] body) {
-        if (!LSSServerConfig.CONFIG.enabled || !LSSServerConfig.CONFIG.enableRegionSummaries) {
+        if (!serviceConfig.enabled() || !serviceConfig.enableRegionSummaries()) {
             return;
         }
         dev.vox.lss.common.region.RegionSummaryWire.Request request;
@@ -731,8 +879,8 @@ public class RequestProcessingService {
     private void tickFarPlayers(LSSServerConfig config) {
         if (this.farPlayerService.subscriberCount() == 0) return;
         try {
-            if (!this.farPlayerService.applyMode(config.farPlayers, this::sendFarPlayerFrame)) return;
-            if (++this.farPlayerTickCounter < config.farPlayersUpdateIntervalTicks) return;
+            if (!this.farPlayerService.applyMode(config.farPlayers(), this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < config.farPlayersUpdateIntervalTicks()) return;
             this.farPlayerTickCounter = 0;
             var online = new java.util.ArrayList<dev.vox.lss.common.farplayers
                     .FarPlayerBroadcastService.PlayerSnapshot>();
@@ -741,9 +889,9 @@ public class RequestProcessingService {
             }
             this.farPlayerService.tick(System.currentTimeMillis(), online,
                     new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
-                            config.farPlayers, config.farPlayersMaxDistanceBlocks,
-                            config.farPlayersMinDistanceBlocks, config.farPlayersSendSpectators,
-                            config.farPlayersExclude, config.farPlayersUpdateIntervalTicks),
+                            config.farPlayers(), config.farPlayersMaxDistanceBlocks(),
+                            config.farPlayersMinDistanceBlocks(), config.farPlayersSendSpectators(),
+                            config.farPlayersExclude(), config.farPlayersUpdateIntervalTicks()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): END_SERVER_TICK has no catch of its own — a
@@ -777,7 +925,7 @@ public class RequestProcessingService {
         return true;
     }
 
-    // /lsslod set support (v0.11.0 stage C — the tick-poll pattern): each formerly
+    // Active-settings reconciliation on the service owner: each formerly
     // capture-at-construction consumer re-applies config at the top of the tick, on the
     // thread that owns its state (the broadcaster's live-read precedent). Change-guarded
     // so the steady state costs a few field compares.
@@ -806,16 +954,16 @@ public class RequestProcessingService {
 
     /**
      * Push a fresh SessionConfig to every CURRENT-dialect (v20) session after a
-     * runtime {@code set lodDistanceChunks} (SET plan §"Pushing the new distance").
+     * explicit settings reload changing terrain distance (SET plan §"Pushing the new distance").
      * Legacy sessions (v19/v18/v16) are deliberately skipped — their clients'
      * mid-session-config behavior is release-frozen and unverified; they keep the
      * handshake distance until rejoin. Fabric: commands run on the server thread (=
-     * tick thread), so this is called directly from the set handler.
+     * tick thread), so reload completion returns here through the server owner.
      *
      * @return {pushed, legacySkipped}
      */
     public int[] repushSessionConfig() {
-        var config = LSSServerConfig.CONFIG;
+        var config = serviceConfig;
         int pushed = 0;
         int legacy = 0;
         for (var state : this.players.values()) {
@@ -827,9 +975,9 @@ public class RequestProcessingService {
             var player = state.getPlayer();
             var payload = new SessionConfigS2CPayload(
                     LSSConstants.PROTOCOL_VERSION,
-                    config.enabled,
+                    config.enabled(),
                     lodDistanceFor(player),
-                    config.enableChunkGeneration,
+                    generationEnabledForSession(),
                     net.minecraft.SharedConstants.getCurrentVersion()
                             .dataVersion().version());
             try {
@@ -870,7 +1018,7 @@ public class RequestProcessingService {
      */
     public void runServiceGateSweeps(LSSServerConfig config) {
         var gateState = this.serviceGateState;
-        if (config.requireServicePermission) {
+        if (config.requireServicePermission()) {
             // The armed-gate-without-provider warn (plan §2.1/§8 N-2, as-built at the
             // sweep so ONE site covers boot AND a runtime set arm — it fires within
             // one recheck interval of either). Only Fabric can lack a backend
@@ -913,7 +1061,7 @@ public class RequestProcessingService {
                                     LSSConstants.PROTOCOL_VERSION, false,
                                     // Inert under enabled=false, but resolved per-world for
                                     // consistency (no raw per-player lodDistanceChunks reads left).
-                                    lodDistanceFor(player), config.enableChunkGeneration,
+                                    lodDistanceFor(player), generationEnabledForSession(),
                                     net.minecraft.SharedConstants.getCurrentVersion()
                                             .dataVersion().version()));
                 } catch (Exception e) {
@@ -956,7 +1104,7 @@ public class RequestProcessingService {
                     continue;
                 }
                 boolean cleared;
-                if (!config.requireServicePermission) {
+                if (!config.requireServicePermission()) {
                     cleared = true; // a disarmed gate trivially clears everyone
                 } else {
                     try {
@@ -973,7 +1121,7 @@ public class RequestProcessingService {
                 if (remembered == null) continue;
                 LSSLogger.info("Re-offering " + dev.vox.lss.common.Brand.shortName() + " to "
                         + remembered.playerName() + " (re-offer): "
-                        + (config.requireServicePermission
+                        + (config.requireServicePermission()
                                 ? "the service permission cleared"
                                 : "requireServicePermission was disarmed")
                         + " — replaying the stored handshake");
@@ -1090,16 +1238,16 @@ public class RequestProcessingService {
                 // ⇒ equal ⇒ no push ⇒ byte-identical to pre-feature behavior). Gated on
                 // CURRENT because dialectOf defaults untracked ids to CURRENT.
                 int newDist = lodDistanceFor(player);
-                int prevDist = LSSServerConfig.CONFIG.lodDistanceForWorld(
+                int prevDist = serviceConfig.lodDistanceForWorld(
                         prevDim == null ? null : prevDim.location().toString());
                 if (newDist != prevDist && this.dialects.isCurrent(player.getUUID())) {
                     try {
                         dev.vox.lss.platform.LoaderServices.get().sendToPlayer(player,
                                 new SessionConfigS2CPayload(
                                         LSSConstants.PROTOCOL_VERSION,
-                                        config.enabled,
+                                        config.enabled(),
                                         newDist,
-                                        config.enableChunkGeneration,
+                                        generationEnabledForSession(),
                                         net.minecraft.SharedConstants.getCurrentVersion()
                                                 .dataVersion().version()));
                     } catch (Exception e) {
@@ -1153,7 +1301,7 @@ public class RequestProcessingService {
                                List<TickSnapshot.GenerationReadyData> generationReady,
                                LSSServerConfig config) {
         this.offThreadProcessor.postSnapshot(
-                lifecycle.buffers.toSnapshot(config.sendQueueLimitPerPlayer), generationReady);
+                lifecycle.buffers.toSnapshot(config.sendQueueLimitPerPlayer()), generationReady);
     }
 
     /** Test seam (D9): puts one column payload on the wire for one player. Production default
@@ -1171,7 +1319,7 @@ public class RequestProcessingService {
         // is APPLIED inside the flush loop below so it rides allocationBytes into the
         // bandwidth bucket's bank clamp (the m12 plumbing). Disabled = factors reset,
         // so a live kill-switch flip cannot leave a stale cut behind.
-        if (config.enablePingBackstop) {
+        if (config.enablePingBackstop()) {
             long now = System.currentTimeMillis();
             for (var state : this.players.values()) {
                 int ping = -1;
@@ -1189,15 +1337,15 @@ public class RequestProcessingService {
         }
         flushSendQueues(this.players.values(), perPlayerCap, this.bandwidthLimiter, this.diag,
                 this::sendColumnPayload, this.offThreadProcessor,
-                config.lodYieldsToVanillaTransport,
+                config.lodYieldsToVanillaTransport(),
                 // The prune is the YIELD's companion (§2.1 — long queue residency is a
                 // yield phenomenon) and must not ship armed under the default-FALSE
                 // posture (review B-2): radius 0 disables it while the gate is off.
-                config.lodYieldsToVanillaTransport
+                config.lodYieldsToVanillaTransport()
                         ? config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
                                 + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS
                         : 0,
-                config.enableSendPacing);
+                config.enableSendPacing());
     }
 
     /** Warn-once latch for the v16 egress guard (MAIN thread only). */
@@ -1560,7 +1708,8 @@ public class RequestProcessingService {
             // generation in-flight tracking (removeGenerationTracking) — without that sweep the
             // dropped ticket's tracking would leak (do not add a drop path that skips it).
             if (!dimension.equals(req.dimension())) continue;
-            boolean accepted = !player.isRemoved() && this.generationService.submitGeneration(
+            boolean accepted = req.policyRevision() == this.settingsRevision
+                    && !player.isRemoved() && this.generationService.submitGeneration(
                     req.playerUuid(), req.registration(), level, req.cx(), req.cz(),
                     req.submissionOrder());
             if (!accepted) {
@@ -1574,6 +1723,7 @@ public class RequestProcessingService {
     }
 
     private void drainSendActions() {
+        if (generationRefreshPending) return;
         this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
             // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
             // prune them from the synthetic want-set. The frame itself is wire-identical.
@@ -1746,7 +1896,7 @@ public class RequestProcessingService {
     }
 
     public String getTickDiagnostics() {
-        return this.diag.format(LSSServerConfig.CONFIG.sendQueueLimitPerPlayer);
+        return this.diag.format(serviceConfig.sendQueueLimitPerPlayer());
     }
 
     public TickDiagnostics getTickDiag() {
@@ -1758,6 +1908,7 @@ public class RequestProcessingService {
     }
 
     public void shutdown() {
+        cancelSettingsReceipts();
         this.serviceGateState.clear();
         try {
             // Own containment, FIRST (P2 review I-m2): no ordering dependency on the

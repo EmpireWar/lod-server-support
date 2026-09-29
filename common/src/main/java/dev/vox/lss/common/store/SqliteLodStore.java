@@ -68,8 +68,8 @@ import java.util.function.Function;
  * <p><b>Containment:</b> every entry point catches {@link Throwable}. Read-side failures
  * count {@code store.errors} and read as misses. Repeated writer-side failures latch the
  * store OFF one-way ({@code store=unavailable} in diag) with one warning. {@code
- * org.sqlite.tmpdir} is pointed at the store directory before the first connection
- * (noexec /tmp ships {@code UnsatisfiedLinkError} otherwise). A WAL watchdog issues
+ * org.sqlite.tmpdir} defaults to the installation runtime cache, preserving explicit
+ * operator overrides. SQLite is isolated from the host classpath. A WAL watchdog issues
  * {@code wal_checkpoint(TRUNCATE)} above a size threshold (PASSIVE checkpoints cannot
  * reset the WAL under continuous readers) and feeds {@code store.wal_bytes}/{@code
  * db_bytes}/{@code checkpoint_ms_max}.
@@ -230,12 +230,44 @@ public final class SqliteLodStore implements LodStoreService {
         record Resweep() implements Op {}
         record BackfillMark(String dim, int rx, int rz) implements Op {}
         record DropAll() implements Op {}
+        record Policy(StorePolicy policy, java.util.concurrent.CompletableFuture<Void> adopted) implements Op {}
     }
 
     private final LodStoreMode mode;
     private final LodStoreDiagnostics diag;
     private final StoreCodec codec;
     private final Environment env;
+    public record StorePolicy(long maxDbBytes, int resweepSeconds, long revision) {}
+    private volatile StorePolicy policy;
+    private final java.util.Set<java.util.concurrent.CompletableFuture<Void>> policyReceipts =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Queued on the existing SQLite owner; no connection or identity changes. */
+    public java.util.concurrent.CompletableFuture<Void> updatePolicy(long capBytes, int resweepSeconds, long revision) {
+        var receipt = new java.util.concurrent.CompletableFuture<Void>();
+        policyReceipts.add(receipt);
+        receipt.whenComplete((v, e) -> policyReceipts.remove(receipt));
+        if (shutdown.get() || latchedOff || !batcher.isAlive()) {
+            receipt.completeExceptionally(new IllegalStateException("Store owner is inactive"));
+            return receipt;
+        }
+        var update = new Op.Policy(new StorePolicy(capBytes <= 0 ? Long.MAX_VALUE : capBytes,
+                Math.max(0, resweepSeconds), revision), receipt);
+        controlQueue.add(update);
+        if (shutdown.get() || latchedOff || !batcher.isAlive()) {
+            controlQueue.remove(update);
+            receipt.completeExceptionally(new IllegalStateException("Store owner is inactive"));
+        }
+        return receipt;
+    }
+
+    public StorePolicy adoptedPolicy() { return policy; }
+    public long adoptedPolicyRevision() { return policy.revision(); }
+    long nextResweepNanosForTest() { return nextResweepNanos; }
+    private void cancelPolicyReceipts() {
+        for (var receipt : policyReceipts)
+            receipt.completeExceptionally(new java.util.concurrent.CancellationException("Store owner stopped"));
+    }
     private final Path dbPath;
 
     private final ArrayBlockingQueue<Op> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
@@ -249,6 +281,13 @@ public final class SqliteLodStore implements LodStoreService {
             new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final Thread batcher;
     private final AtomicBoolean shutdown = new AtomicBoolean();
+    private final StoreDirectoryLease directoryLease;
+    private final Object lifecycleLock = new Object();
+    private int activeReaders;
+    private boolean batcherFinished;
+    private boolean cleanupStarted;
+    private volatile boolean uncertainConnectionClose;
+
     // One-way containment latch: after repeated writer failures the store stops serving
     // and stops accepting work (diag renders store=unavailable via the null-store path).
     private volatile boolean latchedOff;
@@ -335,25 +374,39 @@ public final class SqliteLodStore implements LodStoreService {
 
     private SqliteLodStore(LodStoreMode mode, StoreCodec codec, Environment env,
                            LodStoreDiagnostics diag) throws Exception {
+        this(mode, codec, env, diag, SqliteDriverRuntime::connect);
+    }
+
+    // Inject only the disposable probe connector; real store IO always uses the private runtime.
+    SqliteLodStore(LodStoreMode mode, StoreCodec codec, Environment env,
+                   LodStoreDiagnostics diag, SqliteDriverRuntime.Connector probeConnector) throws Exception {
         this.mode = mode;
         this.codec = codec;
         this.env = env;
+        this.policy = new StorePolicy(env.maxDbBytes(), env.resweepSeconds(), 0);
         this.diag = diag;
-        Files.createDirectories(env.storeDir());
-        // noexec /tmp: sqlite-jdbc extracts its native lib to org.sqlite.tmpdir; the
-        // world folder is always writable+executable for the server.
-        if (System.getProperty("org.sqlite.tmpdir") == null) {
-            System.setProperty("org.sqlite.tmpdir", env.storeDir().toString());
-        }
         this.dbPath = env.storeDir().resolve(DB_FILE);
-        // Open + validate meta on the CALLER thread (service construction): a mismatch
-        // or corruption drops the DB and recreates it fresh — before the batcher exists.
-        openOrRecreateWriter();
-        initMigrationState();
+        this.directoryLease = StoreDirectoryLease.acquire(env.storeDir());
         this.batcher = new Thread(this::batcherLoop, Brand.shortName() + " LOD Store SQLite");
         this.batcher.setDaemon(true);
         this.batcher.setPriority(Thread.MIN_PRIORITY + 1);
-        this.batcher.start();
+        try {
+            SqliteDriverRuntime.probe(env.storeDir(), probeConnector);
+            openOrRecreateWriter();
+            initMigrationState();
+            this.batcher.start();
+        } catch (Throwable failure) {
+            boolean uncertain = failure instanceof SqliteDriverRuntime.ProbeCloseException;
+            try {
+                closeWriter();
+            } catch (Throwable close) { failure.addSuppressed(close); uncertain = true; }
+            if (!uncertain) {
+                try { this.directoryLease.close(); }
+                catch (Throwable close) { failure.addSuppressed(close); uncertain = true; }
+            }
+            if (uncertain) this.directoryLease.retainUntilProcessExit();
+            throw failure;
+        }
     }
 
     // ---- lifecycle / meta ----
@@ -410,9 +463,9 @@ public final class SqliteLodStore implements LodStoreService {
                 }
             }
         } catch (Exception first) {
-            // Any failure here (corrupt DB, bad page) → drop and rebuild once.
-            LSSLogger.warn("LOD store: could not open the existing store — dropping and"
-                    + " rebuilding (derived data)", first);
+            // Only positively identified corruption can authorize destructive recovery.
+            if (!isDatabaseCorruption(first)) throw first;
+            LSSLogger.warn("LOD store: confirmed database corruption — rebuilding derived data", first);
             closeWriter();
             deleteDbFiles();
             openWriter();
@@ -420,10 +473,14 @@ public final class SqliteLodStore implements LodStoreService {
         }
     }
 
+    static boolean isDatabaseCorruption(Throwable failure) {
+        if (!(failure instanceof SQLException sql)) return false;
+        int primary = sql.getErrorCode() & 0xff;
+        return primary == 11 || primary == 26; // SQLITE_CORRUPT / SQLITE_NOTADB
+    }
+
     private void openWriter() throws SQLException {
-        var ds = new org.sqlite.SQLiteDataSource();
-        ds.setUrl("jdbc:sqlite:" + this.dbPath);
-        this.writer = ds.getConnection();
+        this.writer = SqliteDriverRuntime.connect(this.dbPath);
         try (Statement st = this.writer.createStatement()) {
             // Brief lock contention (a reader mid-schema-read, an external inspection
             // tool) must wait, not throw: with timeout 0 a single SQLITE_BUSY costs a
@@ -434,7 +491,7 @@ public final class SqliteLodStore implements LodStoreService {
             // Phase 5 eviction; on an existing DB it is a no-op (v1 stores rebuild via
             // the schema bump instead).
             st.execute("PRAGMA auto_vacuum=INCREMENTAL");
-            st.execute("PRAGMA journal_mode=WAL");
+            SqliteDriverRuntime.requireWal(st);
             st.execute("PRAGMA synchronous=NORMAL");
             st.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
             st.execute("CREATE TABLE IF NOT EXISTS dims (id INTEGER PRIMARY KEY,"
@@ -710,13 +767,13 @@ public final class SqliteLodStore implements LodStoreService {
         }
     }
 
-    private void closeWriter() {
+    private void closeWriter() throws SQLException {
         for (var ps : this.insertByDim.values()) {
             try { ps.close(); } catch (Exception ignored) { }
         }
         this.insertByDim.clear();
         if (this.writer != null) {
-            try { this.writer.close(); } catch (Exception ignored) { }
+            this.writer.close();
             this.writer = null;
         }
     }
@@ -730,6 +787,12 @@ public final class SqliteLodStore implements LodStoreService {
 
     @Override
     public StoreHit get(String dimension, long packed) {
+        if (!admitReader()) return null;
+        try { return getAdmitted(dimension, packed); }
+        finally { releaseReader(); }
+    }
+
+    private StoreHit getAdmitted(String dimension, long packed) {
         if (!this.serving || this.latchedOff) return null;
         var tombs = this.tombstones.get(dimension);
         if (tombs != null && tombs.containsKey(packed)) return null;
@@ -753,17 +816,17 @@ public final class SqliteLodStore implements LodStoreService {
                 if (usize < 0 || usize > MAX_ROW_USIZE) {
                     // Bound the alloc BEFORE trusting the row's own size field — a
                     // bit-rotted usize otherwise allocates whatever it says (R1).
-                    throw new IllegalStateException("row integrity failure at " + packed
+                    throw new RowIntegrityException("row integrity failure at " + packed
                             + " (usize " + usize + " out of bounds)");
                 }
                 byte[] blob = rs.getBytes(5);
-                byte[] raw = this.codec.decompress(blob, usize);
+                byte[] raw = decodeRow(blob, usize);
                 // Per-row hash dispatch (C4): pre-migration 19-rows were written under
                 // FNV-1a 64 (schema 3); everything else validates under CRC32C.
                 long expect = wirefmt == WIREFMT_NATIVE_19
                         ? LodStoreService.legacyContentHashFnv(raw) : contentHash(raw);
                 if (raw.length != usize || expect != chash) {
-                    throw new IllegalStateException("row integrity failure at " + packed
+                    throw new RowIntegrityException("row integrity failure at " + packed
                             + " (usize/chash mismatch)");
                 }
                 return new StoreHit(raw, ts, wirefmt);
@@ -775,7 +838,7 @@ public final class SqliteLodStore implements LodStoreService {
             // failure) — a transient SQLException (SQLITE_BUSY under the WAL watchdog,
             // an IO hiccup) must not destroy a good row per attempt (R1 review); it
             // reads as a miss and the next re-declaration retries.
-            if (!(t instanceof SQLException)) {
+            if (t instanceof RowIntegrityException) {
                 enqueueControl(new Op.DeleteRows(dimension, new long[]{packed}));
             }
             if (this.readErrorWarned.compareAndSet(false, true)) {
@@ -797,6 +860,12 @@ public final class SqliteLodStore implements LodStoreService {
      */
     @Override
     public FrameHit getFrame(String dimension, long packed) {
+        if (!admitReader()) return null;
+        try { return getFrameAdmitted(dimension, packed); }
+        finally { releaseReader(); }
+    }
+
+    private FrameHit getFrameAdmitted(String dimension, long packed) {
         if (!this.serving || this.latchedOff) return null;
         var tombs = this.tombstones.get(dimension);
         if (tombs != null && tombs.containsKey(packed)) return null;
@@ -818,7 +887,7 @@ public final class SqliteLodStore implements LodStoreService {
                 int wirefmt = rs.getInt(4);
                 if (usize == 0) return new FrameHit(EMPTY, 0, ts, wirefmt);
                 if (usize < 0 || usize > MAX_ROW_USIZE) {
-                    throw new IllegalStateException("row integrity failure at " + packed
+                    throw new RowIntegrityException("row integrity failure at " + packed
                             + " (usize " + usize + " out of bounds)");
                 }
                 byte[] blob = rs.getBytes(5);
@@ -826,8 +895,8 @@ public final class SqliteLodStore implements LodStoreService {
                 long expect = wirefmt == WIREFMT_NATIVE_19
                         ? LodStoreService.legacyContentHashFnv(blob) : contentHash(blob);
                 if (expect != fhash
-                        || this.codec.declaredContentSize(blob) != usize) {
-                    throw new IllegalStateException("row integrity failure at " + packed
+                        || this.codec.declaredContentSizeForStore(blob) != usize) {
+                    throw new RowIntegrityException("row integrity failure at " + packed
                             + " (fhash/declared-size mismatch)");
                 }
                 return new FrameHit(blob, usize, ts, wirefmt);
@@ -837,7 +906,7 @@ public final class SqliteLodStore implements LodStoreService {
             this.diag.recordError();
             // Same purge triage as get(): row-poison throws purge; transient
             // SQLExceptions read as a miss and retry on the next re-declaration.
-            if (!(t instanceof SQLException)) {
+            if (t instanceof RowIntegrityException) {
                 enqueueControl(new Op.DeleteRows(dimension, new long[]{packed}));
             }
             if (this.readErrorWarned.compareAndSet(false, true)) {
@@ -855,9 +924,7 @@ public final class SqliteLodStore implements LodStoreService {
         if (this.shutdown.get()) return null; // closing conns; a new one would leak
         Connection created = null;
         try {
-            var ds = new org.sqlite.SQLiteDataSource();
-            ds.setUrl("jdbc:sqlite:" + this.dbPath);
-            created = ds.getConnection();
+            created = SqliteDriverRuntime.connect(this.dbPath);
             if (this.failNextReaderSetupForTest) {
                 // TEST-ONLY fault seam (three-lens review): the F3 pragma-throw path —
                 // a throw after getConnection() succeeded must close the handle, and the
@@ -899,9 +966,9 @@ public final class SqliteLodStore implements LodStoreService {
         }
     }
 
-    private static void closeQuietly(Connection c) {
+    private void closeQuietly(Connection c) {
         if (c == null) return;
-        try { c.close(); } catch (Exception ignored) { }
+        try { c.close(); } catch (Throwable failure) { this.uncertainConnectionClose = true; }
     }
 
     private static final int READER_STMT_GET = 0;
@@ -1049,10 +1116,21 @@ public final class SqliteLodStore implements LodStoreService {
         return this.serving && !this.latchedOff;
     }
 
+    /** Only a live startup sweep can recover health without another operator action. */
+    boolean isStartupSweepPending() {
+        return this.sweepDone.getCount() != 0 && !this.shutdown.get() && !this.latchedOff;
+    }
+
     /** Row-existence check WITHOUT the blob fetch + decompress + integrity hash a full
      *  get() pays — the backfill's skip rung (review finding: a warm region walk was
      *  1024 back-to-back full-row reads). Tombstones honored like get(). */
     public boolean hasRow(String dimension, long packed) {
+        if (!admitReader()) return false;
+        try { return hasRowAdmitted(dimension, packed); }
+        finally { releaseReader(); }
+    }
+
+    private boolean hasRowAdmitted(String dimension, long packed) {
         if (!this.serving || this.latchedOff) return false;
         var tombs = this.tombstones.get(dimension);
         if (tombs != null && tombs.containsKey(packed)) return false;
@@ -1113,6 +1191,12 @@ public final class SqliteLodStore implements LodStoreService {
 
     /** Whether a region was already backfilled (backfill-thread read connection). */
     public boolean isBackfillRegionDone(String dimension, int rx, int rz) {
+        if (!admitReader()) return false;
+        try { return isBackfillRegionDoneAdmitted(dimension, rx, rz); }
+        finally { releaseReader(); }
+    }
+
+    private boolean isBackfillRegionDoneAdmitted(String dimension, int rx, int rz) {
         if (this.latchedOff) return true; // latched store: do no work
         try {
             Connection c = readerConnection();
@@ -1161,6 +1245,7 @@ public final class SqliteLodStore implements LodStoreService {
     @Override
     public void shutdown() {
         if (!this.shutdown.compareAndSet(false, true)) return;
+        cancelPolicyReceipts();
         this.serving = false; // a post-shutdown get() must miss, not race closing conns
         this.batcher.interrupt();
         try {
@@ -1168,28 +1253,70 @@ public final class SqliteLodStore implements LodStoreService {
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
         }
+        finishCloseWhenIdle();
+        this.diag.setQueueDepth(0);
+    }
+
+    private boolean admitReader() {
+        synchronized (this.lifecycleLock) {
+            if (this.shutdown.get()) return false;
+            this.activeReaders++;
+            return true;
+        }
+    }
+
+    private void releaseReader() {
+        synchronized (this.lifecycleLock) { this.activeReaders--; }
+        finishCloseWhenIdle();
+    }
+
+    /** No native handle is closed while a reader/batcher can still use the database.
+     * A timed-out shutdown keeps the directory reserved until its last user exits. */
+    private void finishCloseWhenIdle() {
+        synchronized (this.lifecycleLock) {
+            if (!this.shutdown.get() || !this.batcherFinished || this.activeReaders != 0
+                    || this.cleanupStarted) return;
+            this.cleanupStarted = true;
+        }
         synchronized (this.allReaderConns) {
-            for (var c : this.allReaderConns) {
-                try { c.close(); } catch (Exception ignored) { }
-            }
+            for (var c : this.allReaderConns) closeQuietly(c);
             this.allReaderConns.clear();
         }
-        // The batcher exited (or is wedged — then skip: single-writer discipline).
-        if (!this.batcher.isAlive()) {
-            try {
-                if (this.writer != null) {
-                    // Deliberately NO mtime snapshot here: seen_mtime is only ever
-                    // written next to an actual header examination (see sweepDimension)
-                    // — a shutdown-time stat would mark unexamined regions as seen and
-                    // let offline edits skip every future sweep.
-                    this.writer.commit();
-                    checkpointTruncate();
-                }
-            } catch (Throwable ignored) {
+        try {
+            if (this.writer != null) {
+                // Never stamp region mtimes on shutdown: only actual sweeps may do so.
+                try { this.writer.commit(); checkpointTruncate(); }
+                catch (Throwable failure) { this.diag.recordError(); }
             }
             closeWriter();
+            if (!this.uncertainConnectionClose) this.directoryLease.close();
+        } catch (Throwable failure) {
+            this.uncertainConnectionClose = true;
+            LSSLogger.warn("LOD store close failed; retaining directory ownership until JVM exit", failure);
+        } finally {
+            if (this.uncertainConnectionClose) {
+                this.directoryLease.retainUntilProcessExit();
+                LSSLogger.warn("LOD store native close uncertain; restart the JVM before reopening this store");
+            }
         }
-        this.diag.setQueueDepth(0);
+    }
+
+    private static final class RowIntegrityException extends RuntimeException {
+        RowIntegrityException(String message) { super(message); }
+    }
+
+    private byte[] decodeRow(byte[] blob, int size) {
+        if (blob == null) throw new RowIntegrityException("null compressed row");
+        try { return this.codec.decompress(blob, size); }
+        catch (com.github.luben.zstd.ZstdException corrupt) {
+            // Native/linkage errors never enter this path; do not delete good rows for
+            // allocation failures. zstd's stable format errors are defined in zstd_errors.h.
+            long code = corrupt.getErrorCode();
+            if (code == 10 || code == 20 || code == 22 || code == 32 || code == 70 || code == 72) {
+                throw new RowIntegrityException("invalid compressed row: " + corrupt.getMessage());
+            }
+            throw corrupt;
+        }
     }
 
     // ---- batcher thread ----
@@ -1465,6 +1592,14 @@ public final class SqliteLodStore implements LodStoreService {
     }
 
     private void batcherLoop() {
+        try { runBatcher(); }
+        finally {
+            synchronized (this.lifecycleLock) { this.batcherFinished = true; }
+            finishCloseWhenIdle();
+        }
+    }
+
+    private void runBatcher() {
         try {
             startupSweep();
         } catch (InterruptedException e) {
@@ -1477,8 +1612,8 @@ public final class SqliteLodStore implements LodStoreService {
         } finally {
             this.sweepDone.countDown();
         }
-        this.nextResweepNanos = this.env.resweepSeconds() > 0
-                ? System.nanoTime() + TimeUnit.SECONDS.toNanos(this.env.resweepSeconds())
+        this.nextResweepNanos = this.policy.resweepSeconds() > 0
+                ? System.nanoTime() + TimeUnit.SECONDS.toNanos(this.policy.resweepSeconds())
                 : Long.MAX_VALUE;
         while (!this.shutdown.get() && !this.latchedOff) {
             // Test seam: lets a test single-step the batcher, so the window between
@@ -1528,7 +1663,7 @@ public final class SqliteLodStore implements LodStoreService {
                 // expiry floor inside sweepTombstones, no longer the idle gate.
                 sweepTombstones(now);
                 if (now >= this.nextResweepNanos) {
-                    this.nextResweepNanos = now + TimeUnit.SECONDS.toNanos(this.env.resweepSeconds());
+                    this.nextResweepNanos = now + TimeUnit.SECONDS.toNanos(this.policy.resweepSeconds());
                     commitTxn();
                     runSweep(false);
                 }
@@ -1554,12 +1689,14 @@ public final class SqliteLodStore implements LodStoreService {
                 // latchOff() stops serving, so a permanently broken writer can not
                 // serve the undeleted row either.
                 if (op instanceof Op.DeleteRows) this.controlQueue.add(op);
+                if (op instanceof Op.Policy update) update.adopted().completeExceptionally(t);
                 if (++this.writerFailures >= WRITE_FAILURE_LATCH) {
                     latchOff("repeated write failures", t);
                 }
             }
             this.diag.setQueueDepth(queueDepth());
         }
+        cancelPolicyReceipts();
         // Graceful exit: flush queued deletes (never shed — see controlQueue), then the
         // txn. Containment is PER OP: one failing delete must not abandon the rest
         // (the boot sweep is the cross-restart backstop for whatever still fails —
@@ -1579,10 +1716,11 @@ public final class SqliteLodStore implements LodStoreService {
 
     private void latchOff(String why, Throwable t) {
         this.latchedOff = true;
+        cancelPolicyReceipts();
         this.serving = false;
         if (this.latchWarned.compareAndSet(false, true)) {
             LSSLogger.warn("LOD store disabled for this session (" + why + ") — serving"
-                    + " continues via the normal disk path; the store rebuilds next start"
+                    + " continues via the normal disk path; the store is retried next start"
                     + " (derived data)", t);
         }
         this.queue.clear();
@@ -1630,6 +1768,18 @@ public final class SqliteLodStore implements LodStoreService {
             throw new SQLException("test-injected writer failure");
         }
         switch (op) {
+            case Op.Policy update -> {
+                commitTxn();
+                if (update.policy().revision() < this.policy.revision()) {
+                    update.adopted().completeExceptionally(new java.util.concurrent.CancellationException("Superseded store policy"));
+                } else {
+                    if (update.policy().resweepSeconds() != this.policy.resweepSeconds())
+                        this.nextResweepNanos = update.policy().resweepSeconds() == 0 ? Long.MAX_VALUE
+                                : System.nanoTime() + TimeUnit.SECONDS.toNanos(update.policy().resweepSeconds());
+                    this.policy = update.policy();
+                    update.adopted().complete(null);
+                }
+            }
             case Op.Deposit dep -> applyDeposit(dep);
             case Op.DeleteRows del -> {
                 Integer dimId = this.dimIds.get(del.dim());
@@ -2024,7 +2174,7 @@ public final class SqliteLodStore implements LodStoreService {
             // whether or not the vacuum keeps up; the vacuum is now purely about
             // returning space to the filesystem.
             long liveBytes = logicalDbBytes();
-            if (liveBytes > this.env.maxDbBytes()) {
+            if (liveBytes > this.policy.maxDbBytes()) {
                 commitTxn();
                 // Firm cap (review B12): ONE 512-row/dim batch per 5 s tick
                 // (~780 KB/s) is out-runnable by deposits — the backfill default alone
@@ -2033,9 +2183,9 @@ public final class SqliteLodStore implements LodStoreService {
                 // and with the ts index each pass is an index walk, not a table scan.
                 // Evict to a little UNDER the cap: landing exactly on it puts the
                 // store back into this branch on the very next gauge tick.
-                long target = (long) (this.env.maxDbBytes() * EVICTION_TARGET_FRACTION);
+                long target = (long) (this.policy.maxDbBytes() * EVICTION_TARGET_FRACTION);
                 for (int pass = 0; pass < MAX_EVICTION_PASSES_PER_TICK
-                        && liveBytes > this.env.maxDbBytes(); pass++) {
+                        && liveBytes > this.policy.maxDbBytes(); pass++) {
                     int evicted = evictOldestBatch(liveBytes - target);
                     if (evicted == 0) break;
                     // Count + (once) log BEFORE the vacuum: evictOldestBatch has
@@ -2055,10 +2205,10 @@ public final class SqliteLodStore implements LodStoreService {
                         this.capLogEmissions++;
                         LSSLogger.info("LOD store size cap: evicted " + evicted
                                 + " oldest rows (live " + (liveBytes >> 20) + " MB > cap "
-                                + (this.env.maxDbBytes() >> 20) + " MB) — the store is at "
+                                + (this.policy.maxDbBytes() >> 20) + " MB) — the store is at "
                                 + "its size cap and will keep evicting silently; running "
                                 + "totals in '/" + Brand.serverCommand() + " store status' (evicted=), raise or "
-                                + "zero lodStoreMaxMB (0 = uncapped) for full retention");
+                                + "zero storage.lod_store.max_size_mib (0 = uncapped) for full retention");
                     }
                     liveBytes = logicalDbBytes();
                 }
@@ -2083,7 +2233,7 @@ public final class SqliteLodStore implements LodStoreService {
     /** The active size cap in bytes (Long.MAX_VALUE = uncapped); the backfill's
      *  cap-stop gate reads these two rather than re-deriving gauge accounting. */
     long sizeCapBytes() {
-        return this.env.maxDbBytes();
+        return this.policy.maxDbBytes();
     }
 
     /** DropAll fence for the backfill's done-marks (review B9). */
@@ -2103,10 +2253,17 @@ public final class SqliteLodStore implements LodStoreService {
         // the connection without the cache would leave closed-statement handles that only
         // self-heal through the invalidate-on-throw path.
         this.readerStatements.remove();
-        synchronized (this.allReaderConns) {
-            this.allReaderConns.remove(c);
+        synchronized (this.lifecycleLock) {
+            // Cleanup already owns all registered handles, or this close becomes
+            // active work even after shutdown has stopped admitting new queries.
+            if (this.cleanupStarted) return;
+            this.activeReaders++;
         }
-        try { c.close(); } catch (Exception ignored) { }
+        try {
+            synchronized (this.allReaderConns) {
+                if (this.allReaderConns.remove(c)) closeQuietly(c);
+            }
+        } finally { releaseReader(); }
     }
 
     /** One-word health state for status surfaces (review B1): a latched store must

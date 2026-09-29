@@ -39,6 +39,8 @@ import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, ROOT)
+from tools.packaging import sqlite_capsule
 
 FABRIC_FORBIDDEN = "dev/vox/lss/benchmark/"        # benchmark + soak driver live here on Fabric
 PAPER_FORBIDDEN = "dev/vox/lss/paper/soak/"
@@ -84,7 +86,7 @@ def _nested_jars(jar):
         out = []
         for entry in z.namelist():
             if (entry.startswith(("META-INF/jars/", "META-INF/jarjar/"))
-                    and entry.endswith(".jar")):
+                    and entry.endswith(".jar")) or entry == sqlite_capsule.CAPSULE:
                 out.extend(_walk_nested(entry, z.read(entry)))
         return out
 
@@ -96,7 +98,7 @@ def _walk_nested(label, data):
         out.append((label, names))
         for entry in names:
             if (entry.startswith(("META-INF/jars/", "META-INF/jarjar/"))
-                    and entry.endswith(".jar")):
+                    and entry.endswith(".jar")) or entry == sqlite_capsule.CAPSULE:
                 out.extend(_walk_nested(f"{label}!{entry}", z.read(entry)))
     return out
 
@@ -135,6 +137,76 @@ def _manifest(jar):
 
 def _looks_unexpanded(text):
     return "${version}" in text or "${ version }" in text
+
+
+YAML_PREFIX = "dev/vox/lss/internal/yaml/"
+YAML_CODEC = "dev/vox/lss/common/config/YamlSettingsCodec.class"
+YAML_REQUIRED_CLASSES = tuple(YAML_PREFIX + name for name in (
+    "v2/api/LoadSettings.class", "v2/api/lowlevel/Parse.class",
+    "v2/api/lowlevel/Compose.class", "v2/api/lowlevel/Serialize.class",
+    "v2/api/lowlevel/Present.class", "v2/parser/ParserImpl.class",
+    "v2/emitter/Emitter.class", "v2/schema/JsonSchema.class"))
+YAML_LICENSE = "META-INF/licenses/snakeyaml-engine-LICENSE.txt"
+YAML_NOTICE = "META-INF/licenses/snakeyaml-engine-NOTICE.txt"
+YAML_VERSION = "META-INF/maven/org.snakeyaml/snakeyaml-engine/pom.properties"
+YAML_TEMPLATES = tuple("dev/vox/lss/settings/" + side + ".yaml" for side in ("server", "paper", "client"))
+
+
+def _yaml_archives(source, label=None):
+    """Open archives only while inspected; do not inflate unrelated native entries."""
+    with zipfile.ZipFile(source) as archive:
+        yield label, archive
+        for entry in archive.namelist():
+            if entry.startswith(("META-INF/jars/", "META-INF/jarjar/")) and entry.endswith(".jar"):
+                nested_label = entry if label is None else label + "!" + entry
+                yield from _yaml_archives(io.BytesIO(archive.read(entry)), nested_label)
+
+
+def check_yaml_parser(jar, loader, problems):
+    """One common-owned relocated 3.1.1 parser, complete schema resources and notices."""
+    base = os.path.basename(jar)
+    owners = []
+    try:
+        for label, archive in _yaml_archives(jar):
+            names = archive.namelist()
+            stock = [name for name in names if name.startswith("org/snakeyaml/engine/")]
+            where = base if label is None else base + "!" + label
+            if stock:
+                problems.append(f"{where}: unrelocated SnakeYAML Engine namespace ships")
+            parser = [name for name in names if name.startswith(YAML_PREFIX) and name.endswith(".class")]
+            if not parser:
+                continue
+            owners.append(label)
+            if len(parser) != len(set(parser)):
+                problems.append(f"{where}: duplicate relocated parser class entries")
+            missing = set(YAML_REQUIRED_CLASSES + YAML_TEMPLATES + (YAML_CODEC, YAML_LICENSE, YAML_NOTICE, YAML_VERSION)) - set(names)
+            if missing:
+                problems.append(f"{where}: YAML runtime missing required entries: {sorted(missing)}")
+            if YAML_CODEC in names:
+                code = archive.read(YAML_CODEC)
+                if b"org/snakeyaml/engine/" in code or b"org.snakeyaml.engine." in code:
+                    problems.append(f"{where}: YAML codec still links the unrelocated parser")
+            for name in parser:
+                bytecode = archive.read(name)
+                if len(bytecode) < 8 or bytecode[:4] != b"\xca\xfe\xba\xbe" or int.from_bytes(bytecode[6:8], "big") != 55:
+                    problems.append(f"{where}: parser must retain the verified Java 11 bytecode: {name}")
+                    break
+            if YAML_LICENSE in names:
+                license_text = archive.read(YAML_LICENSE)
+                if len(license_text) < 10000 or b"Apache License" not in license_text or b"Version 2.0" not in license_text:
+                    problems.append(f"{where}: incomplete SnakeYAML Apache license")
+            if YAML_NOTICE in names and b"SnakeYAML Engine 3.1.1" not in archive.read(YAML_NOTICE):
+                problems.append(f"{where}: missing SnakeYAML version/copyright notice")
+            if YAML_VERSION in names and b"version=3.1.1\n" not in archive.read(YAML_VERSION):
+                problems.append(f"{where}: parser version is not pinned to 3.1.1")
+    except zipfile.BadZipFile as error:
+        problems.append(f"{base}: unreadable YAML parser archive ({error})")
+    if len(owners) != 1:
+        problems.append(f"{base}: expected exactly one relocated YAML parser copy, found {len(owners)}")
+    elif loader == "fabric" and (owners[0] is None or not owners[0].startswith("META-INF/jars/common-")):
+        problems.append(f"{base}: Fabric YAML parser must live only in its nested common jar")
+    elif loader != "fabric" and owners[0] is not None:
+        problems.append(f"{base}: {loader} YAML parser must be flattened with common")
 
 
 def check_fabric_jar(jar, problems):
@@ -286,17 +358,15 @@ def check_store_natives_fabric(jar, problems):
     fabric.mod.json 'jars' entries and the matrix inside each nested jar are the ship gate."""
     base = os.path.basename(jar)
     nested = dict(_nested_jars(jar))
-    sq = nested.get("META-INF/jars/sqlite-jdbc-slim.jar")
     zs = nested.get("META-INF/jars/zstd-jni-slim.jar")
-    if sq is None or zs is None:
-        problems.append(f"{base}: missing nested store dep jar(s) "
-                        f"(sqlite={'ok' if sq else 'MISSING'}, zstd={'ok' if zs else 'MISSING'})")
+    if zs is None:
+        problems.append(f"{base}: missing nested zstd store dependency")
         return
     try:
         declared = {j.get("file") for j in json.loads(_read(jar, "fabric.mod.json")).get("jars", [])}
     except (KeyError, json.JSONDecodeError):
         return  # check_fabric_jar already flags the descriptor
-    for f in ("META-INF/jars/sqlite-jdbc-slim.jar", "META-INF/jars/zstd-jni-slim.jar"):
+    for f in ("META-INF/jars/zstd-jni-slim.jar",):
         if f not in declared:
             problems.append(f"{base}: fabric.mod.json 'jars' does not declare {f} — "
                             "the loader will never load it")
@@ -311,9 +381,7 @@ def check_store_natives_fabric(jar, problems):
     if undeclared:
         problems.append(f"{base}: nested jar(s) not declared in fabric.mod.json 'jars': "
                         f"{', '.join(undeclared)} — the loader silently ignores them")
-    _check_sqlite_natives(base, "nested sqlite-jdbc-slim.jar", set(sq), problems)
     _check_zstd_natives(base, "nested zstd-jni-slim.jar", set(zs), problems)
-    _check_native_strip(base, "nested sqlite-jdbc-slim.jar", set(sq), problems)
     _check_native_strip(base, "nested zstd-jni-slim.jar", set(zs), problems)
 
 
@@ -322,13 +390,8 @@ def check_store_natives_paper(jar, problems):
     breaks its native loader); the matrix sits at the top level of the shadow jar."""
     base = os.path.basename(jar)
     names = set(_names(jar))
-    if not any(n == "org/sqlite/JDBC.class" for n in names):
-        problems.append(f"{base}: org/sqlite classes missing from the shadow jar")
-        return
-    if any(n.startswith("dev/vox/lss/") and "/sqlite/" in n for n in names):
-        problems.append(f"{base}: org.sqlite appears RELOCATED — relocation breaks the "
-                        "sqlite native loader; it must stay at org/sqlite")
-    _check_sqlite_natives(base, "shadow jar", names, problems)
+    if any(n.startswith("dev/vox/lss/") and "/sqlite/" in n and n.endswith(".class") for n in names):
+        problems.append(f"{base}: org.sqlite appears RELOCATED")
     _check_zstd_natives(base, "shadow jar", names, problems)
     _check_native_strip(base, "shadow jar", names, problems)
 
@@ -348,16 +411,6 @@ def _is_native(n):
 # NOTICES carries its BSD text verbatim), the JPMS module name the dedupe rests on,
 # and the native layout "trimmed" is judged against.
 NEOFORGE_NESTED_LIBS = (
-    {"group": "org.xerial", "artifact": "sqlite-jdbc", "label": "sqlite",
-     "flat_prefix": "org/sqlite/",
-     "probe_class": "dev/vox/lss/common/store/SqliteLodStore.class",
-     "probe_ref": b"org/sqlite/SQLiteDataSource",
-     "lib_class": "org/sqlite/SQLiteDataSource.class",
-     "module_info": "META-INF/versions/9/module-info.class",
-     "license": "META-INF/maven/org.xerial/sqlite-jdbc/LICENSE",
-     "module": "org.xerial.sqlitejdbc",
-     "native_roots": ("org/sqlite/native/",),
-     "kept_dirs": tuple(sorted({n[:n.rfind("/") + 1] for n in SQLITE_NATIVES}))},
     {"group": "com.github.luben", "artifact": "zstd-jni", "label": "zstd",
      "flat_prefix": "com/github/luben/",
      "probe_class": "dev/vox/lss/common/store/StoreCodec.class",
@@ -445,14 +498,10 @@ def _check_nested_lib(jar, base, names, jars_list, lib, problems):
 
 
 def check_store_natives_neoforge(jar, problems):
-    """NeoForge nests BOTH native-carrying libraries as STOCK jarJar libraries
-    (neoforge-jarjar-sqlite-plan.md, extended by issues-275-282-fix-plan.md): FML
-    then dedupes each module across mods, closing the JPMS module collision flat
-    shading has — two modules exporting the same packages is a ResolutionException
-    beside any mod nesting the same artifact: sqlite beside the community Voxy
-    NeoForge port (P-1), zstd-jni beside XMMP (issue #275). Neither can be relocated
-    (their native loaders — zstd-jni's JNI symbol names — derive from the package),
-    so the shadow jar itself must carry NO flat library classes and NO flat natives."""
+    """NeoForge keeps stock zstd-jni in jarJar for FML module deduplication.
+    SQLite lives in the private opaque capsule checked by sqlite_capsule, outside
+    FML's module graph. Neither JNI library may be relocated or flat shaded;
+    the outer jar must contain no exposed library classes or flat natives."""
     base = os.path.basename(jar)
     names = set(_names(jar))
     for lib in NEOFORGE_NESTED_LIBS:
@@ -482,12 +531,12 @@ def check_store_natives_neoforge(jar, problems):
     if flat_natives:
         problems.append(f"{base}: {len(flat_natives)} flat native(s) (e.g. "
                         f"{flat_natives[0]}) — every native-carrying library rides "
-                        "NESTED now; a flat native is a shade/strip regression "
-                        "shipping a second copy beside the nested one")
+                        "inside the private capsule or a nested jar; a flat native "
+                        "is a shade/strip regression shipping an exposed copy")
     meta_path = "META-INF/jarjar/metadata.json"
     if meta_path not in names:
-        problems.append(f"{base}: missing {meta_path} — sqlite and zstd-jni must ride "
-                        "as jarJar nested libraries")
+        problems.append(f"{base}: missing {meta_path} — zstd-jni must ride "
+                        "as a jarJar nested library")
         return
     try:
         meta = json.loads(_read(jar, meta_path))
@@ -658,6 +707,7 @@ def check_wire_identity_neoforge(lss_jar, vss_jar, problems):
     """The VSS repackage must byte-copy every dev/vox/lss CLASS entry (flat shaded jar,
     so the class set IS the wire surface — the Paper sha256-digest check's sibling;
     was CRC32 until the N-4 review, which is weaker than the byte proof it claimed)."""
+    sqlite_capsule.check_pair(lss_jar, vss_jar, problems)
     base = os.path.basename(vss_jar)
     if _class_digest(lss_jar) != _class_digest(vss_jar):
         problems.append(f"{base}: dev/vox/lss/**.class bytes differ from the LSS neoforge "
@@ -710,13 +760,6 @@ def check_third_party_notices(jar, is_fabric, problems):
         return
     if len(_read_raw(jar, "THIRD-PARTY-NOTICES")) < 100:
         problems.append(f"{base}: THIRD-PARTY-NOTICES is (near-)empty")
-    if is_fabric:
-        nested = dict(_nested_jars(jar))
-        sq = nested.get("META-INF/jars/sqlite-jdbc-slim.jar")
-        if sq is not None and "META-INF/maven/org.xerial/sqlite-jdbc/LICENSE" not in set(sq):
-            problems.append(f"{base}: nested sqlite-jdbc-slim.jar lost its in-jar LICENSE "
-                            "— the slim task must not strip it (THIRD-PARTY-NOTICES "
-                            "delegates sqlite's license text to it)")
 
 
 def check_vss_fabric_identity(jar, problems):
@@ -1004,6 +1047,7 @@ def check_wire_identity_paper(lss_jar, vss_jar, problems):
     class bytes of the whole dev/vox/lss/** tree between the LSS and VSS Paper jars. The VSS
     repackage rewrites only plugin.yml + lss-brand.properties; every class (common + paper,
     incl. the wire codecs) must be byte-identical, or branding leaked into behavior."""
+    sqlite_capsule.check_pair(lss_jar, vss_jar, problems)
     vbase = os.path.basename(vss_jar)
     ldig = _class_digest(lss_jar)
     vdig = _class_digest(vss_jar)
@@ -1116,22 +1160,26 @@ def discover(problems, expected_version=None, root=ROOT):
             _flag_ambiguous(vneo, "voxy-server-side-neoforge", problems)
     for jar in fab:
         check_fabric_jar(jar, problems)
+        check_yaml_parser(jar, "fabric", problems)
         check_store_natives_fabric(jar, problems)
         check_third_party_notices(jar, True, problems)
     for jar in pap:
         check_paper_jar(jar, problems)
+        check_yaml_parser(jar, "paper", problems)
         check_store_natives_paper(jar, problems)
         check_third_party_notices(jar, False, problems)
     for jar in neo:
         check_neoforge_jar(jar, problems)
-        # sqlite AND zstd-jni ride NESTED via jarjar (neoforge-jarjar-sqlite-plan.md
-        # + issue #275) — the flat jar carries neither, nor any native.
+        check_yaml_parser(jar, "neoforge", problems)
+        # Stock zstd-jni rides in jarJar (issue #275); SQLite stays in the
+        # private capsule. The outer jar exposes neither library nor its natives.
         check_store_natives_neoforge(jar, problems)
         check_third_party_notices(jar, False, problems)
         if fab:
             check_cross_loader_classes(fab[0], jar, problems)
     for jar in vneo:
         check_neoforge_jar(jar, problems)
+        check_yaml_parser(jar, "neoforge", problems)
         check_store_natives_neoforge(jar, problems)
         check_third_party_notices(jar, False, problems)
         check_vss_neoforge_identity(jar, problems)
@@ -1154,6 +1202,7 @@ def discover(problems, expected_version=None, root=ROOT):
         check_brand_properties(jar, _BRAND_LSS, problems)
     for jar in vfab:
         check_fabric_jar(jar, problems)
+        check_yaml_parser(jar, "fabric", problems)
         check_store_natives_fabric(jar, problems)
         check_third_party_notices(jar, True, problems)
         check_vss_fabric_identity(jar, problems)
@@ -1167,6 +1216,7 @@ def discover(problems, expected_version=None, root=ROOT):
             check_wire_identity_fabric(src, jar, problems)
     for jar in vpap:
         check_paper_jar(jar, problems)
+        check_yaml_parser(jar, "paper", problems)
         check_store_natives_paper(jar, problems)
         check_third_party_notices(jar, False, problems)
         check_vss_paper_identity(jar, problems)
@@ -1179,6 +1229,8 @@ def discover(problems, expected_version=None, root=ROOT):
             check_vss_pair_paper(src, jar, problems)
             check_wire_identity_paper(src, jar, problems)
     check_glob_hygiene(problems, soak)
+    for jar in fab + pap + vfab + vpap + neo + vneo:
+        sqlite_capsule.check(jar, problems)
     return fab, pap, vfab, vpap, neo, vneo, soak
 
 
@@ -1250,6 +1302,16 @@ def _make_jar(path, entries, manifest=None):
 
 
 def _selftest():
+    original = sqlite_capsule.PINS
+    try:
+        sqlite_capsule.PINS = dict(original, capsuleSha256=sqlite_capsule.digest(
+            sqlite_capsule.fixture_entries()[sqlite_capsule.CAPSULE]))
+        return _selftest_fixtures()
+    finally:
+        sqlite_capsule.PINS = original
+
+
+def _selftest_fixtures():
     n = 0
 
     def check(cond, msg):
@@ -1257,10 +1319,23 @@ def _selftest():
         assert cond, "selftest FAIL: " + msg
         n += 1
 
+    def _yaml_entries():
+        entries = {name: b"\xca\xfe\xba\xbe\x00\x00\x00\x37" for name in YAML_REQUIRED_CLASSES}
+        entries[YAML_CODEC] = b"\xca\xfe\xba\xbe\x00\x00\x00\x41"
+        entries[YAML_LICENSE] = "Apache License Version 2.0 " + "x" * 11000
+        entries[YAML_NOTICE] = "SnakeYAML Engine 3.1.1 Copyright (c) 2018, SnakeYAML"
+        entries[YAML_VERSION] = "version=3.1.1\n"
+        entries.update({name: "config_version: 1\n" for name in YAML_TEMPLATES})
+        return entries
+
     def _nested_common(version="0.4.0"):
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as z:
             z.writestr("dev/vox/lss/common/PositionUtil.class", "x")
+            for name, value in _yaml_entries().items():
+                z.writestr(name, value)
+            for name, data in sqlite_capsule.fixture_entries().items():
+                z.writestr(name, data)
         return buf.getvalue()
 
     def _nested_sqlite(with_license=True):
@@ -1287,59 +1362,34 @@ def _selftest():
     # Entries every schema-complete synthetic fabric release jar carries for the
     # store-native matrix check (the real jars nest these via slimStoreDepJars).
     STORE_FABRIC_ENTRIES = {
-        "META-INF/jars/sqlite-jdbc-slim.jar": _nested_sqlite(),
         "META-INF/jars/zstd-jni-slim.jar": _nested_zstd(),
     }
     # Mirrors the REAL fabric.mod.json: all three nested jars declared (the converse
     # check rejects any undeclared nested jar, so the fixture must declare common too).
-    STORE_FABRIC_JARS_FIELD = [{"file": "META-INF/jars/sqlite-jdbc-slim.jar"},
-                               {"file": "META-INF/jars/zstd-jni-slim.jar"},
+    STORE_FABRIC_JARS_FIELD = [{"file": "META-INF/jars/zstd-jni-slim.jar"},
                                {"file": "META-INF/jars/common-0.7.0.jar"}]
 
     def _store_paper_entries():
-        out = {"org/sqlite/JDBC.class": "x", "com/github/luben/zstd/Zstd.class": "x"}
-        for native in SQLITE_NATIVES:
-            out[native] = "elf"
+        out = {"com/github/luben/zstd/Zstd.class": "x", **sqlite_capsule.fixture_entries()}
         for d in ZSTD_NATIVE_DIRS:
             ext = ".dll" if d.startswith("win") else (".dylib" if d.startswith("darwin") else ".so")
             out[d + "libzstd-jni-1.5.7-3" + ext] = "elf"
         return out
 
-    def _store_neoforge_entries(group="org.xerial", drop_native=None, drop_nested_jar=False,
-                                bad_version=False, drop_license=False, raw_meta=None,
-                                stock=True, drop_metadata=False, undeclared_extra=False,
+    def _store_neoforge_entries(bad_version=False, raw_meta=None,
+                                drop_metadata=False, undeclared_extra=False,
                                 zstd_group="com.github.luben", zstd_drop_native=None,
                                 zstd_drop_nested_jar=False, zstd_stock=True,
                                 flat_zstd=False, flat_native=False, drop_zstd_entry=False):
-        # The jarjar nested shape (neoforge-jarjar-sqlite-plan.md + issue #275): NOTHING
-        # native-carrying flat — sqlite AND zstd-jni as synthesized stock-like nested
-        # jars + a two-entry metadata.json. One VER literal per library so a version
-        # edit cannot half-update the fixture.
-        VER = "3.49.1.0"
+        # Private SQLite capsule plus one stock-like zstd jarJar entry. Neither
+        # library exposes flat classes or natives. A single zstd version literal
+        # keeps its filename and metadata in sync.
         ZVER = "1.5.7-3"
-        out = {}
+        out = dict(sqlite_capsule.fixture_entries())
         if flat_zstd:
             out["com/github/luben/zstd/Zstd.class"] = "x"
         if flat_native:
             out[f"linux/amd64/libzstd-jni-{ZVER}.so"] = "elf"
-        nested = {"org/sqlite/JDBC.class": "x",
-                  "org/sqlite/SQLiteDataSource.class": "x"}
-        if not drop_license:
-            nested["META-INF/maven/org.xerial/sqlite-jdbc/LICENSE"] = "Apache-2.0"
-        if stock:
-            # The stockness discriminators: the MR module-info + at least one native
-            # OUTSIDE the supported matrix (a trimmed repack has neither).
-            nested["META-INF/versions/9/module-info.class"] = "x"
-            nested["org/sqlite/native/FreeBSD/x86_64/libsqlitejdbc.so"] = "elf"
-        for native in SQLITE_NATIVES:
-            if native != drop_native:
-                nested[native] = "elf"
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as z:
-            for n, v in nested.items():
-                z.writestr(n, v)
-        if not drop_nested_jar:
-            out[f"META-INF/jarjar/sqlite-jdbc-{VER}.jar"] = buf.getvalue()
         znested = {"com/github/luben/zstd/Zstd.class": "x"}
         if zstd_stock:
             # zstd-jni's discriminators: the ROOT module-info (an explicit module,
@@ -1362,17 +1412,11 @@ def _selftest():
             with zipfile.ZipFile(rogue, "w") as z:
                 z.writestr("x.txt", "x")
             out["META-INF/jarjar/rogue.jar"] = rogue.getvalue()
-        meta_ver = "9.9.9.9" if bad_version else VER
-        jars = [{
-            "identifier": {"group": group, "artifact": "sqlite-jdbc"},
-            "version": {"range": f"[{meta_ver},{int(meta_ver.split('.')[0]) + 1}.0.0.0)",
-                        "artifactVersion": meta_ver},
-            "path": f"META-INF/jarjar/sqlite-jdbc-{VER}.jar",
-            "isObfuscated": False}]
+        jars = []
         if not drop_zstd_entry:
             jars.append({
                 "identifier": {"group": zstd_group, "artifact": "zstd-jni"},
-                "version": {"range": f"[{ZVER},2.0.0.0)", "artifactVersion": ZVER},
+                "version": {"range": f"[{ZVER},2.0.0.0)", "artifactVersion": ("9.9.9" if bad_version else ZVER)},
                 "path": f"META-INF/jarjar/zstd-jni-{ZVER}.jar",
                 "isObfuscated": False})
         if raw_meta is not None:
@@ -2003,8 +2047,7 @@ def _selftest():
         _make_jar(sn_fab, {
             "fabric.mod.json": json.dumps({"version": "1", "jars": STORE_FABRIC_JARS_FIELD}),
             "assets/lss/lang/en_us.json": "{}",
-            "META-INF/jars/sqlite-jdbc-slim.jar": _nested_sqlite(),
-            "META-INF/jars/zstd-jni-slim.jar": _nested_zstd(missing_dir="linux/aarch64/"),
+                "META-INF/jars/zstd-jni-slim.jar": _nested_zstd(missing_dir="linux/aarch64/"),
         })
         p = []
         check_store_natives_fabric(sn_fab, p)
@@ -2013,8 +2056,7 @@ def _selftest():
         sn_fab_undeclared = os.path.join(td, "store-fab-undeclared.jar")
         _make_jar(sn_fab_undeclared, {
             "fabric.mod.json": json.dumps({"version": "1"}),  # no "jars" field
-            "META-INF/jars/sqlite-jdbc-slim.jar": _nested_sqlite(),
-            "assets/lss/lang/en_us.json": "{}",
+                "assets/lss/lang/en_us.json": "{}",
             "META-INF/jars/zstd-jni-slim.jar": _nested_zstd(),
         })
         p = []
@@ -2023,12 +2065,12 @@ def _selftest():
               f"undeclared nested store jar not caught: {p}")
         sn_pap = os.path.join(td, "store-pap.jar")
         pap_entries = _store_paper_entries()
-        del pap_entries["org/sqlite/native/Mac/aarch64/libsqlitejdbc.dylib"]
+        del pap_entries["darwin/aarch64/libzstd-jni-1.5.7-3.dylib"]
         _make_jar(sn_pap, pap_entries)
         p = []
         check_store_natives_paper(sn_pap, p)
-        check(any("Mac/aarch64" in m for m in p),
-              f"paper jar missing a sqlite native not caught: {p}")
+        check(any("darwin/aarch64" in m for m in p),
+              f"paper jar missing a zstd native not caught: {p}")
         # a regressed strip (an out-of-matrix native shipping) must be caught (F3)
         sn_pap_fat = os.path.join(td, "store-pap-fat.jar")
         fat_entries = _store_paper_entries()
@@ -2044,8 +2086,7 @@ def _selftest():
         tp_ok = os.path.join(td, "tp-ok.jar")
         _make_jar(tp_ok, {
             "THIRD-PARTY-NOTICES": "zstd-jni BSD-2 ... Zstandard BSD-3 ... " + "x" * 100,
-            "META-INF/jars/sqlite-jdbc-slim.jar": _nested_sqlite(),
-        })
+            })
         p = []
         check_third_party_notices(tp_ok, True, p)
         check(p == [], f"clean notices jar flagged: {p}")
@@ -2055,15 +2096,42 @@ def _selftest():
         check_third_party_notices(tp_missing, False, p)
         check(any("THIRD-PARTY-NOTICES missing" in m for m in p),
               f"missing notices not caught: {p}")
-        tp_stripped = os.path.join(td, "tp-stripped-license.jar")
-        _make_jar(tp_stripped, {
-            "THIRD-PARTY-NOTICES": "x" * 200,
-            "META-INF/jars/sqlite-jdbc-slim.jar": _nested_sqlite(with_license=False),
-        })
+        # Relocated YAML parser: all six brands/loaders must enforce the same shape.
+        yaml_flat = os.path.join(td, "yaml-flat.jar")
+        _make_jar(yaml_flat, _yaml_entries())
+        for loader in ("paper", "neoforge", "common"):
+            p = []
+            check_yaml_parser(yaml_flat, loader, p)
+            check(not p, f"valid flat YAML runtime rejected on {loader}: {p}")
+        yaml_fabric = os.path.join(td, "yaml-fabric.jar")
+        _make_jar(yaml_fabric, {"META-INF/jars/common-test.jar": _nested_common()})
         p = []
-        check_third_party_notices(tp_stripped, True, p)
-        check(any("lost its in-jar LICENSE" in m for m in p),
-              f"stripped nested sqlite license not caught: {p}")
+        check_yaml_parser(yaml_fabric, "fabric", p)
+        check(not p, f"valid nested YAML runtime rejected: {p}")
+        p = []
+        check_yaml_parser(yaml_flat, "fabric", p)
+        check(any("nested common" in issue for issue in p), f"outer Fabric parser accepted: {p}")
+        for label, change, expected in (
+                ("stock", {"org/snakeyaml/engine/v2/api/LoadSettings.class": "stock"}, "unrelocated"),
+                ("link", {YAML_CODEC: "org/snakeyaml/engine/v2/api/LoadSettings"}, "still links"),
+                ("license", {YAML_LICENSE: "Apache"}, "incomplete"),
+                ("version", {YAML_VERSION: "version=3.2.0\n"}, "not pinned"),
+                ("class-version", {YAML_REQUIRED_CLASSES[0]: b"\xca\xfe\xba\xbe\x00\x00\x00\x45"}, "Java 11")):
+            bad = os.path.join(td, "yaml-" + label + ".jar")
+            _make_jar(bad, dict(_yaml_entries(), **change))
+            p = []
+            check_yaml_parser(bad, "paper", p)
+            check(any(expected in issue for issue in p), f"YAML {label} regression accepted: {p}")
+        yaml_duplicate = os.path.join(td, "yaml-duplicate.jar")
+        _make_jar(yaml_duplicate, dict(_yaml_entries(), **{"META-INF/jars/common-test.jar": _nested_common()}))
+        p = []
+        check_yaml_parser(yaml_duplicate, "fabric", p)
+        check(any("found 2" in issue for issue in p), f"duplicated parser accepted: {p}")
+        yaml_missing = os.path.join(td, "yaml-missing.jar")
+        _make_jar(yaml_missing, {"dev/vox/lss/common/PositionUtil.class": "x"})
+        p = []
+        check_yaml_parser(yaml_missing, "paper", p)
+        check(any("found 0" in issue for issue in p), f"missing parser accepted: {p}")
 
         # ---- discover(): end-to-end wiring over a synthetic build tree ----
         # The leaf checks above prove each check works; these prove discover() actually
@@ -2116,8 +2184,8 @@ def _selftest():
                 "fabric.mod.json": json.dumps(meta),
                 "assets/lss/lang/en_us.json": json.dumps(
                     {"lss.config.page": "General",
-                     "lss.config.far_players_with_seeu": ("Prefer VSS Far Players" if brand == BRAND_VSS
-                                                          else "Prefer LSS Far Players")}),
+                     "lss.status.title": ("VSS Status" if brand == BRAND_VSS
+                                                          else "LSS Status")}),
                 "dev/vox/lss/LSSMod.class": "x",
                 # A SHARED class (xplat) — the cross-loader presence check's subject.
                 "dev/vox/lss/networking/server/RequestProcessingService.class": "x",
@@ -2141,6 +2209,7 @@ def _selftest():
                 "THIRD-PARTY-NOTICES": "sqlite-jdbc / zstd-jni notices " + "x" * 100,
             }
             entries.update(_store_paper_entries())
+            entries.update(_yaml_entries())
             _make_jar(os.path.join(dpap, name), entries, manifest=pap_manifest)
 
         _write_tree_fabric("lod-server-support-fabric.jar",
@@ -2173,8 +2242,8 @@ def _selftest():
                 "lss-sodium-legacy.mixins.json": "{}",
                 "assets/lss/lang/en_us.json": json.dumps(
                     {"lss.config.page": "General",
-                     "lss.config.far_players_with_seeu": ("Prefer VSS Far Players" if brand == BRAND_VSS
-                                                          else "Prefer LSS Far Players")}),
+                     "lss.status.title": ("VSS Status" if brand == BRAND_VSS
+                                                          else "LSS Status")}),
                 "META-INF/accesstransformer.cfg": "public net.minecraft.world.level.chunk.PalettedContainer data",
                 "META-INF/services/dev.vox.lss.platform.LoaderServices":
                     "dev.vox.lss.platform.NeoForgeLoaderServices",
@@ -2185,12 +2254,13 @@ def _selftest():
                 "dev/vox/lss/platform/NeoForgeLoaderServices.class": "x",
                 "dev/vox/lss/platform/NeoForgeClientLoaderServices.class": "x",
                 "dev/vox/lss/common/store/SqliteLodStore.class":
-                    "ref org/sqlite/SQLiteDataSource ok",
+                    "ref dev/vox/lss/common/store/SqliteDriverRuntime ok",
                 "dev/vox/lss/common/store/StoreCodec.class":
                     "ref com/github/luben/zstd/Zstd ok",
                 "assets/lss/icon.png": "PNG",
                 "THIRD-PARTY-NOTICES": "sqlite-jdbc / zstd-jni notices " + "x" * 100,
             }
+            entries.update(_yaml_entries())
             entries.update(_store_neoforge_entries() if store_entries is None
                            else store_entries)
             if brand == BRAND_VSS:
@@ -2207,6 +2277,19 @@ def _selftest():
         check(p == [] and len(fab_d) == len(pap_d) == len(vfab_d) == len(vpap_d)
               == len(neo_d) == len(vneo_d) == 1,
               f"clean synthetic tree flagged by discover: {p}")
+
+        # Prove parser checks are wired into discovery for every branded loader family.
+        for yaml_jar in fab_d + pap_d + vfab_d + vpap_d + neo_d + vneo_d:
+            with zipfile.ZipFile(yaml_jar) as archive:
+                original_entries = {name: archive.read(name) for name in archive.namelist()}
+            leaked_entries = dict(original_entries)
+            leaked_entries["org/snakeyaml/engine/v2/api/LoadSettings.class"] = "stock"
+            _make_jar(yaml_jar, leaked_entries)
+            p = []
+            discover(p, root=droot)
+            check(any(os.path.basename(yaml_jar) in issue and "unrelocated SnakeYAML" in issue for issue in p),
+                  f"discovery missed parser leakage in {yaml_jar}: {p}")
+            _make_jar(yaml_jar, original_entries)
 
         # a neoforge jar whose entrypoint/seam classes were shaded OUT must fail
         # (round-3 review NIT-3: the gametest smoke runs off classes dirs, never the
@@ -2266,7 +2349,7 @@ def _selftest():
         # the VSS neoforge lang rewrite must actually rebrand (the fabric pair's V-M2 pin)
         _write_tree_neoforge("voxy-server-side-neoforge.jar", TOML_VSS, BRAND_VSS,
                              extra={"assets/lss/lang/en_us.json": json.dumps(
-                                 {"lss.config.far_players_with_seeu": "Prefer LSS Far Players"})})
+                                 {"lss.status.title": "LSS Status"})})
         p = []
         check_vss_pair_neoforge(os.path.join(dneo, "lod-server-support-neoforge.jar"),
                                 os.path.join(dneo, "voxy-server-side-neoforge.jar"), p)
@@ -2274,38 +2357,7 @@ def _selftest():
               f"un-rebranded neoforge VSS lang not caught: {p}")
         _write_tree_neoforge("voxy-server-side-neoforge.jar", TOML_VSS, BRAND_VSS)
 
-        # jarjar-shape negatives (neoforge-jarjar-sqlite-plan.md §4): metadata
-        # pointing at a missing nested jar; flat org/sqlite leaking back beside the
-        # nested shape; a foreign identifier group; a native missing INSIDE the
-        # nested jar. Each must red through check_store_natives_neoforge.
         neo_jar = os.path.join(dneo, "lod-server-support-neoforge.jar")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             store_entries=_store_neoforge_entries(drop_nested_jar=True))
-        p = []
-        check_store_natives_neoforge(neo_jar, p)
-        check(any("nested sqlite jar is missing" in m for m in p),
-              f"missing nested sqlite jar not caught: {p}")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             extra={"org/sqlite/JDBC.class": "x"})
-        p = []
-        check_store_natives_neoforge(neo_jar, p)
-        check(any("flat org/sqlite" in m for m in p),
-              f"flat sqlite leak beside the nested jar not caught: {p}")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             store_entries=_store_neoforge_entries(group="org.example"))
-        p = []
-        check_store_natives_neoforge(neo_jar, p)
-        check(any("exactly one org.xerial:sqlite-jdbc" in m for m in p),
-              f"foreign jarjar identifier not caught: {p}")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             store_entries=_store_neoforge_entries(
-                                 drop_native=SQLITE_NATIVES[0]))
-        p = []
-        check_store_natives_neoforge(neo_jar, p)
-        check(any("missing sqlite native" in m for m in p),
-              f"missing native inside the nested jar not caught: {p}")
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS)
-
         # Round-2 hardening negatives (the 3-Opus execution review): every remaining
         # branch of check_store_natives_neoforge pinned, plus the multi-entry positive.
         def _neo_case(expect, why, **knobs):
@@ -2321,13 +2373,8 @@ def _selftest():
                   raw_meta='{"jars": "x"}')
         _neo_case("disagrees with the nested jar filename",
                   "version/filename disagreement not caught", bad_version=True)
-        _neo_case("lost META-INF/maven/org.xerial/sqlite-jdbc/LICENSE",
-                  "missing nested license not caught", drop_license=True)
         _neo_case("undeclared in jarjar metadata",
                   "undeclared nested jar not caught", undeclared_extra=True)
-        _neo_case("nested sqlite jar looks TRIMMED", "trimmed nested jar not caught", stock=False)
-        _neo_case("nested sqlite jar lost its module-info", "module-info loss not caught",
-                  stock=False)
         # issue #275: zstd-jni nests too — every zstd-specific branch pinned, plus the
         # two flat-leak shapes the old flat-shaded layout would have passed.
         _neo_case("flat com/github/luben entries",
@@ -2355,26 +2402,18 @@ def _selftest():
         check(any("StoreCodec no longer references com/github/luben/zstd/Zstd" in m
                   for m in p), f"relocated zstd references not caught: {p}")
         wrong_range = json.dumps({"jars": [{
-            "identifier": {"group": "org.xerial", "artifact": "sqlite-jdbc"},
-            "version": {"range": "[3.49.1.0,)", "artifactVersion": "3.49.1.0"},
-            "path": "META-INF/jarjar/sqlite-jdbc-3.49.1.0.jar",
+            "identifier": {"group": "com.github.luben", "artifact": "zstd-jni"},
+            "version": {"range": "[1.5.7-3,)", "artifactVersion": "1.5.7-3"},
+            "path": "META-INF/jarjar/zstd-jni-1.5.7-3.jar",
             "isObfuscated": False}]})
         _neo_case("jarjar range", "wrong range not caught (the M4 decision unpinned)",
                   raw_meta=wrong_range)
         bad_path = json.dumps({"jars": [{
-            "identifier": {"group": "org.xerial", "artifact": "sqlite-jdbc"},
-            "version": {"range": "[3.49.1.0,4.0.0.0)", "artifactVersion": "3.49.1.0"},
-            "path": "libs/sqlite-jdbc-3.49.1.0.jar", "isObfuscated": False}]})
+            "identifier": {"group": "com.github.luben", "artifact": "zstd-jni"},
+            "version": {"range": "[1.5.7-3,2.0.0.0)", "artifactVersion": "1.5.7-3"},
+            "path": "libs/zstd-jni-1.5.7-3.jar", "isObfuscated": False}]})
         _neo_case("sits outside META-INF/jarjar/",
                   "escaping path not caught", raw_meta=bad_path)
-        # relocated store class: the flat class no longer names sqlite unrelocated
-        _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS,
-                             extra={"dev/vox/lss/common/store/SqliteLodStore.class":
-                                    "relocated refs only"})
-        p = []
-        check_store_natives_neoforge(neo_jar, p)
-        check(any("no longer references" in m for m in p),
-              f"relocated store-class references not caught: {p}")
         # multi-entry POSITIVE: a second declared+present library must not red
         second = io.BytesIO()
         with zipfile.ZipFile(second, "w") as z:
@@ -2391,7 +2430,7 @@ def _selftest():
                              store_entries=multi_entries)
         p = []
         check_store_natives_neoforge(neo_jar, p)
-        check(p == [], f"multi-entry metadata with one sqlite entry must pass: {p}")
+        check(p == [], f"multi-entry metadata with one zstd entry must pass: {p}")
         _write_tree_neoforge("lod-server-support-neoforge.jar", TOML_LSS, BRAND_LSS)
 
         # a missing vss family must fail the gate (silently unwired repackage task)
@@ -2510,6 +2549,10 @@ def main(argv):
                          "(ignores stale artifacts from earlier builds)")
     args = ap.parse_args(argv)
     if args.selftest:
+        import unittest
+        suite = unittest.defaultTestLoader.loadTestsFromName('tools.packaging.test_sqlite_capsule')
+        if not unittest.TextTestRunner().run(suite).wasSuccessful():
+            return 1
         return _selftest()
 
     problems = []

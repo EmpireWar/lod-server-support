@@ -79,9 +79,9 @@ class LoaderPermissionSeamContractTest {
         assertEquals(1, occurrences(glue, "PlayerServiceGate.OPEN"),
                 "exactly ONE open-gate use in the glue — the documented legacy/test "
                         + "overload delegation; a second is a production leak");
-        assertTrue(glue.contains("config.enabled && !serviceDenied"),
+        assertTrue(glue.contains("config.enabled() && !serviceDenied"),
                 "the gate rides the SAME evaluate input as the server-wide kill switch");
-        assertTrue(glue.contains("boolean deniedByServiceGate = serviceDenied && config.enabled && service != null")
+        assertTrue(glue.contains("boolean deniedByServiceGate = serviceDenied && config.enabled() && service != null")
                         && glue.contains("decision.outcome() == HandshakeGate.Outcome.DISABLED"),
                 "the decision-anchored log/deposit conjunction (outcome DISABLED, enabled, "
                         + "servicePresent) must not drift from the Paper twin");

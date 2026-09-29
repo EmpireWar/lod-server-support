@@ -58,7 +58,7 @@ public final class LodStores {
     public static LodStoreService createOrNull(SqliteLodStore.Environment env) {
         StoreCodec codec = StoreCodec.zstdOrNull();
         if (codec == null) {
-            LSSLogger.warn("lodStore requested but the " + StoreCodec.NAME + " codec native"
+            LSSLogger.warn("LOD store requested but the " + StoreCodec.NAME + " codec native"
                     + " cannot load on this platform — running WITHOUT the LOD store");
             return null;
         }
@@ -69,7 +69,7 @@ public final class LodStores {
             // box whose SQLite just failed is the honest state (the diag token reads
             // store=unavailable — what is actually running), and disk reads serve
             // everything.
-            LSSLogger.warn("lodStore=on requested but the SQLite store is unavailable —"
+            LSSLogger.warn("LOD store enabled but the SQLite store is unavailable —"
                     + " running WITHOUT a store (disk reads serve everything; warm-join"
                     + " acceleration is off until the store can open)");
             return null;
@@ -79,11 +79,12 @@ public final class LodStores {
         // leaving admins to discover a doubled world folder — a changelog line does not
         // reach someone who upgraded through a host panel.
         String storeDirName = Brand.lowerShortName() + "-lod";
-        LSSLogger.info("LOD store active (lodStore=on). It stores served LOD bytes under"
+        LSSLogger.info("LOD store active (driver=private/" + SqliteDriverRuntime.VERSION
+                + "). It stores served LOD bytes under"
                 + " <world>/" + storeDirName + "/ and, once fully warmed, occupies roughly"
                 + " as much space as the region files themselves. It is DERIVED data —"
-                + " deleting " + storeDirName + "/ is always safe. Set lodStore=off to"
-                + " disable, lodStoreMaxMB to bound it.");
+                + " deleting " + storeDirName + "/ is always safe. Set storage.lod_store.enabled"
+                + " to false and restart to disable; storage.lod_store.max_size_mib bounds its size after reload.");
         return sqlite;
     }
 
@@ -95,14 +96,14 @@ public final class LodStores {
      * the one place the feature and its disk tradeoff reach the admin at all. Returns the
      * message rather than logging so the decision is pinnable; callers log INFO. Null when
      * LSS is disabled (nothing to recommend into) and on Folia — the store is unvalidated
-     * there and {@code PaperConfig.validate()} WARNS on an armed store; recommending what
+     * there and Folia remains experimental; recommending what
      * we warn about is incoherent.
      */
     public static String offRecommendationOrNull(boolean lssEnabled, boolean isFolia) {
         if (!lssEnabled || isFolia) return null;
-        return "LOD store is off. Recommended: set \"lodStore\": \"on\" in"
-                + " " + Brand.lowerShortName() + "-server-config.json for much faster LOD"
+        return "LOD store is off. Recommended: set storage.lod_store.enabled to true in"
+                + " " + Brand.lowerShortName() + "-server-config.yaml and restart for faster LOD"
                 + " serving; the tradeoff is it"
-                + " roughly doubles the size of your world directory.";
+                + " can require additional disk space comparable to the world directory.";
     }
 }

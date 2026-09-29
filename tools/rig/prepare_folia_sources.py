@@ -3,6 +3,7 @@
 import argparse
 import copy
 from pathlib import Path
+from rig_settings import render, values
 import sys
 from rig import require_lock,read,write,sha,digest
 from world_snapshot import stages
@@ -46,9 +47,9 @@ def main():
     launch.update(ready_marker='LSS_RIG_SOURCES_READY',ready_timeout_seconds=180)
     runtime['ready_conditions']=[{'launch_id':'server','marker':'LSS_RIG_SOURCE_WORKLOAD_ACTIVE','timeout_seconds':180}]
     import json
-    runtime['generated_files']['server/plugins/LodServerSupport/lss-server-config.json']=json.dumps({
-        'lodDistanceChunks':32,'enableChunkGeneration':True,'generationConcurrencyLimitGlobal':4,
-        'generationConcurrencyLimitPerPlayer':1,'lodStore':'on','lodStoreBackfill':False})+'\n'
+    runtime['generated_files']['server/plugins/LodServerSupport/lss-server-config.yaml']=render({
+        'lod.distance.default_chunks':32,'generation.enabled':True,'generation.concurrency.global':4,
+        'generation.concurrency.per_player':1,'storage.lod_store.enabled':True,'storage.lod_store.backfill.enabled':False},platform='paper')
     out=Path(a.output);out.mkdir(parents=True,exist_ok=False,mode=0o700)
     write(out/'profile.json',profile);write(out/'server-profile.json',server)
     runtime['server_profile'].update(path=str((out/'server-profile.json').resolve()),profile_hash=digest(server))

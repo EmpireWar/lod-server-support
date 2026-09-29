@@ -1,10 +1,10 @@
 {
   "baseline": {
-    "1.21.1": "3093d44e2df33d59756698d8779a7b4fb3b54dbd",
-    "1.21.10": "bff1004a13aa896cb36318209d8a5ac42675629c",
-    "1.21.11": "daafdc28886d0226d1a5cb013b82a6de20e4efd9",
-    "26.1": "d0be5be9a0ca2e2ae1540cb9ce6cca1d479f0ea8",
-    "26.2": "b794e5a0384b5c30113a7eeec3a3e2288a3dd076"
+    "1.21.1": "a5a5223bdf71e9c86ec5f7e31813f3a97f42e73f",
+    "1.21.10": "a7804eb089cfee8d874b41c86b6c624ee23cfebb",
+    "1.21.11": "5de8a3de6af533578c85f0d2ec9ae236e2f7ce28",
+    "26.1": "37f0c2daf89c0c2e073eba9d69473f000af56ac3",
+    "26.2": "89d0418bd9f46af456c1456a657efc235b191888"
   },
   "final_shared_invariants": [
     "common/build.gradle",
@@ -52,6 +52,7 @@
       "gradle.properties": "53755c612d8a46d0e75a10d102bdcf853cd54597",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
+      "scripts/release_check.py": "ff3e8f33b41d654b2197f7f4006f348788861e67",
       "tools/packaging/classfile.py": "2897f4beed175a3e77ade973b28690b399e3bc92",
       "tools/packaging/sqlite_capsule.py": "9e6803498fecf8c886a798179fd8233648b95269",
       "tools/packaging/test_sqlite_capsule.py": "549185cd98f66bcc3ce5dc32dcfb44a4e46b0cce",
@@ -71,6 +72,7 @@
       "gradle.properties": "b1211e10f0e47695f2ad55a30cdf81ca8c44c039",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
+      "scripts/release_check.py": "19c8a96eceeeb844e9cbb100504f7d0577f1cfc3",
       "tools/packaging/classfile.py": "2897f4beed175a3e77ade973b28690b399e3bc92",
       "tools/packaging/sqlite_capsule.py": "9e6803498fecf8c886a798179fd8233648b95269",
       "tools/packaging/test_sqlite_capsule.py": "549185cd98f66bcc3ce5dc32dcfb44a4e46b0cce",
@@ -90,6 +92,7 @@
       "gradle.properties": "3191b27ed5fa12cd027591dcd24c585ecfc5f958",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
+      "scripts/release_check.py": "ec1f0044c2e15843a8684a1a0092bd0cb557049c",
       "tools/packaging/classfile.py": "2897f4beed175a3e77ade973b28690b399e3bc92",
       "tools/packaging/sqlite_capsule.py": "9e6803498fecf8c886a798179fd8233648b95269",
       "tools/packaging/test_sqlite_capsule.py": "549185cd98f66bcc3ce5dc32dcfb44a4e46b0cce",
@@ -109,6 +112,7 @@
       "gradle.properties": "23658e8afd53632dc4317ec2d5ff8fd4610a1c8d",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
+      "scripts/release_check.py": "d6d796cf0c3942241405be51d693e73e9428fe10",
       "tools/packaging/classfile.py": "2897f4beed175a3e77ade973b28690b399e3bc92",
       "tools/packaging/sqlite_capsule.py": "9e6803498fecf8c886a798179fd8233648b95269",
       "tools/packaging/test_sqlite_capsule.py": "549185cd98f66bcc3ce5dc32dcfb44a4e46b0cce",
@@ -128,6 +132,7 @@
       "gradle.properties": "d6fd4282aebfc63683ac313f40cf3ec8e39ae012",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
+      "scripts/release_check.py": "1e3718e5e556963a39efa24c13223032ef2e2af1",
       "tools/packaging/classfile.py": "2897f4beed175a3e77ade973b28690b399e3bc92",
       "tools/packaging/sqlite_capsule.py": "9e6803498fecf8c886a798179fd8233648b95269",
       "tools/packaging/test_sqlite_capsule.py": "549185cd98f66bcc3ce5dc32dcfb44a4e46b0cce",

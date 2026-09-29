@@ -1,10 +1,10 @@
 {
   "baseline": {
-    "1.21.1": "027c3690ea66dbc1b9e166d216f8610a530ecd2a",
-    "1.21.10": "ec6cc3e85d05b91c6cf684c8f795f1f6e6a103b4",
-    "1.21.11": "866e29fa5c69872fc3fcee3018ebc85a13557298",
-    "26.1": "63a242eceabc2a921e7942a92966b5a1e1647c6a",
-    "26.2": "4396b26b523c3d7a626b5a3e56c773f3c50481a2"
+    "1.21.1": "6d5f2b00b5af2512177cf9c2b8cf29435d22d3b0",
+    "1.21.10": "c048f1079a281b18fd1e50dcfb44b6e1727ed267",
+    "1.21.11": "18805068462ce5ef38337fc08a9680ff01e195b1",
+    "26.1": "fd48a48c8c24132c5c51c519659c6e547583246d",
+    "26.2": "ce2533c9a13dd8599beb2e380843888a3a45b3d3"
   },
   "final_shared_invariants": [
     "common/build.gradle",
@@ -54,6 +54,7 @@
       "common/src/test/java/dev/vox/lss/common/store/SqliteOwnershipTest.java": "0dcfc436e9cd3f68c8e21c44ca46665a01578b74",
       "common/src/test/java/dev/vox/lss/common/store/SqliteRuntimeProbe.java": "2f2bdfb1bf034a19f627373576b92a25dd053b4e",
       "common/src/test/java/dev/vox/lss/common/store/StorePolicyReloadTest.java": "1fcaad0f3a6d74f407fbf27416950ea0268bf9c9",
+      "fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java": "a1966ea7e2520b4c3b9b75910be89f937afe786e",
       "gradle.properties": "53755c612d8a46d0e75a10d102bdcf853cd54597",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
@@ -85,6 +86,7 @@
       "common/src/test/java/dev/vox/lss/common/store/SqliteOwnershipTest.java": "0dcfc436e9cd3f68c8e21c44ca46665a01578b74",
       "common/src/test/java/dev/vox/lss/common/store/SqliteRuntimeProbe.java": "2f2bdfb1bf034a19f627373576b92a25dd053b4e",
       "common/src/test/java/dev/vox/lss/common/store/StorePolicyReloadTest.java": "1fcaad0f3a6d74f407fbf27416950ea0268bf9c9",
+      "fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java": "a1966ea7e2520b4c3b9b75910be89f937afe786e",
       "gradle.properties": "b1211e10f0e47695f2ad55a30cdf81ca8c44c039",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
@@ -116,6 +118,7 @@
       "common/src/test/java/dev/vox/lss/common/store/SqliteOwnershipTest.java": "0dcfc436e9cd3f68c8e21c44ca46665a01578b74",
       "common/src/test/java/dev/vox/lss/common/store/SqliteRuntimeProbe.java": "2f2bdfb1bf034a19f627373576b92a25dd053b4e",
       "common/src/test/java/dev/vox/lss/common/store/StorePolicyReloadTest.java": "1fcaad0f3a6d74f407fbf27416950ea0268bf9c9",
+      "fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java": "a1966ea7e2520b4c3b9b75910be89f937afe786e",
       "gradle.properties": "3191b27ed5fa12cd027591dcd24c585ecfc5f958",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
@@ -147,6 +150,7 @@
       "common/src/test/java/dev/vox/lss/common/store/SqliteOwnershipTest.java": "0dcfc436e9cd3f68c8e21c44ca46665a01578b74",
       "common/src/test/java/dev/vox/lss/common/store/SqliteRuntimeProbe.java": "2f2bdfb1bf034a19f627373576b92a25dd053b4e",
       "common/src/test/java/dev/vox/lss/common/store/StorePolicyReloadTest.java": "1fcaad0f3a6d74f407fbf27416950ea0268bf9c9",
+      "fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java": "a1966ea7e2520b4c3b9b75910be89f937afe786e",
       "gradle.properties": "23658e8afd53632dc4317ec2d5ff8fd4610a1c8d",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",
@@ -178,6 +182,7 @@
       "common/src/test/java/dev/vox/lss/common/store/SqliteOwnershipTest.java": "0dcfc436e9cd3f68c8e21c44ca46665a01578b74",
       "common/src/test/java/dev/vox/lss/common/store/SqliteRuntimeProbe.java": "2f2bdfb1bf034a19f627373576b92a25dd053b4e",
       "common/src/test/java/dev/vox/lss/common/store/StorePolicyReloadTest.java": "1fcaad0f3a6d74f407fbf27416950ea0268bf9c9",
+      "fabric/src/test/java/dev/vox/lss/config/JsonConfigLoadTest.java": "a1966ea7e2520b4c3b9b75910be89f937afe786e",
       "gradle.properties": "d6fd4282aebfc63683ac313f40cf3ec8e39ae012",
       "gradle/sqlite-runtime.gradle": "813c9fd8c05488911c5b40029d6c79e1a9dbd993",
       "gradle/sqlite-runtime.properties": "e0a17cf9546772e18ce0dbf40cde54d495a0c077",

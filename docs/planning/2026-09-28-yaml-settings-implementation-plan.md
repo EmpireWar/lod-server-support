@@ -322,14 +322,18 @@ Do not retain a second reflective old-config class hierarchy.
 | Null/blank default block fallback | `minecraft:stone`; validate resolution on the client owner, never accept an air fallback effectively. |
 | Null block fallback map / null or blank entries | Empty map / drop bad entries and retain good neighbors. |
 | Null alias list | Empty list. Preserve original spelling/order in valid alias groups; never normalize canonical address text into a different cache identity. Well-typed but invalid groups remain documented inactive groups; structurally invalid elements follow existing safe group rejection with a count-only warning. |
-| Legacy quoted booleans / numbers | Convert case-insensitive `true`/`false` and finite numeric strings explicitly; integer fields must have an exactly representable integer value. Reject other coercion tricks/overflow with an actionable migration error, never silently choose fresh defaults. |
+| Legacy quoted booleans / numbers | Preserve Gson Boolean.parseBoolean for legacy boolean strings; convert finite numeric strings explicitly, requiring exactly representable integers and rejecting overflow. See the dated release follow-up decision below. |
 | Legacy null elements in other string lists | Keep meaningful neighboring entries; remove elements the old effective resolver ignored. Document each rule in the migration table and corpus. |
 
-Use the real existing load/clamp/alias fixtures as the corpus, including harmless
-unknown keys and nulls. Already-corrupt JSON, non-object input and unsupported Gson
-leniencies (for example comments, unquoted names or nonsensical boolean strings)
-produce a repair message and preserve bytes. Acceptance of these non-JSON quirks
-is deliberately not a promise of the new migrator. New YAML remains strict.
+**Release follow-up decision, 2026-09-29:** preserve the old Gson loader's lenient
+JSON syntax, including comments, unquoted/single-quoted tokens and legacy separators.
+Repeated root fields use their last value and legacy boolean strings use Gson's
+Boolean.parseBoolean behavior. Differential tests exercise Gson 2.13.2 and 2.10.1.
+Use the existing load/clamp/alias fixtures too, including harmless unknown keys and
+nulls. Corrupt structures, non-object or multiple-root input and resource/numeric
+budget violations still produce a repair message without modifying source files.
+Migration is one-way: v0.15.x reads retained JSON and ignores later YAML edits.
+New YAML remains strict. This supersedes the original exclusion of Gson leniencies.
 
 ## 5. Typed settings and reload ownership
 

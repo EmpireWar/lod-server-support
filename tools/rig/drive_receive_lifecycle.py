@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Owned fixture controller; real menu SaveHook and native connection behavior stay in Java."""
+"""Owned fixture controller; real draft SaveHook, explicit reload and native connection behavior stay in Java."""
 import argparse,time
 from pathlib import Path
 from rig import read,inside,alive,write

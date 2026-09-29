@@ -124,7 +124,7 @@ public class ServiceLifecycleGameTests {
             var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
             int pcx = mock.getBlockX() >> 4;
             int pcz = mock.getBlockZ() >> 4;
-            int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+            int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER;
             helper.assertTrue(pcx - maxDist < 0 && pcz - maxDist < 0,
                     "premise: spawn-relative far positions must reach the negative quadrant");
 
@@ -382,7 +382,7 @@ public class ServiceLifecycleGameTests {
         int pcz = mock.getBlockZ() >> 4;
         int cx = pcx - PROBE_CHUNK_OFFSET;
         int cz = pcz - PROBE_CHUNK_OFFSET;
-        int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks + LSSConstants.LOD_DISTANCE_BUFFER;
+        int maxDist = LSSServerConfig.CONFIG.lodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER;
         helper.assertTrue(PositionUtil.chebyshevDistance(cx, cz, pcx, pcz) <= maxDist,
                 "premise: the probe chunk must be inside the request distance guard");
         var chunkPos = new ChunkPos(cx, cz);
@@ -830,7 +830,7 @@ public class ServiceLifecycleGameTests {
         // caught a decode-side flavor of this — pin the encode side too).
         helper.assertTrue(replies.get(0).enabled(),
                 "the legacy echo must carry the real enabled flag");
-        helper.assertTrue(replies.get(0).lodDistanceChunks() == LSSServerConfig.CONFIG.lodDistanceChunks,
+        helper.assertTrue(replies.get(0).lodDistanceChunks() == LSSServerConfig.CONFIG.lodDistanceChunks(),
                 "the legacy echo must carry the real LOD distance, got "
                         + replies.get(0).lodDistanceChunks());
         var state = service.getPlayers().get(uuid);
@@ -881,44 +881,35 @@ public class ServiceLifecycleGameTests {
     /**
      * CG-028: the REGISTER reply's field wiring at the Fabric call site — lodDistance
      * distinct from the protocol version (int transposition) and generationEnabled opposed
-     * to enabled (boolean transposition) across the 4-field frame. The global config is
-     * mutated and restored within this single synchronous callback — gametest callbacks own
-     * the main thread, so no other test (or the live service tick) can observe the window.
+     * to enabled (boolean transposition) across the 4-field frame. The service owns a detached
+     * configuration facade, so this test cannot retune other tests or the live lifecycle.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty")
     public void sessionConfigReplyWiresConfigFieldsByNameNotPosition(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
         var playerList = server.getPlayerList();
         var mock = placeMockServerPlayer(helper);
-        var service = new RequestProcessingService(server);
-        var config = LSSServerConfig.CONFIG;
-        helper.assertTrue(config.enabled, "premise: gametest config runs enabled");
+        var config = new ServiceSettingsFixture();
+        config.set("lod.distance.default_chunks", 251);
+        config.set("generation.enabled", false);
+        var service = new RequestProcessingService(server, config);
+        helper.assertTrue(config.enabled(), "premise: gametest config runs enabled");
 
-        int prevLod = config.lodDistanceChunks;
-        boolean prevGenEnabled = config.enableChunkGeneration;
         var replies = new ArrayList<SessionConfigS2CPayload>();
         try {
-            config.lodDistanceChunks = 251;
-            config.enableChunkGeneration = false;
-
             LSSServerNetworking.handleHandshake(
                     new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION,
                             LSSConstants.CAPABILITY_VOXEL_COLUMNS),
                     mock, service, replies::add);
-        } finally {
-            config.lodDistanceChunks = prevLod;
-            config.enableChunkGeneration = prevGenEnabled;
-        }
-        try {
             helper.assertTrue(replies.size() == 1, "premise: REGISTER handshake must reply once");
             var reply = replies.get(0);
             helper.assertTrue(reply.enabled(),
                     "effectiveEnabled must be true (config enabled + service present)");
             helper.assertTrue(reply.lodDistanceChunks() == 251,
-                    "lodDistanceChunks must wire from CONFIG.lodDistanceChunks, got "
+                    "lodDistanceChunks must wire from the service configuration, got "
                             + reply.lodDistanceChunks());
             helper.assertTrue(!reply.generationEnabled(),
-                    "generationEnabled must wire from CONFIG.enableChunkGeneration"
+                    "generationEnabled must wire from the service policy"
                             + " (the concurrency caps left the 4-field wire payload)");
         } finally {
             service.shutdown();
@@ -977,8 +968,8 @@ public class ServiceLifecycleGameTests {
      * The discriminator: with the clear applied first, the ts&gt;0 re-request probe-serves
      * (in_memory=1); a lost or late clear resolves it up-to-date off the stale done-bit
      * (in_memory=0). Exactly one post-enable tick precedes the wait, so the test also
-     * pins "resumes within a tick". The global flip is confined to this synchronous
-     * callback with a finally-restore.
+     * pins "resumes within a tick". This is an isolated consumer branch test, not a reload test: service.enabled is
+     * restart-only in production. The fixture swaps complete immutable snapshots.
      */
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
     public void disabledTickFreezesPipelineAndFrozenEventsApplyOnFirstResumedCycle(GameTestHelper helper) {
@@ -995,16 +986,16 @@ public class ServiceLifecycleGameTests {
         chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
         level.getChunk(chunkPos.x, chunkPos.z);
 
-        var service = new RequestProcessingService(server);
+        var config = new ServiceSettingsFixture();
+        var service = new RequestProcessingService(server, config);
         var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
         // Stale done-bit + a ts>0 request: only the frozen-queued clear makes it re-serve.
         state.markDiskReadDone(chunkPos.x, chunkPos.z);
         GameTestSeeding.seedRequest(state, packed, 5L);
 
         var diag = service.getOffThreadProcessor().getDiagnostics();
-        var config = LSSServerConfig.CONFIG;
         try {
-            config.enabled = false;
+            config.set("service.enabled", false);
             for (int i = 0; i < 3; i++) {
                 service.tick();
             }
@@ -1017,7 +1008,7 @@ public class ServiceLifecycleGameTests {
             // Event posted while frozen: lossless, must apply before the first resumed routing.
             service.getOffThreadProcessor().clearDiskReadDone(uuid, new long[]{packed});
         } finally {
-            config.enabled = true;
+            config.set("service.enabled", true);
         }
         service.tick(); // exactly one resumed tick — the wait below never ticks again
 
@@ -1390,10 +1381,10 @@ public class ServiceLifecycleGameTests {
         var viewer = placeMockServerPlayer(helper);
         var farTarget = placeMockServerPlayer(helper);
         var beyondCap = placeMockServerPlayer(helper);
-        var service = new RequestProcessingService(server);
-        var config = dev.vox.lss.config.LSSServerConfig.CONFIG;
-        String savedMode = config.farPlayers;
-        int savedInterval = config.farPlayersUpdateIntervalTicks;
+        var config = new ServiceSettingsFixture();
+        var service = new RequestProcessingService(server, config);
+        String savedMode = config.farPlayers();
+        int savedInterval = config.farPlayersUpdateIntervalTicks();
         try {
             // In-range far target (~500 blocks out); the third mock sits beyond the
             // 2048-block server cap and must be filtered.
@@ -1417,8 +1408,8 @@ public class ServiceLifecycleGameTests {
 
             service.getFarPlayerService().onPrefs(viewer.getUUID(),
                     new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, true, 0));
-            config.farPlayers = "on";
-            config.farPlayersUpdateIntervalTicks = 2; // the clamp floor — 2 service ticks
+            config.set("far_players.mode", "on");
+            config.set("far_players.update_interval_ticks", 2); // the clamp floor — 2 service ticks
             service.tick();
             service.tick();
 
@@ -1435,9 +1426,8 @@ public class ServiceLifecycleGameTests {
                     "at least the in-range target is served, entries=" + fp.entriesSent());
             helper.assertTrue(fp.bytesSent() > 0, "the dedicated lane counted its bytes");
         } finally {
-            config.farPlayers = savedMode;
-            config.farPlayersUpdateIntervalTicks = savedInterval;
-            config.validate();
+            config.set("far_players.mode", savedMode);
+            config.set("far_players.update_interval_ticks", savedInterval);
             service.shutdown();
         }
         helper.succeed();
@@ -1565,12 +1555,12 @@ public class ServiceLifecycleGameTests {
         var server = level.getServer();
         var mock = placeMockServerPlayer(helper);
         var uuid = mock.getUUID();
-        var service = new RequestProcessingService(server);
+        var config = new ServiceSettingsFixture();
+        var service = new RequestProcessingService(server, config);
         var replies = new ArrayList<SessionConfigS2CPayload>();
         LSSServerNetworking.SessionConfigResponder recorder = replies::add;
-        var config = LSSServerConfig.CONFIG;
-        boolean savedArm = config.requireServicePermission;
-        config.requireServicePermission = true;
+        boolean savedArm = config.requireServicePermission();
+        config.set("service.require_permission", true);
         try {
             var gateState = service.getServiceGateState();
             // The production gate shape with the permission read forced FALSE (no live
@@ -1631,7 +1621,7 @@ public class ServiceLifecycleGameTests {
             // 3. The gate disarmed mid-session: the same player registers through the
             //    same entry (the OPEN overload path is production for gate-off in the
             //    sense that serviceDenied short-circuits false before any probe).
-            config.requireServicePermission = false;
+            config.set("service.require_permission", false);
             dev.vox.lss.networking.server.ServerReceiverGlue.handleHandshake(
                     new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION,
                             LSSConstants.CAPABILITY_VOXEL_COLUMNS
@@ -1649,7 +1639,7 @@ public class ServiceLifecycleGameTests {
 
             // 4. Re-armed + denied re-handshake of the LIVE session: the composite runs —
             //    state gone, viewer shed — and the reply advertises disabled.
-            config.requireServicePermission = true;
+            config.set("service.require_permission", true);
             dev.vox.lss.networking.server.ServerReceiverGlue.handleHandshake(
                     new HandshakeC2SPayload(LSSConstants.PROTOCOL_VERSION,
                             LSSConstants.CAPABILITY_VOXEL_COLUMNS
@@ -1718,7 +1708,7 @@ public class ServiceLifecycleGameTests {
                     "a HOLDING consumer-less handshake keeps enabled=true — the gate is "
                             + "invisible to players it does not deny");
         } finally {
-            config.requireServicePermission = savedArm;
+            config.set("service.require_permission", savedArm);
             service.shutdown();
             server.getPlayerList().remove(mock);
         }
@@ -1741,11 +1731,11 @@ public class ServiceLifecycleGameTests {
         var server = level.getServer();
         var mock = placeMockServerPlayer(helper);
         var uuid = mock.getUUID();
-        var service = new RequestProcessingService(server);
+        var config = new ServiceSettingsFixture();
+        var service = new RequestProcessingService(server, config);
         var replies = new ArrayList<SessionConfigS2CPayload>();
         LSSServerNetworking.SessionConfigResponder recorder = replies::add;
-        var config = LSSServerConfig.CONFIG;
-        boolean savedArm = config.requireServicePermission;
+        boolean savedArm = config.requireServicePermission();
         var denying = new java.util.concurrent.atomic.AtomicBoolean(false);
         try {
             // Register through the production entry (no permission backend in a gametest
@@ -1760,7 +1750,7 @@ public class ServiceLifecycleGameTests {
             helper.assertTrue(service.getFarPlayerService().subscriberCount() == 1,
                     "premise: far-player viewer");
 
-            config.requireServicePermission = true;
+            config.set("service.require_permission", true);
             service.setPermissionProbeForTest((p, node) -> !denying.get());
             denying.set(true);
 
@@ -1811,7 +1801,7 @@ public class ServiceLifecycleGameTests {
                             && service.getPlayers().get(uuid) == null,
                     "…and it never loops: the entry is gone for good");
         } finally {
-            config.requireServicePermission = savedArm;
+            config.set("service.require_permission", savedArm);
             service.shutdown();
             server.getPlayerList().remove(mock);
         }

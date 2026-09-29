@@ -102,9 +102,9 @@ class PaperDirtyColumnBroadcasterTest {
         overworld = level(Level.OVERWORLD);
         server = mock(MinecraftServer.class);
         when(server.getAllLevels()).thenReturn(List.of(overworld));
-        config = new PaperConfig();
-        config.validate();
-        config.dirtyBroadcastIntervalSeconds = 1; // 20 ticks per broadcast
+        config = new MutablePaperSettings();
+        MutablePaperSettings.normalize(config);
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (1) * 20); // 20 ticks per broadcast
         broadcaster = new PaperDirtyColumnBroadcaster(server, players, tracker, processor);
         broadcaster.setDirtySender((player, positions) -> {
             sent.add(new Sent(player.getUUID(), positions.clone()));
@@ -133,7 +133,7 @@ class PaperDirtyColumnBroadcasterTest {
 
     /** Advance exactly one broadcast interval (fires on the last call). */
     private void fireBroadcast() {
-        for (int i = 0; i < config.dirtyBroadcastIntervalSeconds * LSSConstants.TICKS_PER_SECOND; i++) {
+        for (int i = 0; i < config.dirtyBroadcastIntervalTicks(); i++) {
             broadcaster.tick(config);
         }
     }
@@ -185,7 +185,7 @@ class PaperDirtyColumnBroadcasterTest {
 
     @Test
     void rangeFilterUsesRawLodDistanceWithoutTheRequestGateBuffer() {
-        config.lodDistanceChunks = 8;
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 8);
         var uuid = UUID.randomUUID();
         addPlayer(uuid, overworld, true, false); // at chunk (0,0)
 
@@ -208,8 +208,8 @@ class PaperDirtyColumnBroadcasterTest {
 
     @Test
     void perWorldOverrideShrinksDirtyBroadcastRadiusForNetherPlayerOnly() {
-        config.lodDistanceChunks = 16;
-        config.lodDistanceChunksByWorld.put("minecraft:the_nether", 8);
+        MutablePaperSettings.set(config, "lod.distance.default_chunks", 16);
+        MutablePaperSettings.dimension(config, "minecraft:the_nether", 8);
         var nether = level(Level.NETHER);
         when(server.getAllLevels()).thenReturn(List.of(overworld, nether));
         var netherUuid = UUID.randomUUID();
@@ -310,7 +310,7 @@ class PaperDirtyColumnBroadcasterTest {
         tracker.markDirty(OVERWORLD, 1, 0);
 
         for (int i = 0; i < 10; i++) broadcaster.tick(config); // counter 10 of 20
-        config.dirtyBroadcastIntervalSeconds = 2;              // window stretches to 40 ticks
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (2) * 20);              // window stretches to 40 ticks
         for (int i = 0; i < 29; i++) broadcaster.tick(config); // counter 39 of 40
         assertTrue(sent.isEmpty(), "the longer interval is honored mid-window (no caching)");
         broadcaster.tick(config);
@@ -324,7 +324,7 @@ class PaperDirtyColumnBroadcasterTest {
      *  must get the clears and still no frame. */
     @Test
     void intervalZeroDrainsInvalidatesAndClearsWithZeroSends() {
-        config.dirtyBroadcastIntervalSeconds = 0;
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         var uuid = UUID.randomUUID();
         var state = addPlayer(uuid, overworld, true, false);
         long pos = PositionUtil.packPosition(1, 2);
@@ -355,7 +355,7 @@ class PaperDirtyColumnBroadcasterTest {
      *  compute intervalTicks = 0 and drain every tick. */
     @Test
     void intervalZeroFiresOnExactlyTheFallbackCadenceTick() {
-        config.dirtyBroadcastIntervalSeconds = 0;
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         addPlayer(UUID.randomUUID(), overworld, true, false);
         tracker.markDirty(OVERWORLD, 3, 4);
 
@@ -382,7 +382,7 @@ class PaperDirtyColumnBroadcasterTest {
         long pos = PositionUtil.packPosition(1, 2);
 
         // Start off (0): the fallback drain happens silently.
-        config.dirtyBroadcastIntervalSeconds = 0;
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         tracker.markDirty(OVERWORLD, 1, 2);
         for (int i = 0; i < LSSConstants.DIRTY_DRAIN_ONLY_INTERVAL_SECONDS * LSSConstants.TICKS_PER_SECOND; i++) {
             broadcaster.tick(config);
@@ -391,7 +391,7 @@ class PaperDirtyColumnBroadcasterTest {
         assertTrue(sent.isEmpty(), "no frames while off");
 
         // Flip 0 -> 1: sends resume on the next (1 s) interval.
-        config.dirtyBroadcastIntervalSeconds = 1;
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (1) * 20);
         tracker.markDirty(OVERWORLD, 1, 2);
         fireBroadcast();
         assertEquals(1, sent.size(), "flipping back to nonzero resumes sends live — no restart");
@@ -400,7 +400,7 @@ class PaperDirtyColumnBroadcasterTest {
         // Flip 1 -> 0: sends stop, the drain keeps running at the fallback cadence.
         sent.clear();
         int invalidationsBefore = processor.invalidations.size();
-        config.dirtyBroadcastIntervalSeconds = 0;
+        MutablePaperSettings.set(config, "updates.dirty_broadcast_interval_ticks", (0) * 20);
         tracker.markDirty(OVERWORLD, 5, 6);
         for (int i = 0; i < LSSConstants.DIRTY_DRAIN_ONLY_INTERVAL_SECONDS * LSSConstants.TICKS_PER_SECOND; i++) {
             broadcaster.tick(config);

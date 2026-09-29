@@ -16,7 +16,7 @@ import java.util.ArrayList;
  * renderer (the 0.8+ config-API walker and the legacy reflective builder) consumes,
  * and ConfigValidationTest classloads it under fabric-loader-junit to pin the
  * round-trip invariant — every nonzero stop must survive the
- * {@code LSSClientConfig.validate()} clamp unchanged, so the lowest nonzero stop IS
+ * {@code SettingsSchema.client()} clamp unchanged, so the lowest nonzero stop IS
  * the clamp floor. A curve edit that breaks that reds Tier 1, not a user report of
  * the UI lying about the saved value.
  */

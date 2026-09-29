@@ -144,9 +144,9 @@ public final class LSSNeoGameTests {
     private static void configLoadsFreshDefaults(GameTestHelper helper) {
         var config = LSSServerConfig.CONFIG;
         helper.assertTrue(config != null, "server config must load");
-        helper.assertTrue(config.enabled, "fresh config must default enabled");
-        helper.assertTrue(config.lodDistanceChunks == 512,
-                "fresh config must carry the shipped 512 distance, got " + config.lodDistanceChunks);
+        helper.assertTrue(config.enabled(), "fresh config must default enabled");
+        helper.assertTrue(config.lodDistanceChunks() == 512,
+                "fresh config must carry the shipped 512 distance, got " + config.lodDistanceChunks());
         helper.succeed();
     }
 

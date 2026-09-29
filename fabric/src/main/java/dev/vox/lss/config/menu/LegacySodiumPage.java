@@ -43,10 +43,10 @@ import java.util.function.IntFunction;
  * <p>Semantics parity with the 0.8+ walker (plan D8): {@code enabledBy} is a
  * {@code BooleanSupplier} over the dependency option's STAGED value (Sodium's
  * {@code getValue()} returns the pending edit — the sliders grey the moment "Receive
- * Server LODs" is unticked, before Apply); the two {@link SaveHook}s are two storage
+ * Server LODs" is unticked, before Apply); the shared {@link SaveHook} has one storage
  * proxies — the legacy screen saves once per DISTINCT storage per Apply, collecting
  * them in a {@code HashSet}, which is why the proxies answer {@code hashCode}/
- * {@code equals} (identity) — and the far-player page's push hook fires once.
+ * {@code equals} (identity) — and the complete draft writes once.
  *
  * <p>{@link #SURFACE} is the resolved-member table as DATA: the resolver consumes it
  * and {@code SodiumLegacySurfaceResolvesTest} checks every row (name + arity) against
@@ -124,13 +124,14 @@ public final class LegacySodiumPage {
 
     /**
      * The production entry, called by the constructor hook: the catalog rendered
-     * against the live config and environment, brand-titled. Empty on any failure
+     * against the retained disk draft and environment, brand-titled. Empty on any failure
      * (logged once) — never throws.
      */
     public static List<Object> build() {
         try {
             Handles h = handles();
-            LSSClientConfig cfg = LSSClientConfig.CONFIG;
+            ClientSettingsEditSession cfg = LSSClientConfig.CONFIG.edits();
+            cfg.open(new Object());
             return buildWith(h, cfg, MenuContext.current(), Brand.shortName(), hook -> hook.run(cfg));
         } catch (Throwable t) {
             if (!buildFailureLogged) {
@@ -217,7 +218,7 @@ public final class LegacySodiumPage {
      * for the tab titles, and the save observer the storage proxies call (production:
      * {@code hook.run(cfg)}).
      */
-    static List<Object> buildWith(Handles h, LSSClientConfig cfg, MenuContext ctx, String brand,
+    static List<Object> buildWith(Handles h, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx, String brand,
                                   Consumer<SaveHook> onSave) throws Throwable {
         Map<SaveHook, Object> storages = new HashMap<>();
         for (SaveHook hook : SaveHook.values()) {
@@ -255,7 +256,7 @@ public final class LegacySodiumPage {
         return pages;
     }
 
-    private static Object buildOption(Handles h, OptionSpec spec, LSSClientConfig cfg, MenuContext ctx,
+    private static Object buildOption(Handles h, OptionSpec spec, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx,
                                       Object storage, Map<String, Object> builtById) throws Throwable {
         Class<?> valueType = spec instanceof OptionSpec.BoolSpec ? Boolean.class : Integer.class;
         Object b = h.createBuilder().invoke(valueType, storage);
@@ -266,13 +267,13 @@ public final class LegacySodiumPage {
         }
         switch (spec) {
             case OptionSpec.BoolSpec s -> {
-                h.setBinding().invoke(b, (BiConsumer<Object, Object>) (data, v) -> s.setter().accept((LSSClientConfig) data, (Boolean) v),
-                        (Function<Object, Object>) data -> s.getter().apply((LSSClientConfig) data));
+                h.setBinding().invoke(b, (BiConsumer<Object, Object>) (data, v) -> s.setter().accept((dev.vox.lss.config.menu.ClientSettingsEditSession) data, (Boolean) v),
+                        (Function<Object, Object>) data -> s.getter().apply((dev.vox.lss.config.menu.ClientSettingsEditSession) data));
                 h.setControl().invoke(b, (Function<Object, Object>) option -> invoke(h.tickBoxCtor(), option));
             }
             case OptionSpec.IntSpec s -> {
-                h.setBinding().invoke(b, (BiConsumer<Object, Object>) (data, v) -> s.setter().accept((LSSClientConfig) data, (Integer) v),
-                        (Function<Object, Object>) data -> s.getter().apply((LSSClientConfig) data));
+                h.setBinding().invoke(b, (BiConsumer<Object, Object>) (data, v) -> s.setter().accept((dev.vox.lss.config.menu.ClientSettingsEditSession) data, (Integer) v),
+                        (Function<Object, Object>) data -> s.displayValue((dev.vox.lss.config.menu.ClientSettingsEditSession) data));
                 Object formatter = formatterProxy(h, s.label());
                 h.setControl().invoke(b, (Function<Object, Object>) option ->
                         invoke(h.sliderCtor(), option, s.min(), s.max(), s.step(), formatter));
@@ -299,11 +300,11 @@ public final class LegacySodiumPage {
 
     // The two proxies are the boundaries where SODIUM calls INTO us — from its Apply loop
     // and from every slider render frame, neither of which catches (javap 0.6.13/0.7.3).
-    // Nothing shipped can throw here (JsonConfig.save() contains its own IO, the prefs
-    // push is guarded, indices are clamp-bounded), so containment + a once-bounded WARN is
+    // Draft persistence contains IO failures and retains edits. Defensive containment
+    // plus a once-bounded warning also protects optional API incompatibilities and is
     // defense in depth for the house doctrine: nothing optional may crash a client.
 
-    private static Object storageProxy(Handles h, LSSClientConfig cfg, SaveHook hook, Consumer<SaveHook> onSave) {
+    private static Object storageProxy(Handles h, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, SaveHook hook, Consumer<SaveHook> onSave) {
         return Proxy.newProxyInstance(h.storageClass().getClassLoader(), new Class<?>[]{h.storageClass()},
                 (proxy, method, args) -> {
                     switch (method.getName()) {

@@ -125,7 +125,7 @@ class SodiumLegacySurfaceResolvesTest {
     }
 
     @Test
-    void legacyStatusReturnMembersExistInActualSodium() throws IOException {
+    void legacyDraftRefreshMembersExistInActualSodium() throws IOException {
         Path jar = goldenJar("lss.sodiumLegacyGoldenJar", true);
         try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/client/gui/SodiumOptionsGUI.class")) {
             statusMethods(zip, "client/gui/SodiumOptionsGUI", "getAllOptions");
@@ -135,7 +135,7 @@ class SodiumLegacySurfaceResolvesTest {
     }
 
     @Test
-    void modernStatusReturnMembersExistInActualSodium() throws IOException {
+    void modernDraftRefreshMembersExistInActualSodium() throws IOException {
         Path jar = goldenJar("lss.sodiumModernGoldenJar",
                 "true".equals(System.getProperty("lss.sodiumModernGoldenExpected", "false")));
         try (ZipFile zip = openGolden(jar, "net/caffeinemc/mods/sodium/api/config/ConfigEntryPoint.class")) {
@@ -191,13 +191,17 @@ class SodiumLegacySurfaceResolvesTest {
     }
 
     private static ClassNode read(ZipFile zip, String entryName) {
+        return read(zip, entryName, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+    }
+
+    private static ClassNode read(ZipFile zip, String entryName, int flags) {
         ZipEntry e = zip.getEntry(entryName);
         if (e == null) {
             return null;
         }
         try (InputStream in = zip.getInputStream(e)) {
             ClassNode n = new ClassNode();
-            new ClassReader(in.readAllBytes()).accept(n, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG);
+            new ClassReader(in.readAllBytes()).accept(n, flags);
             return n;
         } catch (IOException ex) {
             throw new java.io.UncheckedIOException(ex);

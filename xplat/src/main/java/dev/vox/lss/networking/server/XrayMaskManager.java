@@ -53,7 +53,7 @@ public final class XrayMaskManager {
     private volatile XrayMaskFilter.MaskSet fallbackMask;
 
     XrayMaskManager(ServerConfigBase config) {
-        this.mode = XrayMaskPolicy.Mode.parse(config.xrayObfuscation);
+        this.mode = XrayMaskPolicy.Mode.parse(config.xrayObfuscation());
         this.config = config;
     }
 
@@ -203,7 +203,7 @@ public final class XrayMaskManager {
             // config list, but at the ENGINE's cutoff so coverage height still mirrors the
             // server's anti-xray intent.
             mask = XrayMaskFilter.MaskSet.resolve(
-                    this.config.xrayHiddenBlocks, noise.maxBlockHeight());
+                    this.config.xrayHiddenBlocks(), noise.maxBlockHeight());
             source = "antixray-mod+lss-list";
             if (!quiet) {
                 LSSLogger.info("AntiXray engine mode 2/3 detected for " + dimension
@@ -228,7 +228,7 @@ public final class XrayMaskManager {
                 resolved = this.fallbackMask;
                 if (resolved == null) {
                     resolved = XrayMaskFilter.MaskSet.resolve(
-                            this.config.xrayHiddenBlocks, this.config.xrayMaxBlockHeight);
+                            this.config.xrayHiddenBlocks(), this.config.xrayMaxBlockHeight());
                     this.fallbackMask = resolved;
                 }
             }

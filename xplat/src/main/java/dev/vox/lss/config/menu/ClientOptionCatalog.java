@@ -22,7 +22,7 @@ import java.util.Optional;
  * The catalog test pins: unique {@code lss:} ids, every key present in {@code en_us.json},
  * defaults equal to a fresh config's fields, binding round-trips, {@code enabledBy}
  * dependencies on the same page, the slider curve inside the validate() clamps, and the
- * far-player page's push hook.
+ * shared disk-only storage hook.
  *
  * <p>Page/option ORDER is display order and is part of the shipped shape (n12: the
  * main page first, far players second).
@@ -39,7 +39,6 @@ public final class ClientOptionCatalog {
     public static final String ID_FAR_PLAYERS_NAME_TAGS = "lss:far_players_name_tags";
     public static final String ID_FAR_PLAYERS_FULL_BRIGHT = "lss:far_players_full_bright";
     public static final String ID_FAR_PLAYERS_RENDER_DISTANCE = "lss:far_players_render_distance";
-    public static final String ID_FAR_PLAYERS_WITH_SEEU = "lss:far_players_with_seeu";
 
     public static final String PAGE_GENERAL = "general";
     public static final String PAGE_FAR_PLAYERS = "far_players";
@@ -68,17 +67,16 @@ public final class ClientOptionCatalog {
     private static dev.vox.lss.common.config.SettingDescriptor withControlMetadata(
             dev.vox.lss.common.config.SettingDescriptor stored) {
         String id = switch (stored.key()) {
-            case "receiveServerLods" -> ID_RECEIVE_SERVER_LODS;
-            case "lodDistanceChunks" -> ID_LOD_DISTANCE;
-            case "lodColumnsPerSecondLimit" -> ID_COLUMN_RATE_LIMIT;
-            case "enableJoinSlowStart" -> ID_JOIN_SLOW_START;
-            case "enableXaeroMapBridge" -> ID_XAERO_MAP_BRIDGE;
-            case "farPlayersEnabled" -> ID_FAR_PLAYERS_ENABLED;
-            case "farPlayersShareSelf" -> ID_FAR_PLAYERS_SHARE_SELF;
-            case "farPlayersNameTags" -> ID_FAR_PLAYERS_NAME_TAGS;
-            case "farPlayersFullBright" -> ID_FAR_PLAYERS_FULL_BRIGHT;
-            case "farPlayersMaxRenderDistanceBlocks" -> ID_FAR_PLAYERS_RENDER_DISTANCE;
-            case "farPlayersWithSeeU" -> ID_FAR_PLAYERS_WITH_SEEU;
+            case "lod.receive" -> ID_RECEIVE_SERVER_LODS;
+            case "lod.distance_chunks" -> ID_LOD_DISTANCE;
+            case "lod.download.max_columns_per_second" -> ID_COLUMN_RATE_LIMIT;
+            case "lod.download.slow_start_on_join" -> ID_JOIN_SLOW_START;
+            case "integrations.xaero_map.enabled" -> ID_XAERO_MAP_BRIDGE;
+            case "far_players.enabled" -> ID_FAR_PLAYERS_ENABLED;
+            case "far_players.sharing.enabled" -> ID_FAR_PLAYERS_SHARE_SELF;
+            case "far_players.name_tags" -> ID_FAR_PLAYERS_NAME_TAGS;
+            case "far_players.full_bright" -> ID_FAR_PLAYERS_FULL_BRIGHT;
+            case "far_players.render_distance_blocks" -> ID_FAR_PLAYERS_RENDER_DISTANCE;
             default -> null;
         };
         if (id == null) return stored;
@@ -86,43 +84,14 @@ public final class ClientOptionCatalog {
         return new dev.vox.lss.common.config.SettingDescriptor(stored.key(), stored.type(), stored.units(),
                 option.nameKey(), stored.defaultPolicy(), stored.domain(), stored.validationBinding(),
                 stored.scopes(), stored.inheritance(), option.visibility().name(),
-                "client owner apply; " + option.saveHook(), false, option.saveHook().name(),
+                "save draft; explicit reload; " + option.saveHook(), false, option.saveHook().name(),
                 dev.vox.lss.common.config.SettingDescriptor.Exposure.UI);
     }
 
     public static java.util.List<dev.vox.lss.common.config.SettingBinding<dev.vox.lss.config.LSSClientConfig>> serializedBindings() {
-        var descriptors = serializedDescriptors();
-        return java.util.List.of(
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(0), config -> config.enableRegionScan),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(1), config -> config.receiveServerLods),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(2), config -> config.useWorldSubBuckets),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(3), config -> config.cacheAddressAliases),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(4), config -> config.lodDistanceChunks),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(5), config -> config.unknownBlockFallback),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(6), config -> config.crossVersionBlockFallbacks),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(7), config -> config.enableV16ServerCompat),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(8), config -> config.enableV19ServerCompat),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(9), config -> config.enableV16Generation),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(10), config -> config.enableAdaptiveScanCadence),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(11), config -> config.enableScanPrefixRetention),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(12), config -> config.enableQuadtreeScan),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(13), config -> config.enableRegionSummarySync),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(14), config -> config.enableXaeroMapBridge),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(15), config -> config.enableXaeroMapBackpressure),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(16), config -> config.enableIngestBackpressure),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(17), config -> config.lodColumnsPerSecondLimit),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(18), config -> config.enableAdaptiveTransferRate),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(19), config -> config.enableJoinSlowStart),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(20), config -> config.farPlayersEnabled),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(21), config -> config.farPlayersMaxDistanceBlocks),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(22), config -> config.farPlayersMinDistanceBlocks),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(23), config -> config.farPlayersNameTags),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(24), config -> config.farPlayersFullBright),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(25), config -> config.farPlayersShareSelf),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(26), config -> config.farPlayersShareDistanceBlocks),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(27), config -> config.farPlayersWithSeeU),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(28), config -> config.farPlayersMaxRenderDistanceBlocks),
-                new dev.vox.lss.common.config.SettingBinding<>(descriptors.get(29), config -> config.farPlayersMaxAnimationDistanceBlocks)        );
+        return serializedDescriptors().stream().map(descriptor ->
+                new dev.vox.lss.common.config.SettingBinding<dev.vox.lss.config.LSSClientConfig>(descriptor,
+                        config -> config.snapshot().values().get(descriptor.key()))).toList();
     }
 
     /** Metadata is derived from the same typed rows used by both Sodium generations. */
@@ -135,9 +104,9 @@ public final class ClientOptionCatalog {
         return new dev.vox.lss.common.config.SettingDescriptor(option.id(), type,
                 option.id().equals(ID_COLUMN_RATE_LIMIT) ? "slider index -> columns/s; 0 unlimited"
                         : option.id().equals(ID_LOD_DISTANCE) ? "chunks; 0 server default" : "option value",
-                option.nameKey(), defaults, domain, "OptionSpec typed binding + LSSClientConfig.validate",
+                option.nameKey(), defaults, domain, "OptionSpec typed binding + SettingsSchema.client",
                 java.util.Set.of(dev.vox.lss.common.config.SettingDescriptor.Scope.CLIENT), "client-global",
-                option.visibility().name(), "client owner apply; " + option.saveHook().name(), false,
+                option.visibility().name(), "save draft; explicit reload; " + option.saveHook().name(), false,
                 option.saveHook().name(), dev.vox.lss.common.config.SettingDescriptor.Exposure.UI);
     }
 
@@ -148,7 +117,7 @@ public final class ClientOptionCatalog {
                 .tooltip("lss.config.receive_server_lods.tooltip")
                 .impact(Impact.HIGH)
                 .defaultValue(true)
-                .bind(c -> c.receiveServerLods, (c, v) -> c.receiveServerLods = v)
+                .bind(c -> c.bool("lod.receive"), (c, v) -> c.set("lod.receive", v))
                 .build();
 
         // LOD Distance: 0 = the server's distance. No impact line (the shipped shape).
@@ -158,7 +127,7 @@ public final class ClientOptionCatalog {
                 .defaultValue(0)
                 .range(0, LSSConstants.MAX_LOD_DISTANCE, 1)
                 .label(v -> v == 0 ? Label.key("lss.config.lod_distance.server_default") : Label.number(v))
-                .bind(c -> c.lodDistanceChunks, (c, v) -> c.lodDistanceChunks = v)
+                .bind(c -> c.integer("lod.distance_chunks"), (c, v) -> c.set("lod.distance_chunks", v))
                 .enabledBy(ID_RECEIVE_SERVER_LODS)
                 .build();
 
@@ -182,15 +151,15 @@ public final class ClientOptionCatalog {
                 .label(idx -> idx == 0
                         ? Label.key("lss.config.column_rate_limit.unlimited")
                         : Label.number(RateSliderStops.STOPS[idx]))
-                .bind(c -> RateSliderStops.nearestIndex(c.lodColumnsPerSecondLimit),
-                        (c, idx) -> c.lodColumnsPerSecondLimit = RateSliderStops.STOPS[idx])
+                .bind(c -> RateSliderStops.nearestIndex(c.integer("lod.download.max_columns_per_second")),
+                        (c, idx) -> c.set("lod.download.max_columns_per_second", RateSliderStops.STOPS[idx]))
                 .enabledBy(ID_RECEIVE_SERVER_LODS)
                 .build();
 
         // Slow Start on Join (join-slow-start-plan.md, user direction: toggle in the
         // menu, default enabled). Inert while the enableAdaptiveTransferRate umbrella
         // is off (config-file-only key) — the tooltip says so when that is the case
-        // at menu build (the SeeU conditional-tooltip precedent).
+        // at menu build.
         var slowStart = BoolSpec.builder(ID_JOIN_SLOW_START)
                 .name("lss.config.join_slow_start")
                 .tooltip(Tooltip.conditional(Condition.GOVERNOR_ON,
@@ -198,12 +167,12 @@ public final class ClientOptionCatalog {
                         "lss.config.join_slow_start.tooltip.governor_off"))
                 .impact(Impact.LOW)
                 .defaultValue(true)
-                .bind(c -> c.enableJoinSlowStart, (c, v) -> c.enableJoinSlowStart = v)
+                .bind(c -> c.bool("lod.download.slow_start_on_join"), (c, v) -> c.set("lod.download.slow_start_on_join", v))
                 .enabledBy(ID_RECEIVE_SERVER_LODS)
                 .build();
 
         // Xaero's World Map bridge (issue #223, xaero-map-bridge-plan.md §2.9): write
-        // received LODs into Xaero's map. Checked LIVE (flip applies mid-session); with
+        // received LODs into Xaero's map. Apply reloads, then reconnect activates it; with
         // Xaero absent the toggle is inert — say so where the user is looking.
         var xaero = BoolSpec.builder(ID_XAERO_MAP_BRIDGE)
                 .name("lss.config.xaero_map_bridge")
@@ -212,7 +181,7 @@ public final class ClientOptionCatalog {
                         "lss.config.xaero_map_bridge.tooltip.not_installed"))
                 .impact(Impact.LOW)
                 .defaultValue(false)
-                .bind(c -> c.enableXaeroMapBridge, (c, v) -> c.enableXaeroMapBridge = v)
+                .bind(c -> c.bool("integrations.xaero_map.enabled"), (c, v) -> c.set("integrations.xaero_map.enabled", v))
                 .enabledBy(ID_RECEIVE_SERVER_LODS)
                 .build();
 
@@ -224,26 +193,21 @@ public final class ClientOptionCatalog {
     }
 
     // ---- Far players (E2, FARP §3.3): its own page — a distinct feature with its own
-    //      privacy semantics, not another LOD slider. Every option here persists AND
-    //      pushes the prefs NOW (E2 review M2/m4) — SaveHook.SAVE_AND_PUSH_FAR_PLAYER_PREFS.
-    //      The renderer-only options are RENDER_AVAILABLE-gated (hidden wherever a loader/line's
-    //      render path is a stub — on this 1.21.11 line the NeoForge twin; see Visibility);
-    //      "Share My Position" is the prefs carrier and is never hidden — a NeoForge user's
-    //      opt-out must stay deliverable.
+    //      privacy semantics, not another LOD slider. Every option saves
+    //      a draft; explicit reload publishes it.
+    //      The renderer-only options are RENDER_AVAILABLE-gated (hidden on NeoForge v1,
+    //      whose render path is a stub); "Share My Position" is the prefs carrier and is
+    //      never hidden — a NeoForge user's opt-out must stay deliverable.
     private static PageSpec farPlayersPage() {
-        var push = SaveHook.SAVE_AND_PUSH_FAR_PLAYER_PREFS;
+        var save = SaveHook.SAVE;
 
-        // With SeeU installed the coexist gate overrides this toggle — say so where the
-        // user is looking (E3, the plan §6 discoverability requirement).
         var enabled = BoolSpec.builder(ID_FAR_PLAYERS_ENABLED)
                 .name("lss.config.far_players_enabled")
-                .tooltip(Tooltip.conditional(Condition.SEEU_ABSENT,
-                        "lss.config.far_players_enabled.tooltip",
-                        "lss.config.far_players_enabled.tooltip.seeu"))
+                .tooltip("lss.config.far_players_enabled.tooltip")
                 .impact(Impact.LOW)
                 .defaultValue(true)
-                .bind(c -> c.farPlayersEnabled, (c, v) -> c.farPlayersEnabled = v)
-                .saveHook(push)
+                .bind(c -> c.bool("far_players.enabled"), (c, v) -> c.set("far_players.enabled", v))
+                .saveHook(save)
                 .visibility(Visibility.RENDER_AVAILABLE)
                 .build();
 
@@ -255,8 +219,8 @@ public final class ClientOptionCatalog {
                 .tooltip("lss.config.far_players_share_self.tooltip")
                 .impact(Impact.LOW)
                 .defaultValue(true)
-                .bind(c -> c.farPlayersShareSelf, (c, v) -> c.farPlayersShareSelf = v)
-                .saveHook(push)
+                .bind(c -> c.bool("far_players.sharing.enabled"), (c, v) -> c.set("far_players.sharing.enabled", v))
+                .saveHook(save)
                 .build();
 
         var tags = BoolSpec.builder(ID_FAR_PLAYERS_NAME_TAGS)
@@ -264,23 +228,22 @@ public final class ClientOptionCatalog {
                 .tooltip("lss.config.far_players_name_tags.tooltip")
                 .impact(Impact.LOW)
                 .defaultValue(true)
-                .bind(c -> c.farPlayersNameTags, (c, v) -> c.farPlayersNameTags = v)
+                .bind(c -> c.bool("far_players.name_tags"), (c, v) -> c.set("far_players.name_tags", v))
                 .enabledBy(ID_FAR_PLAYERS_ENABLED)
-                .saveHook(push)
+                .saveHook(save)
                 .visibility(Visibility.RENDER_AVAILABLE)
                 .build();
 
         // Full-bright proxies (far-player-render-hardening-plan.md WI-2): render-only, so it
-        // is NOT a capability-bit term — but it rides the page-uniform push hook like every
-        // far-players row (pinned; the prefs changed-guard makes the push a no-op).
+        // is not a capability-bit term. Saving this row never sends preferences.
         var fullBright = BoolSpec.builder(ID_FAR_PLAYERS_FULL_BRIGHT)
                 .name("lss.config.far_players_full_bright")
                 .tooltip("lss.config.far_players_full_bright.tooltip")
                 .impact(Impact.LOW)
                 .defaultValue(false)
-                .bind(c -> c.farPlayersFullBright, (c, v) -> c.farPlayersFullBright = v)
+                .bind(c -> c.bool("far_players.full_bright"), (c, v) -> c.set("far_players.full_bright", v))
                 .enabledBy(ID_FAR_PLAYERS_ENABLED)
-                .saveHook(push)
+                .saveHook(save)
                 .visibility(Visibility.RENDER_AVAILABLE)
                 .build();
 
@@ -291,24 +254,13 @@ public final class ClientOptionCatalog {
                 .defaultValue(0)
                 .range(0, 16384, 128)
                 .label(v -> v == 0 ? Label.key("lss.config.far_players_render_distance.server") : Label.number(v))
-                .bind(c -> c.farPlayersMaxRenderDistanceBlocks, (c, v) -> c.farPlayersMaxRenderDistanceBlocks = v)
+                .bind(c -> c.integer("far_players.render_distance_blocks"), (c, v) -> c.set("far_players.render_distance_blocks", v))
                 .enabledBy(ID_FAR_PLAYERS_ENABLED)
-                .saveHook(push)
+                .saveHook(save)
                 .visibility(Visibility.RENDER_AVAILABLE)
                 .build();
 
-        // The coexist override — only meaningful (and only shown) with SeeU installed.
-        var withSeeU = BoolSpec.builder(ID_FAR_PLAYERS_WITH_SEEU)
-                .name("lss.config.far_players_with_seeu")
-                .tooltip("lss.config.far_players_with_seeu.tooltip")
-                .impact(Impact.LOW)
-                .defaultValue(false)
-                .bind(c -> c.farPlayersWithSeeU, (c, v) -> c.farPlayersWithSeeU = v)
-                .saveHook(push)
-                .visibility(Visibility.SEEU_ONLY)
-                .build();
-
         return PageSpec.of(PAGE_FAR_PLAYERS, "lss.config.far_players.page",
-                GroupSpec.of(enabled, share, tags, fullBright, render, withSeeU));
+                GroupSpec.of(enabled, share, tags, fullBright, render));
     }
 }

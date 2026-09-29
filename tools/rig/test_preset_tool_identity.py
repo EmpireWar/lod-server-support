@@ -13,10 +13,10 @@ class ActiveDependencyControls(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.staged={}
-        for name in ('server_control_smoke.py','conservative_native.py','check_conservative_native.py'):
+        for name in ('server_control_smoke.py','conservative_native.py','check_conservative_native.py','rig_settings.py'):
             data=('# synthetic identity-only source '+name+'\n').encode()
             (self.root/name).write_bytes(data)
-            self.staged['preset-tools/'+name]=hashlib.sha256(data).hexdigest()
+            self.staged['settings-tools/'+name]=hashlib.sha256(data).hexdigest()
     def test_unchanged_active_dependencies_are_accepted(self):
         verifier.verify_active_dependencies(self.root,self.staged)
     def test_changed_active_numeric_helper_is_rejected(self):

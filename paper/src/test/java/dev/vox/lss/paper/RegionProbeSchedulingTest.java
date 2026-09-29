@@ -75,8 +75,8 @@ class RegionProbeSchedulingTest {
 
     @BeforeEach
     void buildRig() {
-        config = new PaperConfig();
-        config.validate();
+        config = new MutablePaperSettings();
+        MutablePaperSettings.normalize(config);
         players = new ConcurrentHashMap<>();
         diskReader = new PaperChunkDiskReader(1, false);
         processor = new PaperRequestProcessingServiceTest.RecordingProcessor(players, diskReader);

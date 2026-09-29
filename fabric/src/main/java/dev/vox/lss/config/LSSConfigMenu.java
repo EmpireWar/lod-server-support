@@ -40,8 +40,10 @@ import java.util.Optional;
 public class LSSConfigMenu implements ConfigEntryPoint {
     @Override
     public void registerConfigLate(ConfigBuilder builder) {
-        var cfg = LSSClientConfig.CONFIG;
-        var ctx = MenuContext.current();
+        registerDraft(builder, LSSClientConfig.CONFIG.edits(), MenuContext.current());
+    }
+
+    void registerDraft(ConfigBuilder builder, dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx) {
 
         var container = FabricLoader.getInstance().getModContainer(LSSConstants.MOD_ID);
         var version = container
@@ -58,7 +60,7 @@ public class LSSConfigMenu implements ConfigEntryPoint {
         // ONE handler per SaveHook, shared by every option that uses it: Sodium keeps the
         // pending handlers in an identity Set and fires each once per Apply, so per-option
         // lambdas would save the file once per changed option (implementation review) —
-        // and the legacy renderer's two storage proxies are the same shape (plan D8).
+        // and the legacy renderer's storage proxy are the same shape (plan D8).
         Map<SaveHook, StorageEventHandler> handlers = new EnumMap<>(SaveHook.class);
         for (SaveHook hook : SaveHook.values()) {
             handlers.put(hook, () -> hook.run(cfg));
@@ -86,7 +88,7 @@ public class LSSConfigMenu implements ConfigEntryPoint {
     }
 
     private static OptionBuilder buildOption(ConfigBuilder builder, OptionSpec spec,
-                                             LSSClientConfig cfg, MenuContext ctx,
+                                             dev.vox.lss.config.menu.ClientSettingsEditSession cfg, MenuContext ctx,
                                              StorageEventHandler save) {
         Identifier id = Identifier.parse(spec.id());
         StatefulOptionBuilder<?> option = switch (spec) {
@@ -101,12 +103,14 @@ public class LSSConfigMenu implements ConfigEntryPoint {
                 o.setDefaultValue(s.defaultValue());
                 o.setRange(new Range(s.min(), s.max(), s.step()));
                 o.setValueFormatter(v -> component(s.label().apply(v)));
-                o.setBinding(v -> s.setter().accept(cfg, v), () -> s.getter().apply(cfg));
+                o.setBinding(v -> s.setter().accept(cfg, v), () -> s.displayValue(cfg));
                 yield o;
             }
         };
         option.setName(Component.translatable(spec.nameKey()));
-        option.setTooltip(Component.translatable(spec.tooltip().resolve(ctx)));
+        option.setTooltip(unused -> Component.translatable(spec.tooltip().resolve(
+                spec.tooltip().condition() == dev.vox.lss.config.menu.Tooltip.Condition.GOVERNOR_ON
+                        ? MenuContext.current() : ctx)));
         if (spec.impact() != null) {
             option.setImpact(OptionImpact.valueOf(spec.impact().name()));
         }

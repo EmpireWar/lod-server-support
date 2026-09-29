@@ -48,6 +48,24 @@ class ScenarioClosureTest(unittest.TestCase):
   before=self.get();self.put('check_export_lifecycle','value=2\n');self.assertEqual(before,self.get())
  def test_declared_export_checker_must_exist(self):
   with self.assertRaisesRegex(ValueError,'missing scenario dependency'):self.get({'checker':'export-lifecycle'})
+ def test_yaml_reload_binds_checker_driver_and_transitive_evidence(self):
+  self.put('check_yaml_reload','from native_evidence import inspect\n')
+  self.put('drive_yaml_reload','from check_yaml_reload import inspect\n')
+  self.put('native_evidence','value=1\n')
+  scenario={'checker':'yaml-reload'}
+  for module in ('check_yaml_reload','drive_yaml_reload','native_evidence'):
+   before=self.get(scenario)
+   self.assertIn('tools/rig/'+module+'.py',before)
+   path=self.root/'tools/rig'/(module+'.py');path.write_text(path.read_text()+'changed=True\n')
+   self.assertNotEqual(before,self.get(scenario))
+ def test_unselected_yaml_driver_and_checker_do_not_change_other_routes(self):
+  self.put('rig','from check_yaml_reload import inspect\nfrom drive_yaml_reload import ReloadDriver\n')
+  self.put('check_yaml_reload','value=1\n');self.put('drive_yaml_reload','value=1\n')
+  before=self.get()
+  for module in ('check_yaml_reload','drive_yaml_reload'):
+   self.assertNotIn('tools/rig/'+module+'.py',before)
+   self.put(module,'value=2\n')
+  self.assertEqual(before,self.get())
  def test_unknown_route_rejected(self):
   with self.assertRaisesRegex(ValueError,'undeclared'):self.get({'execution_route':'new-route'})
 

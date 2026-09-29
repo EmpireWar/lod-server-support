@@ -1,0 +1,726 @@
+{
+  "intended_lss_publish_artifact_count": 13,
+  "intended_publish_artifact_count": 28,
+  "intended_vss_publish_artifact_count": 15,
+  "lines": {
+    "1.21.1": {
+      "artifacts": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.1.jar": {
+          "bytes": 8760228,
+          "publish": true,
+          "sha256": "f93fa217e0fdc6433e47c38555dcb8efda3d808490265974d6cdececfbaaff1e"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.1.jar": {
+          "bytes": 8766377,
+          "publish": true,
+          "sha256": "157e13a23adc991eba22401f4268496f9192089eab9ac841402d3bfb94d338da"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.1.jar": {
+          "bytes": 13954384,
+          "publish": true,
+          "sha256": "404ac7b3dde3454ae8087144956a5abf970bdf4ddaa273764e0a1ed5b216095e"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.1.jar": {
+          "bytes": 13960461,
+          "publish": true,
+          "sha256": "a780f192500f72e7559cc2bad28fea0ec3c07d8dc20c08c2eb96d3d79f8ce06b"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+1.21.1.jar": {
+          "bytes": 8321235,
+          "publish": true,
+          "sha256": "50071419f15e371574fc8f52977de54a6dbac0314b49e483a42d5db73cdce55e"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.1.jar": {
+          "bytes": 8321169,
+          "publish": true,
+          "sha256": "bb9d3705d682d42ed23ea25dd4744d18ac95f79bc96de9d3c370120daa0917e5"
+        }
+      },
+      "base_branch": "support/mc1.21.1",
+      "base_commit": "0390908b4e7857e0ec11fbd329364a5376582349",
+      "baseline_candidate_commit": "b5d9059d911ddda34765c4fd62fd5da49d5477c5",
+      "build_attempt": "01",
+      "build_commit": "861379538331c3966e732f8528806d4d6e87bd23",
+      "build_log_sha256": "50a5c4efcf6f9f6b10ce85818a850377b2ebba3c3edaf62412356f273418b152",
+      "client_gametest": "unavailable-on-line",
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 917
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 4,
+          "tests": 1653
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 23
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 536
+        }
+      },
+      "make_latest": false,
+      "minecraft_versions": {
+        "fabric": [
+          "1.21.1"
+        ],
+        "neoforge": [
+          "1.21.1"
+        ],
+        "paper": [
+          "1.21.1"
+        ]
+      },
+      "neoforge_published": true,
+      "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.1.md",
+      "notes_sha256": "00cd9042cf383ff8fa73d1d94b068d14e5f3798a6816d3dff0babb61bc166dbb",
+      "release_branch": "release/v0.16.0-mc1.21.1",
+      "reviewed_catalog_commit": "861379538331c3966e732f8528806d4d6e87bd23",
+      "server_gametests_passed": [
+        78,
+        8
+      ],
+      "source_commit": "6d5f2b00b5af2512177cf9c2b8cf29435d22d3b0",
+      "tag": "v0.16.0+mc1.21.1"
+    },
+    "1.21.10": {
+      "artifacts": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.10.jar": {
+          "bytes": 8754701,
+          "publish": true,
+          "sha256": "743a67c95534395651889e796422e2bb8ad989c7e4290a1dd09351678c709e5b"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.10.jar": {
+          "bytes": 8760851,
+          "publish": true,
+          "sha256": "5d683bf6224bd60667504bd4364f0cefc1343a49d873b8daf4dca9360943aaca"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.10.jar": {
+          "bytes": 13920603,
+          "publish": false,
+          "sha256": "09ba777120ec1a7ff842f2f96efd608ddc1fff3f187f6964a545f1452f0cd027"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.10.jar": {
+          "bytes": 13926683,
+          "publish": true,
+          "sha256": "636b7c4a884c863107f5f9621d1f5bb84abffad4f75807070b40194caf700f44"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+1.21.10.jar": {
+          "bytes": 8320797,
+          "publish": true,
+          "sha256": "00d5463dbd15815e9b05a490fc0b0dd158205acc686edaaeea478d413ea17148"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.10.jar": {
+          "bytes": 8320735,
+          "publish": true,
+          "sha256": "97c2a96c2d92ff0a45f044744316eae1907f99375e3f1f1e8131ce36893923a4"
+        }
+      },
+      "base_branch": "support/mc1.21.10",
+      "base_commit": "4d4f630078b84ec51f2564fd4f55843c4a14b3cc",
+      "baseline_candidate_commit": "d606269965b2d4677988e73726f0eda46721e784",
+      "build_attempt": "01",
+      "build_commit": "e50b3b6f91eb65c414bd24ea421757cced6812ef",
+      "build_log_sha256": "cc943231570c501be9efc09c30fa71048579dcb0fc769d714b5e4866403b559a",
+      "client_gametest": "passed",
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 916
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 6,
+          "tests": 1649
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 19
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 536
+        }
+      },
+      "make_latest": false,
+      "minecraft_versions": {
+        "fabric": [
+          "1.21.10"
+        ],
+        "neoforge": [
+          "1.21.10"
+        ],
+        "paper": [
+          "1.21.10"
+        ]
+      },
+      "neoforge_published": false,
+      "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.10.md",
+      "notes_sha256": "dd3af694eee15cdc796eb4becf3c25d5fc932f8e7771da606999f3482395529e",
+      "release_branch": "release/v0.16.0-mc1.21.10",
+      "reviewed_catalog_commit": "e50b3b6f91eb65c414bd24ea421757cced6812ef",
+      "server_gametests_passed": [
+        80,
+        8
+      ],
+      "source_commit": "c048f1079a281b18fd1e50dcfb44b6e1727ed267",
+      "tag": "v0.16.0+mc1.21.10"
+    },
+    "1.21.11": {
+      "artifacts": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.11.jar": {
+          "bytes": 8761022,
+          "publish": true,
+          "sha256": "a169e92f9cd2501c2f22f6025403fb991cf136753add19946ad86689c8a2c4a6"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.11.jar": {
+          "bytes": 8767172,
+          "publish": true,
+          "sha256": "7553c52eae755f37c4e3100e91899e5537ffb9cdf9442b0efc3b3502e551b610"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.11.jar": {
+          "bytes": 13927152,
+          "publish": false,
+          "sha256": "196789293adb485d427be914bec56b494682b1efeb679e06c180676f68508dde"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.11.jar": {
+          "bytes": 13933228,
+          "publish": true,
+          "sha256": "cca7ab02252f2e53a3f9991b7d9c1ab17a3cc661d458a8326fef4be06dbd959c"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+1.21.11.jar": {
+          "bytes": 8320724,
+          "publish": true,
+          "sha256": "e18b0c75ff9dc60e042c538f42c0eddb0474b3eca54c1b38e668a341fdfa34d8"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.11.jar": {
+          "bytes": 8320663,
+          "publish": true,
+          "sha256": "4fd7ac5ee70273ef53f8c66d2a7a14454adcd2448fd0606010c0164f40ab3d79"
+        }
+      },
+      "base_branch": "support/mc1.21.11-v0.14",
+      "base_commit": "e2aed3953f2a13d3fe9b2e9c978ef8973220c245",
+      "baseline_candidate_commit": "549c28515fa9e5fb432a6ac07b54e1dc49f7607d",
+      "build_attempt": "01",
+      "build_commit": "03aa8485585e9dfd4e062dbaca222d2959e0c261",
+      "build_log_sha256": "e8e8557d2ee043291eaea4d32cfb6ed6026d642504ae053d6571a9d36e1f941f",
+      "client_gametest": "passed",
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 916
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 4,
+          "tests": 1654
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 23
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 536
+        }
+      },
+      "make_latest": false,
+      "minecraft_versions": {
+        "fabric": [
+          "1.21.11"
+        ],
+        "neoforge": [
+          "1.21.11"
+        ],
+        "paper": [
+          "1.21.11"
+        ]
+      },
+      "neoforge_published": false,
+      "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.11.md",
+      "notes_sha256": "17affb0892ebe2a2783a7f3ce46f7f6e30507e111c83368bb48721821d3f7a44",
+      "release_branch": "release/v0.16.0-mc1.21.11",
+      "reviewed_catalog_commit": "03aa8485585e9dfd4e062dbaca222d2959e0c261",
+      "server_gametests_passed": [
+        80,
+        8
+      ],
+      "source_commit": "18805068462ce5ef38337fc08a9680ff01e195b1",
+      "tag": "v0.16.0+mc1.21.11"
+    },
+    "26.1": {
+      "artifacts": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+26.1.2.jar": {
+          "bytes": 8763640,
+          "publish": true,
+          "sha256": "79e73a9fcb55067af652551d628f2736ebdc28ffc37de5ae101b9db1bbdf2877"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.1.2.jar": {
+          "bytes": 8769789,
+          "publish": true,
+          "sha256": "64644e8598cf44133e39d3b7aa3aca563affcfff35c9c31afe7f296892dfd384"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.1.2.jar": {
+          "bytes": 13929426,
+          "publish": true,
+          "sha256": "cc6b49b175e1d4c84a7875e1b78e73354760d948d9a585b80adae321b3673873"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.1.2.jar": {
+          "bytes": 13935502,
+          "publish": true,
+          "sha256": "727896a1e4f512ae4cfcc7f648879ccb3f2ac73dd8245f833e74f843ef9b8611"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+26.1.2.jar": {
+          "bytes": 8320630,
+          "publish": true,
+          "sha256": "c3b502a718ba94223c96c44fa983d3e7f82d86b86f6e207b25fecf395711426f"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+26.1.2.jar": {
+          "bytes": 8320568,
+          "publish": true,
+          "sha256": "b57d6bc731cd16958cde8f8eae44e3adcf425a4f71be8de65bb851b0fab798f3"
+        }
+      },
+      "base_branch": "support/mc26.1-v0.14",
+      "base_commit": "decdeceedc323749304c4dcb73255de07544b6f0",
+      "baseline_candidate_commit": "dc82cfabb809117db2ae8d21b97143a898d31c6e",
+      "build_attempt": "01",
+      "build_commit": "c3b1fcdd2494cd655501d2b7196188ebc242e1a7",
+      "build_log_sha256": "093285b7248d3480535e1cc2f228cd386c62cbd4c411001908a0e1fb087de865",
+      "client_gametest": "passed",
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 916
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 4,
+          "tests": 1661
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 23
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 536
+        }
+      },
+      "make_latest": false,
+      "minecraft_versions": {
+        "fabric": [
+          "26.1",
+          "26.1.1",
+          "26.1.2"
+        ],
+        "neoforge": [
+          "26.1.2"
+        ],
+        "paper": [
+          "26.1.2"
+        ]
+      },
+      "neoforge_published": true,
+      "notes_file": "docs/planning/v0.16.0-release-notes/mc26.1.md",
+      "notes_sha256": "c32425bdb7cd4cd020dfa86ad54a4b3fd7991494563777d0a370480a29c1eca0",
+      "release_branch": "release/v0.16.0-mc26.1",
+      "reviewed_catalog_commit": "c3b1fcdd2494cd655501d2b7196188ebc242e1a7",
+      "server_gametests_passed": [
+        79,
+        8
+      ],
+      "source_commit": "fd48a48c8c24132c5c51c519659c6e547583246d",
+      "tag": "v0.16.0+mc26.1"
+    },
+    "26.2": {
+      "artifacts": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+26.2.jar": {
+          "bytes": 8765019,
+          "publish": true,
+          "sha256": "9c5307223c61a6e771954b0f7c3e247cfb8fc2adceadd3622efe91a9f1ea840a"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.2.jar": {
+          "bytes": 8771177,
+          "publish": true,
+          "sha256": "6afd7880fac5df3f8fac492b7582b60eab8141f56b88b335a0bcfac2e8f6324b"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.2.jar": {
+          "bytes": 13930381,
+          "publish": true,
+          "sha256": "87546481fefb3dc8449a4e8bcadeb6978f31b2c9c5ec8c22f26d534419c71164"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.2.jar": {
+          "bytes": 13936467,
+          "publish": true,
+          "sha256": "9e6a61d732f9617f0b15dbde63295144dcb78f1f40699d458ca9edca1dee078f"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+26.2.jar": {
+          "bytes": 8320763,
+          "publish": true,
+          "sha256": "6fbc800156329e2efcb4fb17e6f087217c3752b5ecc26c849df9c2a0661706e9"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+26.2.jar": {
+          "bytes": 8320703,
+          "publish": true,
+          "sha256": "75e4d6a554900dd630e379b090c7bce429cd9a964be3aeb6bdb8b7e93776f387"
+        }
+      },
+      "base_branch": "main",
+      "base_commit": "d4b415d5d84c2b272532e011669a265109db509c",
+      "baseline_candidate_commit": "c04dd01e7d7272f4b5add1df86d776502273d1ae",
+      "build_attempt": "02",
+      "build_commit": "e9e2caad73dd9e883772cc42157d34947cfa14f3",
+      "build_log_sha256": "6dcb78bea734b5e59feba6953085f120be02b998d042e739a839f9e538ba13b3",
+      "client_gametest": "passed",
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 917
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 4,
+          "tests": 1660
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 23
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 538
+        }
+      },
+      "make_latest": true,
+      "minecraft_versions": {
+        "fabric": [
+          "26.2"
+        ],
+        "neoforge": [
+          "26.2"
+        ],
+        "paper": [
+          "26.2"
+        ]
+      },
+      "neoforge_published": true,
+      "notes_file": "docs/planning/v0.16.0-release-notes/main.md",
+      "notes_sha256": "35cbec714df425a35af6ef6cadbccda066ffc228c19e0cd482f5aa5992ca8e6e",
+      "release_branch": "release/v0.16.0-mc26.2",
+      "reviewed_catalog_commit": "e9e2caad73dd9e883772cc42157d34947cfa14f3",
+      "server_gametests_passed": [
+        79,
+        8
+      ],
+      "source_commit": "ce2533c9a13dd8599beb2e380843888a3a45b3d3",
+      "tag": "v0.16.0"
+    }
+  },
+  "postchecks": {
+    "old_gson_validation": "gson-legacy-01.log",
+    "per_line": {
+      "1.21.1": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "1.21.10": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "1.21.11": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "26.1": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      },
+      "26.2": {
+        "settings-inventory": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "settings-reference": {
+          "exit": 0,
+          "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "test-placement": {
+          "exit": 0,
+          "log_sha256": "5ba10ab8931e485829645d26ae85b58af97593717f1ea67711a2c587ae695dcc"
+        }
+      }
+    },
+    "settings_runtime_identity": {
+      "exit": 0,
+      "log_sha256": "643c7cfc3921e5830e047bed28578bc933677c101c9c5a9f6610b6207052d03c",
+      "prior_invocation": "settings-runtime-identity.log (import failure: missing tools/compat on PYTHONPATH; no tests executed)",
+      "pythonpath": [
+        "tools/compat",
+        "tools/rig"
+      ]
+    },
+    "sqlite_capsules_unchanged": {
+      "1.21.1": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.1.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.1.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.1.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.1.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+1.21.1.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.1.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        }
+      },
+      "1.21.10": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.10.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.10.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.10.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.10.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+1.21.10.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.10.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        }
+      },
+      "1.21.11": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+1.21.11.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.11.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.11.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.11.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+1.21.11.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.11.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        }
+      },
+      "26.1": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+26.1.2.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.1.2.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.1.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.1.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+26.1.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+26.1.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        }
+      },
+      "26.2": {
+        "fabric/build/libs/lod-server-support-fabric-0.16.0+26.2.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.2.jar": {
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "META-INF/jars/common-0.16.0.jar!/dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/lod-server-support-paper-0.16.0+26.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        },
+        "paper/build/libs/voxy-server-side-paper-0.16.0+26.2.jar": {
+          "dev/vox/lss/internal/jdbc/bridge.class.bin": "eb964b2ad992eb4a0ce8af7cc91c70e5686118e14d873f37da77960cd15fe5f6",
+          "dev/vox/lss/internal/jdbc/driver.properties": "daff1fc33da3d2c578228e71f1f3fbab1ba8239b7fc8bee3d142f57b2b5cee5b",
+          "dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin": "c4273190414104eaa2236632c23e6953c4ee444e546b5220351010ce0dec7efa"
+        }
+      }
+    }
+  },
+  "previous_validation_state": "lss-release-prep-v0.16.0-20260929",
+  "published": false,
+  "remote_ci": "pending candidate push and PR checks",
+  "schema_version": 1,
+  "status": "authorized-awaiting-hosted-ci",
+  "validation_revision": "lenient-migration-backfill-followups",
+  "validation_state": "lss-release-followups-v0.16.0",
+  "version": "0.16.0",
+  "vss_conventions": {
+    "changelog": "",
+    "dependencies": [],
+    "featured": false,
+    "filenames": "voxy-server-side-<loader>.jar",
+    "history_version": "0.14.0",
+    "name": "Voxy Server Side 0.16.0",
+    "project_id": "84zcagOb",
+    "publication": "local Modrinth API, after hosted gates",
+    "scope": "all five lines, three maintained loaders; current line.env compatibility metadata",
+    "version_number": "0.16.0"
+  },
+  "vss_publish": true
+}

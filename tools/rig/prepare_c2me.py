@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+from rig_settings import render, values
 import shutil
 import sys
 import zipfile
@@ -136,7 +137,7 @@ def main():
         remapped_paths.append(mapping.get(raw) or snapshot([path], 'remap-%03d' % index, enabled=False))
     runtime['generated_files']['remap-classpath.txt'] = ':'.join(remapped_paths)
     runtime['generated_files']['server/eula.txt'] = 'eula=true\n'
-    runtime['generated_files']['server/config/lss-server-config.json'] = json.dumps(dict(lodStore='off', lodStoreBackfill=False, maxConcurrentDiskReads=64))
+    runtime['generated_files']['server/config/lss-server-config.yaml'] = render({'storage.lod_store.enabled':False, 'storage.lod_store.backfill.enabled':False, 'storage.disk.max_concurrent_reads':64})
     scenario = json.loads((source / 'tools/rig/scenarios/c2me-save-read.json').read_text())
     argv = [str(Path(a.java_home) / 'bin/java'), '-Xmx2G', '-Dfabric.development=true',
             '-Dfabric.defaultModDistributionNamespace=intermediary', '-Dfabric.defaultMixinRemapType=mixin',

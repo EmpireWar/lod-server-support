@@ -1,6 +1,0 @@
-{
-  "enabled": false,
-  "lodStore": "off",
-  "lodStoreBackfill": false,
-  "maxConcurrentDiskReads": 3
-}

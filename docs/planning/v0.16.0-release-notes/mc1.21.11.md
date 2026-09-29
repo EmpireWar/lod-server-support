@@ -19,5 +19,5 @@
 ### Support and Compatibility
 
 - **Platforms** — Fabric and Paper/Purpur/Folia for Minecraft 1.21.11, with correct-not-perfect support; Folia remains experimental.
-- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption; this release publishes LSS only.
+- **Compatibility** — Preserves the network protocol and LSS/VSS configuration adoption.
 - **Known limitations** — Existing Xaero first-spawn gaps, region-boundary shading seams, and shader/LOD-depth limitations remain.

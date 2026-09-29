@@ -1,10 +1,10 @@
 {
   "baseline": {
-    "1.21.1": "8bc13a165220119320127a28188b138d54b45159",
-    "1.21.10": "c87db88b70ce8c61a0ff374a190a6e2bce5028fc",
-    "1.21.11": "14248370a219331279b98da6b52c3aacc71f6d76",
-    "26.1": "c30b83f75d0562a05ce6e2a620a4a0960690b097",
-    "26.2": "d0c2ebd620450fd88352ae43da72d583a4d7cc57"
+    "1.21.1": "a6bfb5f6000bd66cf7906bbf263b17c5e49e9f16",
+    "1.21.10": "10499e8306c118db651ef966f35c0d0eee961dc4",
+    "1.21.11": "7cfae92c7ac828e361f572f0ad6a4805516061e0",
+    "26.1": "38e1156e7581cc98541e5d773f586704b1e6c176",
+    "26.2": "8efca7adac7351cfde6d3b0a35b0fd7e1d9bdbb6"
   },
   "final_shared_invariants": [
     "common/build.gradle",
@@ -40,6 +40,7 @@
   ],
   "reviewed_candidate_blobs": {
     "1.21.1": {
+      ".github/workflows/build.yml": "3c6d98212312a6be1db372b2ea2a74248e567581",
       ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
       ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
@@ -74,6 +75,7 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "d040010d53b6d2e541a0aa7ad3d582a00f209040"
     },
     "1.21.10": {
+      ".github/workflows/build.yml": "23d4159d085d721bf21c75653085d889c3d16d98",
       ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
       ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
@@ -108,6 +110,7 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "da6ce121d3c48b03bfec47ddfe350006d873ba54"
     },
     "1.21.11": {
+      ".github/workflows/build.yml": "23d4159d085d721bf21c75653085d889c3d16d98",
       ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
       ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
@@ -142,6 +145,7 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "21a398c626565b4640ec42fcee4a5876713fa42e"
     },
     "26.1": {
+      ".github/workflows/build.yml": "fb10d277aa7575841c2910488689bc7b5a5714ef",
       ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
       ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",
@@ -176,6 +180,7 @@
       "xplat/src/main/java/dev/vox/lss/networking/server/LSSServerCommands.java": "21a398c626565b4640ec42fcee4a5876713fa42e"
     },
     "26.2": {
+      ".github/workflows/build.yml": "34035c32256e92d2bf066ac855c999a762342f53",
       ".github/workflows/catalog.yml": "0cea2524684c61b849b7fe630d33fe23152e3917",
       ".github/workflows/settings.yml": "a8df58d5b0f0e3a3b6bc5ce4f48da9ab745f0854",
       "common/build.gradle": "403926489351fda6e0290088c52680cc3b6c7240",

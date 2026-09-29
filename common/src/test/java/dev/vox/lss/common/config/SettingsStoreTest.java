@@ -54,6 +54,19 @@ class SettingsStoreTest {
         byte[] original="{broken".getBytes(StandardCharsets.UTF_8);Files.write(file("lss-server-config.json"),original);
         assertThrows(SettingsException.class,()->server("lss").initialize());assertArrayEquals(original,Files.readAllBytes(file("lss-server-config.json")));assertFalse(Files.exists(file("lss-server-config.yaml")));
     }
+    @Test void commentedLegacyFilesMigrateOnceAndKeepTheirOriginalBytes() throws Exception {
+        for(boolean client:List.of(false,true)) {
+            Path target=dir.resolve(client?"loose-client":"loose-server");Files.createDirectories(target);
+            String stem=client?"lss-client-config":"lss-server-config";
+            byte[] original=(client?"// client\n{farPlayersShareSelf:false}":"/* server */\n{enabled:false,lodDistanceChunks:128}").getBytes(StandardCharsets.UTF_8);
+            Files.write(target.resolve(stem+".json"),original);
+            var store=client?new SettingsStore<>(target,"lss",SettingsSchema.client()):new SettingsStore<>(target,"lss",SettingsSchema.server(false));
+            var migrated=store.initialize();
+            assertArrayEquals(original,Files.readAllBytes(target.resolve(stem+".json")));
+            assertArrayEquals(original,Files.readAllBytes(target.resolve(stem+".json.migrated.bak")));
+            assertArrayEquals(migrated.bytes(),store.initialize().bytes());
+        }
+    }
     @Test void sourceEditDuringMigrationAbortsBeforeYamlInstallation()throws Exception {
         Files.writeString(file("lss-server-config.json"),"{}");
         var s=new SettingsStore<>(dir,"lss",SettingsSchema.server(false),m->{},(temp,target)->Files.writeString(file("lss-server-config.json"),"{\"enabled\":false}"));

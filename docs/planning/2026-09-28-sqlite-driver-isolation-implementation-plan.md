@@ -1,10 +1,11 @@
 # Private SQLite driver isolation implementation plan
 
-Date: 2026-09-28. Status: **proposed; implementation is not started**.
+Date: 2026-09-28. Status: **approved for implementation; revised after review**.
 
 Requested outcome: resolve LSS's SQLite package collisions before the next release,
 using a privately loaded bundled driver instead of relying on a shared library mod.
-This plan follows the completed YAML settings implementation. It covers all five
+This fix starts independently on the release/support heads, then is integrated into
+the completed YAML branches. It covers all five
 maintained lines, Fabric, Paper/Folia where available, NeoForge, and both LSS/VSS
 artifacts. Planning authorization does not authorize publication or issue replies.
 
@@ -108,101 +109,84 @@ No game processes or existing databases were used.
 
 ## 3. Proposed runtime design
 
-### 3.1 Packaging and ownership
+### 3.1 Packaging and independent identity
 
-Common owns exactly one driver resource, for example
-`dev/vox/lss/internal/sqlite/sqlite-jdbc.jar.bin`, plus a generated descriptor
-containing coordinate, version, byte length and SHA-256. Use the **stock upstream
-jar bytes** initially; the resource is not a mod, Jar-in-Jar entry or flat classes.
-The `.bin` suffix and absence from loader descriptors make the intent explicit.
-Prove that real loader discovery ignores it rather than assuming this from its name.
+Common owns one opaque capsule at
+`dev/vox/lss/internal/jdbc/sqlite-jdbc.jar.bin`, a descriptor, and a Java-21
+child bridge class packaged as `.class.bin`. Keep the existing eight native
+platforms (Linux and Linux-Musl, Windows, macOS, each x86_64/aarch64); preserve
+upstream classes, services, module metadata and licenses INSIDE the capsule.
+Use deterministic trimming rather than the 14 MB stock payload. Pin both the
+upstream SHA above and the resulting slim SHA in checked-in build/checker data.
+A generated descriptor matching its own input is insufficient supply-chain proof.
+No SQLite class, service or module escapes onto a normal host classpath.
 
-The stock jar is 14,317,659 bytes; today's Fabric slim jar is 4,981,674 bytes.
-Accept approximately 9.3 MB additional uncompressed payload on Fabric/Paper as a
-deliberate simplification. NeoForge already carries the stock SQLite jar. Record
-actual final archive sizes. Retain upstream license/native resources and notices;
-extra bundled platforms do not expand our support commitment. Native trimming can
-be reconsidered separately after correctness, without changing Java/native bytes.
+Compile the child bridge separately. A narrow platform-parent URLClassLoader
+subclass defines its verified raw bytes; the feasibility probe's second directory
+URL did NOT prove this part. The bridge exposes only JDK SQL types, forces JDBC
+initialization, then deregisters drivers defined by its own loader, including on
+failed initialization. Do not register a forwarding driver or change the TCCL.
 
-Add a small Java-21 child-only bridge, compiled as a separate common source set.
-Package its class bytes as an opaque resource as well. It must not be loadable as
-an ordinary LSS class or acquire the host plugin/mod loader as its defining loader.
-The private URLClassLoader defines this one helper from verified resource bytes;
-all other non-JDK classes come solely from the verified driver jar.
+### 3.2 Extraction and runtime lifetime
 
-The bridge creates/configures SQLiteDataSource and removes its own DriverManager
-registration. All public boundary arguments/results are JDK types: String, Path
-converted to a URL string, DataSource, Connection and SQLException. No SQLite
-type, exception cast, callback or class literal crosses into common/platform code.
-No arbitrary child-first loader, package allowlist framework or reflective module
-opening is needed. Keep the bridge narrow and test its classloader explicitly.
+Use one lazily initialized runtime per LSS defining classloader, reused across all
+stores, world closes/reopens and settings reloads. Never load a second native copy
+for a reopened store. Successfully initialized loaders remain available for that
+classloader's lifetime; do not promise immediate native unloading or archive handle
+release. The pinned driver's cached resource stream can keep the jar locked on
+Windows until process exit. Failed bootstrap closes its loader after child cleanup.
 
-### 3.2 Extraction and bootstrap
+Extract immutable, hash-addressed jars into an installation-level cache, independent
+of world directories (including a deleted first world). Verify size/digest before
+reuse; stage uniquely and install create-only. A corrupt cache entry must never
+execute and must not be replaced underneath a loaded loader. Keep an explicit
+`org.sqlite.tmpdir`, `org.sqlite.lib.path` or `org.sqlite.lib.name`; when tmpdir is
+absent establish an installation-level native directory once, never set/restore
+properties around calls. No network requests or new settings are needed.
 
-`SqliteDriverRuntime` in common provides the narrow facade:
+### 3.3 Store ownership and deferred close
 
-1. Locate resources relative to the defining LSS class and verify their descriptor.
-2. Extract the driver beneath the adopted store directory, e.g.
-   `<store>/.sqlite-runtime/sqlite-jdbc-<version>-<sha256>.jar`.
-3. Reuse an existing file only after digest/size verification. A mismatched entry
-   must never execute. Stage to a unique same-directory temp file and install
-   create-only; concurrent extraction must verify the winner. Preserve unrelated
-   files. Corruption recovery may quarantine only the owned cache entry.
-4. Construct the private platform-parent loader and load the child bridge. Assert
-   the driver's defining loader, unnamed module and code-source jar match intent.
-5. Initialize JDBC and immediately deregister only driver instances defined by this
-   loader, from code also defined by this loader. Cleanup must run on initialization
-   failure too. Never deregister another plugin's driver. Do not install a forwarding
-   JDBC driver or change the caller's thread context classloader.
-6. Open/close a private in-memory connection to establish native availability before
-   any existing-store corruption/rebuild path is entered.
-7. Supply DataSources/connections for the existing writer and reader setup code.
-   Their pragmas, connection-thread ownership and SQL remain unchanged.
+Acquire exclusive ownership of the canonical store directory BEFORE opening the
+real database or any probe. Use a permanent sidecar FileLock for cross-process
+exclusion and a JVM-wide, JDK-only claim for classloader/plugin-reload exclusion.
+The JVM claim must happen before opening another descriptor for that lock file:
+closing a duplicate descriptor can release process-wide POSIX locks. Do not keep
+plugin objects in a JVM-global registry on normal lifecycle paths, and never unlink
+the locked sidecar. If native close fails, an exceptional daemon retains the lease
+and its defining loader until JVM exit. It has no inherited thread locals and a
+null context loader; interruption cannot release ownership. This deliberate
+failure-only retention prevents channel cleaners from releasing the OS lock after
+a failed store is discarded. Restart is required; a concurrent shutdown hook must
+not close the lock while SQL users can still run.
 
-Avoid caching reflective Method/Constructor objects in process-global registries.
-Within the runtime, resolve the small bridge API once rather than reflecting per
-row or statement. Reflection is on initialization/connection creation only.
+Retain ownership until all native database users finish and every connection closes.
+Track reader admission around all SQL read entrypoints as well as batcher lifetime;
+shutdown denies new admissions. If bounded shutdown expires, retain the writer,
+runtime and directory claim; the last completing worker/reader performs final
+cleanup exactly once. A new service/plugin loader must fail closed while the old
+owner is alive. Uncertain connection-close failure retains ownership. Constructor
+failure closes acquired connections before releasing ownership. Test same-path
+aliases, repeated shutdown, blocked readers/writer, failed construction and reopen.
 
-### 3.3 Native properties and failure boundaries
+### 3.4 Failure classification and data preservation
 
-Keep the existing operator compatibility policy for `org.sqlite.tmpdir`: preserve
-an explicit value; when absent, establish the existing store-directory fallback
-before private native initialization. Do not temporarily set/restore that property
-per connection or loader; unrelated drivers do not synchronize on our lock.
-Do not overwrite `org.sqlite.lib.path` or `org.sqlite.lib.name`.
+Before opening an existing store, create a disposable file-backed probe in the
+SAME STORE FILESYSTEM. Assert `journal_mode=WAL` actually succeeds and two
+connections can write/read committed data. Close its handles before deleting only
+its own temporary files. An in-memory/bootstrap probe is not evidence of WAL or
+filesystem support. Probe failure leaves existing DB/WAL/SHM bytes intact.
 
-This deliberately retains an existing JVM-global surface rather than claiming
-native-property isolation. Explicit overrides, unwritable directories and noexec
-mounts need tests and truthful diagnostics. A writable world directory does not
-prove native execution is allowed. P0 must establish that ordinary coexisting
-drivers use separate extracted native files without new global-property churn.
-If robust isolation requires driver-bytecode changes or native forking, revisit
-the design instead of silently adding those mechanisms.
+Narrow recovery in `openOrRecreateWriter`: rebuild only for SQLite primary error
+codes CORRUPT (11), NOTADB (26), or the existing explicit metadata DROP verdict.
+I/O, permissions, locks, native/linkage and arbitrary setup errors preserve the
+store and disable acceleration honestly. Unwrap reflective causes; report private
+driver origin/version and a useful failure cause.
 
-Bootstrap/extraction/class linkage errors are separate from corrupt database
-errors. Place private runtime initialization before `openOrRecreateWriter()`;
-preserve the database if this prerequisite fails. Unwrap reflection exceptions
-without losing the actual cause, and bound repeated diagnostics. No changes to
-world contents or live server configuration are necessary.
-
-### 3.4 Lifetime and shutdown
-
-One runtime per store/service lifetime, shared by all its writer and reader
-connections; never one per connection, dimension or settings reload. Keep ownership
-explicit on the store, with no JVM-global singleton retaining plugin classloaders.
-
-- Failed construction closes any connection, bridge and loader it acquired.
-- Normal shutdown drains/stops the batcher, closes statements and all reader/writer
-  connections, then closes the loader. Remove references retained by reader-thread
-  locals through the existing pool lifecycle or an explicit owner cleanup path.
-- The existing bounded shutdown can time out while the batcher is still alive.
-  In that case do **not** close its runtime underneath it: defer final cleanup to
-  worker completion, exactly once. Test this path and reader/open shutdown races.
-- Closing URLClassLoader releases archive handles; it does not promise immediate
-  native unloading. Do not delete loaded DLLs or require deterministic GC. Keep
-  immutable extracted jars reusable; avoid a new background cache-pruning service.
-- Reopening an integrated-server world or re-enabling a plugin must produce a valid
-  runtime without stale registration, old-world ownership or version confusion.
+Likewise `get`/`getFrame` may remove a damaged row only for explicit row integrity
+or codec corruption, never merely because an exception is not SQLException.
+Linkage/native failures must not erase valid rows. Existing schema migrations,
+registry permutation, eviction, metadata invalidation and worker ownership stay
+unchanged. Preserve YAML policy adoption when forward-integrating.
 
 ## 4. Build and integration changes
 
@@ -213,7 +197,7 @@ explicit on the store, with no JVM-global singleton retaining plugin classloader
 | Fabric | Remove SQLite from `storeDeps`, normal dev runtime and `fabric.mod.json` jars. Keep zstd's existing slim nested mod. Common carries the opaque SQLite resource. |
 | NeoForge | Remove SQLite from `implementation` and `jarJarStore`, generated jarJar metadata and any SQLite dev classpath workaround. Keep zstd stock Jar-in-Jar and its range/identity checks. |
 | Paper/Folia | Remove SQLite from the ordinary runtime/shadow dependency graph. Common carries the opaque resource; outer plugin exposes no SQLite package or JDBC provider. Preserve zstd packaging. |
-| Soaks/tools/tests | Move `SoakStoreDowngrade` off ambient DriverManager; explicitly scope its private runtime. Test fixture SQL may use a separate driver only where intentional, never to supply a missing production dependency. |
+| Soaks/tools/tests | Move `SoakStoreDowngrade` off ambient DriverManager; use the same private engine. Convert every ordinary SQL fixture to that engine, including helpers that edit an open store. |
 | LSS/VSS repackaging | Same private resource/bridge bytes and effective JDBC behavior; preserve local brand/path adoption. No wire differences or new external dependency. |
 | Catalogs/docs | Update packaging facts, surfaces, runtime input identities, references to no-relocate/Jar-in-Jar, native notices and operator troubleshooting. Keep historical reports historical. |
 
@@ -227,7 +211,7 @@ must not remove that unrelated fix.
 ### Packaging checks on every final artifact
 
 - Exactly one private driver capsule and expected child bridge per product; verify
-  descriptor length/digest against the actual bytes, version, required natives and
+  descriptor length/digest AND the independent checked-in capsule pin against actual bytes, version, required natives and
   license. Walk Fabric's nested common jar and both shaded layouts explicitly.
 - No outer/ordinary library `org/sqlite/**`, SQLite module declaration or SQLite
   provider entry. A JDBC service file **inside the opaque capsule** is permitted.
@@ -239,7 +223,13 @@ must not remove that unrelated fix.
 - Negative fixtures must catch reintroduced flat classes, declared nested SQLite,
   duplicate/wrong capsules, altered digests, missing bridge/license/native, exposed
   bridge classes and accidental external `sqlite_jdbc` dependency requirements.
-- Keep LSS/VSS pair identity, package isolation and all existing release guarantees.
+- Extend both recursive artifact walkers to inspect the exact opaque capsule path.
+  Invert the old flat/nested SQLite pins on all three loaders, narrow Paper’s
+  relocation heuristic to classes, and retain zstd checks unchanged.
+- Extend Paper/NeoForge LSS/VSS identity to capsule, bridge and descriptor bytes,
+  in addition to classes. Negative fixtures include modifying both descriptor and
+  capsule together, omitted native/license, duplicate payload and forbidden metadata.
+- Keep package isolation and all other release guarantees.
 
 ### Common/runtime regression tests
 
@@ -260,20 +250,22 @@ Use real SQLite SQL/WAL operations, not source-string assertions, for the core p
 7. Existing store migration, frame serving, read errors, backfill, registry
    permutation and YAML reload/pending-policy tests stay meaningful and pass.
 
-The broad suites may retain an ambient driver for fixture preparation, but the
-dedicated packaging/runtime tests must fork a JVM without it. Child-only bridge
-visibility and absence of game/loader dependencies must be executable assertions.
+Remove ambient SQLite from common/Fabric test and dev classpaths. Every ordinary
+fixture uses the store runtime; a deliberately ambient driver runs only in a
+separate coexistence JVM against a DIFFERENT database. Fork no-ambient tests and
+assert child-only bridge visibility, shared JDK types and absence of game/loader
+dependencies. Platform `check` already depends on `:common:test`; preserve that gate.
 
 ## 6. Implementation sequence and acceptance gates
 
 ### P0 — packaged 1.21.1 NeoForge feasibility
 
-Start from the completed YAML branch, not PR #306. Preserve exact candidate,
+Start from release/support heads, not the YAML stack or PR #306. Preserve exact candidate,
 dependency and fixture hashes. In a private disposable rig:
 
 - Reproduce #304 with the released LSS jar and each independently valid minimal
   collider stack: GriefLogger 1.2.10 with its real dependencies; the Minecraft
-  SQLite JDBC mod; and the relevant reported Aeroworks setup where obtainable.
+  SQLite JDBC mod (separate valid stacks, never the two colliders combined).
 - Prove each third-party stack boots without LSS. If two foreign mods conflict
   with each other, record that independently rather than making LSS's gate
   impossible or mislabeling it as fixed.
@@ -281,7 +273,9 @@ dependency and fixture hashes. In a private disposable rig:
   SQLite mod, then alongside each valid collider stack. Verify module discovery,
   private driver origin and **actual LOD-store deposit/read/reopen**. A boot that
   silently disables the store is a failure, not a successful isolation test.
-- Repeat the existing Neo-Voxy/XMMP combination to guard zstd's distinct fix.
+- Preserve the existing Neo-Voxy/XMMP zstd packaging pins. A new live render-stack
+  run is optional follow-up, as recommended by review M6: no zstd bytes or discovery
+  mechanism change in this patch.
 - Compare PR #306's no-library/with-library behavior and dependency assumptions
   against these results. Keep #306 unmerged while evaluating the replacement.
 
@@ -316,44 +310,56 @@ Port shared code identically, preserving line-specific Gradle/loader seams:
 
 Common and the bridge emit Java 21 everywhere. Validate actual catalogs after ports;
 do not overwrite line facts from an older banner or #306's one-line implementation.
-Suggested baselines: main `77bddb47`, 1.21.1 `aeef2a83`, 1.21.10 `f21ccb4f`,
-1.21.11 `7c5f18c0`, 26.1 `bd8d687a`; confirm newer work before starting.
+Release-head baselines (the current 1.21.11 and 26.1 branches use the `-v0.14`
+suffix; the unsuffixed branches are historical v0.8 lines):
 
-### P4 — complete validation and review
+| Line | Exact base |
+| --- | --- |
+| 1.21.1 | `0390908b4e7857e0ec11fbd329364a5376582349` |
+| 1.21.10 | `4d4f630078b84ec51f2564fd4f55843c4a14b3cc` |
+| 1.21.11 | `e2aed3953f2a13d3fe9b2e9c978ef8973220c245` |
+| 26.1 | `decdeceedc323749304c4dcb73255de07544b6f0` |
+| 26.2 | `d4b415d5d84c2b272532e011669a265109db509c` |
 
-- All five: full build/JUnit/server game tests, explicit Fabric client game tests
-  where registered, NeoForge smoke, `vssJars`, release/artifact checks, catalog
-  render/validate and exact cross-line classification. Check all 30 jars.
-- Native 1.21.1 NeoForge: P0 collider matrix, client boot without store initialization,
-  dedicated server with real store IO, both branded artifacts (one at a time).
-- Main Fabric and Paper: store-enabled dedicated boot, served-row deposit, warm
-  restart and reuse. Paper additionally gets a deliberately foreign SQLite plugin
-  using a different version, checked in both load orders; both plugins perform SQL.
-- Main Folia: representative store/reload/shutdown smoke preserving ownership and
-  experimental designation. No 1.21.1 Folia task or nonexistent client test.
-- Other three lines: representative packaged store-enabled startup/read/reopen on
-  supported loaders; prove packaging/classloader integration, not new renderer
-  certification.
-- Real Windows Java 21 and 25: isolated-driver SQL, coexistence and close/reopen
-  checks with native DLLs and spaces in paths. This can run headlessly through
-  PowerShell; do not open or operate the Windows Minecraft desktop. WSL/DrvFS
-  evidence alone is not Windows JVM evidence.
-- macOS and ARM variants: artifact/native-resource checks everywhere; execute
-  native smoke on available matching runners. Record unavailable runtime coverage
-  explicitly, with no expanded platform support claim.
-- Independent implementation review should focus on classloader/native ownership,
-  lifecycle/failure containment, and artifact/support-line completeness before
-  release. Review execution is a later implementation gate, not claimed here.
+Classify new files in `config/lines/classification.json`; update adapted blob pins,
+exact cross-line source refs, port-batch provenance and rendered catalog data.
+Run catalog CI against the five actual source commits. Forward-integrate the
+independent commits into the five YAML branches, resolve deliberately, and repeat
+catalog/policy checks there. A wholesale YAML rebase is not a prerequisite.
 
-Serialize heavy builds and rigs under the shared lock. Preserve first failures,
-exact hashes and owned process identities. Private WSL displays only; no changes
-to the live Modrinth server, normal test server, personal Prism or user worlds are
-needed for this implementation gate.
+### P4 — focused acceptance and independent review
+
+- All five: common and platform JUnit, server gametests/NeoForge smoke, all three
+  loader builds and VSS variants, release/artifact checks and catalog CI. Check
+  all 30 final product jars. Renderer/client-gametest and broad performance/soak
+  campaigns are not required by this connection/packaging change.
+- Forked no-ambient SQL/WAL tests, independent-driver coexistence on separate DBs,
+  ownership/shutdown races, failure data preservation and checker negative fixtures.
+- Real final-packaged 1.21.1 NeoForge: candidate alone, GriefLogger 1.2.10 and its
+  dependencies, and Minecraft SQLite JDBC separately; each foreign stack proven
+  valid without LSS. Check actual store activity, deposit/read and restart reuse.
+  A store-disabled boot fails this gate. Neo-Voxy/XMMP live re-testing is optional;
+  its unchanged zstd packaging contracts remain required.
+- Representative final-packaged Fabric and Paper: store enabled, deposit/read and
+  warm reopen; brands additionally checked by resource/class equality and a VSS
+  boot. No whole additional cross-line live matrix is required.
+- Headless real Windows Java 21 and 25: packaged SQL/WAL, close/reopen and immutable
+  extraction in paths containing spaces. Never open/operate the Windows desktop.
+- All eight native resource variants are checked; report absent macOS/ARM execution
+  coverage honestly, without expanding support claims.
+- Independent implementation review covers runtime/native ownership, destructive
+  recovery, tests, packaging/checker integrity and cross-line/YAML integration.
+
+Serialize heavy builds and rigs under the shared harness lock, retain exact hashes,
+first failures and owned process identities. Use disposable rigs; no personal Prism,
+normal server/world or live Modrinth installation changes are part of this gate.
 
 ### P5 — release preparation and #306 disposition
 
 Update the final ledger with actual results and any residual platform limits.
-Once isolation passes, recommend superseding #306 rather than shipping a temporary
+Once isolation passes, recommend superseding #306: its required Modrinth dependency
+automatically brings the SQLite library mod into GriefLogger installs, where those
+two foreign providers conflict independently. Do not ship a temporary
 external dependency and removing it again immediately. Preserve attribution and
 its verified reproductions/version-range lesson. If it merges meanwhile, explicitly
 remove its TOML/Modrinth dependencies, driver-absence bootstrap hooks, library-mod
@@ -378,3 +384,31 @@ requirement or new configuration knob is introduced.
 The runtime can remain small, but the complete work includes lifecycle, extraction,
 packaging, tools and real coexistence tests. A fixed 150-line estimate is not an
 appropriate completion criterion.
+
+## Review disposition
+
+The supplied [review](2026-09-28-sqlite-driver-isolation-review.md) motivated this
+revision. All five high findings and the extraction/bridge/Windows/slimming
+corrections are accepted. Two qualifications: common tests already gate platform
+checks, and small automated all-artifact/Fabric/Paper checks remain necessary even
+with the reduced live matrix. No issue reply, PR merge or release is authorized.
+
+### Detailed supplied-review disposition
+
+H1–H5 and M1–M5 are incorporated in the runtime, recovery, fixture, capsule and
+independent-delivery requirements above. M6 narrows live coverage: no new
+Neo-Voxy/XMMP renderer run, Folia load campaign, Paper foreign-plugin load-order
+matrix or macOS/ARM execution is required. Automated all-line artifact checks
+remain cheap and required. M7 adds private-driver status, startup failure cause,
+bootstrap JUL forwarding, dependency absence pins, notice/surface updates and
+brand-adopting benchmark paths. Historical compatibility records keep their
+original dependency identities; new validation recipes remove ambient SQLite.
+L1–L4 require operator native-access/cache documentation, JDK-module assertions,
+foreign-native version warnings and reopen/native-count probes. L5 means identical
+common source blobs, each line's real artifact checks, and the two named packaged
+collider stacks; it does not claim unexecuted operating-system coverage.
+
+The runtime review additionally requires the uncertain-close daemon described in
+§3.3. Normal store close and reload create no global plugin root. A deterministic
+classloader-GC/unload deadline is not a portable acceptance test; driver registry
+cleanup and cross-process directory exclusion after GC are the enforced claims.

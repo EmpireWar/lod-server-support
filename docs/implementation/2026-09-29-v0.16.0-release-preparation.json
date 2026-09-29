@@ -1,5 +1,7 @@
 {
-  "intended_publish_artifact_count": 13,
+  "intended_lss_publish_artifact_count": 13,
+  "intended_publish_artifact_count": 28,
+  "intended_vss_publish_artifact_count": 15,
   "lines": {
     "1.21.1": {
       "artifacts": {
@@ -10,7 +12,7 @@
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.1.jar": {
           "bytes": 8766377,
-          "publish": false,
+          "publish": true,
           "sha256": "157e13a23adc991eba22401f4268496f9192089eab9ac841402d3bfb94d338da"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.1.jar": {
@@ -20,7 +22,7 @@
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.1.jar": {
           "bytes": 13960461,
-          "publish": false,
+          "publish": true,
           "sha256": "a780f192500f72e7559cc2bad28fea0ec3c07d8dc20c08c2eb96d3d79f8ce06b"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.1.jar": {
@@ -30,7 +32,7 @@
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.1.jar": {
           "bytes": 8321169,
-          "publish": false,
+          "publish": true,
           "sha256": "bb9d3705d682d42ed23ea25dd4744d18ac95f79bc96de9d3c370120daa0917e5"
         }
       },
@@ -81,7 +83,7 @@
       },
       "neoforge_published": true,
       "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.1.md",
-      "notes_sha256": "05de38eae104df4099bba41eb03c0f3dd2f401ce373fe0ea3aa4ef81ed424122",
+      "notes_sha256": "00cd9042cf383ff8fa73d1d94b068d14e5f3798a6816d3dff0babb61bc166dbb",
       "release_branch": "release/v0.16.0-mc1.21.1",
       "reviewed_catalog_commit": "861379538331c3966e732f8528806d4d6e87bd23",
       "server_gametests_passed": [
@@ -100,7 +102,7 @@
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.10.jar": {
           "bytes": 8760851,
-          "publish": false,
+          "publish": true,
           "sha256": "5d683bf6224bd60667504bd4364f0cefc1343a49d873b8daf4dca9360943aaca"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.10.jar": {
@@ -110,7 +112,7 @@
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.10.jar": {
           "bytes": 13926683,
-          "publish": false,
+          "publish": true,
           "sha256": "636b7c4a884c863107f5f9621d1f5bb84abffad4f75807070b40194caf700f44"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.10.jar": {
@@ -120,7 +122,7 @@
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.10.jar": {
           "bytes": 8320735,
-          "publish": false,
+          "publish": true,
           "sha256": "97c2a96c2d92ff0a45f044744316eae1907f99375e3f1f1e8131ce36893923a4"
         }
       },
@@ -171,7 +173,7 @@
       },
       "neoforge_published": false,
       "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.10.md",
-      "notes_sha256": "a244e63197d995ea867219bb03fc6372c0ee3975cceb752b36c885c7992781f6",
+      "notes_sha256": "dd3af694eee15cdc796eb4becf3c25d5fc932f8e7771da606999f3482395529e",
       "release_branch": "release/v0.16.0-mc1.21.10",
       "reviewed_catalog_commit": "e50b3b6f91eb65c414bd24ea421757cced6812ef",
       "server_gametests_passed": [
@@ -190,7 +192,7 @@
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+1.21.11.jar": {
           "bytes": 8767172,
-          "publish": false,
+          "publish": true,
           "sha256": "7553c52eae755f37c4e3100e91899e5537ffb9cdf9442b0efc3b3502e551b610"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+1.21.11.jar": {
@@ -200,7 +202,7 @@
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+1.21.11.jar": {
           "bytes": 13933228,
-          "publish": false,
+          "publish": true,
           "sha256": "cca7ab02252f2e53a3f9991b7d9c1ab17a3cc661d458a8326fef4be06dbd959c"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+1.21.11.jar": {
@@ -210,7 +212,7 @@
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+1.21.11.jar": {
           "bytes": 8320663,
-          "publish": false,
+          "publish": true,
           "sha256": "4fd7ac5ee70273ef53f8c66d2a7a14454adcd2448fd0606010c0164f40ab3d79"
         }
       },
@@ -261,7 +263,7 @@
       },
       "neoforge_published": false,
       "notes_file": "docs/planning/v0.16.0-release-notes/mc1.21.11.md",
-      "notes_sha256": "bec1b0ea89c06653c352cb1a004f25e521e9a8ab9baa01f3826be57545ff9e87",
+      "notes_sha256": "17affb0892ebe2a2783a7f3ce46f7f6e30507e111c83368bb48721821d3f7a44",
       "release_branch": "release/v0.16.0-mc1.21.11",
       "reviewed_catalog_commit": "03aa8485585e9dfd4e062dbaca222d2959e0c261",
       "server_gametests_passed": [
@@ -280,7 +282,7 @@
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.1.2.jar": {
           "bytes": 8769789,
-          "publish": false,
+          "publish": true,
           "sha256": "64644e8598cf44133e39d3b7aa3aca563affcfff35c9c31afe7f296892dfd384"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.1.2.jar": {
@@ -290,7 +292,7 @@
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.1.2.jar": {
           "bytes": 13935502,
-          "publish": false,
+          "publish": true,
           "sha256": "727896a1e4f512ae4cfcc7f648879ccb3f2ac73dd8245f833e74f843ef9b8611"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+26.1.2.jar": {
@@ -300,7 +302,7 @@
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+26.1.2.jar": {
           "bytes": 8320568,
-          "publish": false,
+          "publish": true,
           "sha256": "b57d6bc731cd16958cde8f8eae44e3adcf425a4f71be8de65bb851b0fab798f3"
         }
       },
@@ -353,7 +355,7 @@
       },
       "neoforge_published": true,
       "notes_file": "docs/planning/v0.16.0-release-notes/mc26.1.md",
-      "notes_sha256": "ab26bcd70ec5bda097b022763aae304fe420b5af136338d9c9dc48b82835fe81",
+      "notes_sha256": "c32425bdb7cd4cd020dfa86ad54a4b3fd7991494563777d0a370480a29c1eca0",
       "release_branch": "release/v0.16.0-mc26.1",
       "reviewed_catalog_commit": "c3b1fcdd2494cd655501d2b7196188ebc242e1a7",
       "server_gametests_passed": [
@@ -372,7 +374,7 @@
         },
         "fabric/build/libs/voxy-server-side-fabric-0.16.0+26.2.jar": {
           "bytes": 8771177,
-          "publish": false,
+          "publish": true,
           "sha256": "6afd7880fac5df3f8fac492b7582b60eab8141f56b88b335a0bcfac2e8f6324b"
         },
         "neoforge/build/libs/lod-server-support-neoforge-0.16.0+26.2.jar": {
@@ -382,7 +384,7 @@
         },
         "neoforge/build/libs/voxy-server-side-neoforge-0.16.0+26.2.jar": {
           "bytes": 13936467,
-          "publish": false,
+          "publish": true,
           "sha256": "9e6a61d732f9617f0b15dbde63295144dcb78f1f40699d458ca9edca1dee078f"
         },
         "paper/build/libs/lod-server-support-paper-0.16.0+26.2.jar": {
@@ -392,7 +394,7 @@
         },
         "paper/build/libs/voxy-server-side-paper-0.16.0+26.2.jar": {
           "bytes": 8320703,
-          "publish": false,
+          "publish": true,
           "sha256": "75e4d6a554900dd630e379b090c7bce429cd9a964be3aeb6bdb8b7e93776f387"
         }
       },
@@ -443,7 +445,7 @@
       },
       "neoforge_published": true,
       "notes_file": "docs/planning/v0.16.0-release-notes/main.md",
-      "notes_sha256": "926191faf39718fdc9e556c3c2573c0ea05c7d1a66e1c1daa94d6abb6abef819",
+      "notes_sha256": "35cbec714df425a35af6ef6cadbccda066ffc228c19e0cd482f5aa5992ca8e6e",
       "release_branch": "release/v0.16.0-mc26.2",
       "reviewed_catalog_commit": "e9e2caad73dd9e883772cc42157d34947cfa14f3",
       "server_gametests_passed": [
@@ -704,9 +706,21 @@
   "published": false,
   "remote_ci": "pending candidate push and PR checks",
   "schema_version": 1,
-  "status": "local-preflight-complete-awaiting-release-authorization",
+  "status": "authorized-awaiting-hosted-ci",
   "validation_revision": "lenient-migration-backfill-followups",
   "validation_state": "lss-release-followups-v0.16.0",
   "version": "0.16.0",
-  "vss_publish": false
+  "vss_conventions": {
+    "changelog": "",
+    "dependencies": [],
+    "featured": false,
+    "filenames": "voxy-server-side-<loader>.jar",
+    "history_version": "0.14.0",
+    "name": "Voxy Server Side 0.16.0",
+    "project_id": "84zcagOb",
+    "publication": "local Modrinth API, after hosted gates",
+    "scope": "all five lines, three maintained loaders; current line.env compatibility metadata",
+    "version_number": "0.16.0"
+  },
+  "vss_publish": true
 }

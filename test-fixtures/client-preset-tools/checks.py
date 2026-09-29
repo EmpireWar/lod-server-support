@@ -39,16 +39,21 @@ def verify_tool_identity(root, repo, active_files):
   if expected is None or sha(root/target)!=expected:raise ValueError('staged settings tool changed: '+name)
   active=Path(active_files.get(name, Path(active_files['entrypoint']).resolve().parent/name)).resolve()
   if sha(active)!=expected:raise ValueError('active settings tool differs: '+name)
- from toolchain import verify_settings_codec
- verify_settings_codec(runtime, bound.get('settings_codec'))
  tools=bound['runtime_tools']
- for required in ('rig.py','native_window.py','private_input.py','ui_snapshot_wait.py','rig_settings.py'):
+ for required in ('rig.py','native_window.py','private_input.py','ui_snapshot_wait.py','rig_settings.py','toolchain.py'):
   if 'tools/rig/'+required not in tools:raise ValueError('required owned rig dependency unbound: '+required)
  if 'tools/settings/settings_file.py' not in tools:raise ValueError('required shared settings helper unbound')
  for name,expected in tools.items():
   if not name.startswith('tools/'):continue
   active=(repo/name).resolve()
   if not active.is_relative_to(repo) or sha(active)!=expected:raise ValueError('selected repository tool differs: '+name)
+ # Bootstrap only after the selected repository's source hashes are verified.
+ # Standalone entrypoints have not added tools/rig to sys.path yet.
+ import sys
+ sys.path.insert(0,str(repo/'tools/rig'))
+ import toolchain,rig_settings
+ verify_active_rig(repo,{'toolchain':toolchain,'rig_settings':rig_settings})
+ toolchain.verify_settings_codec(runtime,bound.get('settings_codec'))
  return repo
 
 def verify_active_rig(repo, modules):

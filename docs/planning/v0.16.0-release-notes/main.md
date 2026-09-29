@@ -21,6 +21,5 @@
 ### Support and Compatibility
 
 - **Platforms** — Fabric, Paper/Purpur, and NeoForge on Minecraft 26.2. NeoForge remains best-effort, and its distant-player renderer is unavailable. Folia support remains experimental.
-
 - **Compatibility** — Preserves the existing network protocol and LSS/VSS adoption behavior. This release publishes LSS only. SQLite isolation does not fix conflicts between two unrelated third-party SQLite providers.
 - **Known limitations** — Existing Xaero first-spawn gaps, region-boundary shading seams, and shader/LOD-depth limitations remain.

@@ -497,14 +497,10 @@ def _check_nested_lib(jar, base, names, jars_list, lib, problems):
 
 
 def check_store_natives_neoforge(jar, problems):
-    """NeoForge nests BOTH native-carrying libraries as STOCK jarJar libraries
-    (neoforge-jarjar-sqlite-plan.md, extended by issues-275-282-fix-plan.md): FML
-    then dedupes each module across mods, closing the JPMS module collision flat
-    shading has — two modules exporting the same packages is a ResolutionException
-    beside any mod nesting the same artifact: sqlite beside the community Voxy
-    NeoForge port (P-1), zstd-jni beside XMMP (issue #275). Neither can be relocated
-    (their native loaders — zstd-jni's JNI symbol names — derive from the package),
-    so the shadow jar itself must carry NO flat library classes and NO flat natives."""
+    """NeoForge keeps stock zstd-jni in jarJar for FML module deduplication.
+    SQLite lives in the private opaque capsule checked by sqlite_capsule, outside
+    FML's module graph. Neither JNI library may be relocated or flat shaded;
+    the outer jar must contain no exposed library classes or flat natives."""
     base = os.path.basename(jar)
     names = set(_names(jar))
     for lib in NEOFORGE_NESTED_LIBS:
@@ -534,12 +530,12 @@ def check_store_natives_neoforge(jar, problems):
     if flat_natives:
         problems.append(f"{base}: {len(flat_natives)} flat native(s) (e.g. "
                         f"{flat_natives[0]}) — every native-carrying library rides "
-                        "NESTED now; a flat native is a shade/strip regression "
-                        "shipping a second copy beside the nested one")
+                        "inside the private capsule or a nested jar; a flat native "
+                        "is a shade/strip regression shipping an exposed copy")
     meta_path = "META-INF/jarjar/metadata.json"
     if meta_path not in names:
-        problems.append(f"{base}: missing {meta_path} — sqlite and zstd-jni must ride "
-                        "as jarJar nested libraries")
+        problems.append(f"{base}: missing {meta_path} — zstd-jni must ride "
+                        "as a jarJar nested library")
         return
     try:
         meta = json.loads(_read(jar, meta_path))
@@ -1178,8 +1174,8 @@ def discover(problems, expected_version=None, root=ROOT):
     for jar in neo:
         check_neoforge_jar(jar, problems)
         check_yaml_parser(jar, "neoforge", problems)
-        # sqlite AND zstd-jni ride NESTED via jarjar (neoforge-jarjar-sqlite-plan.md
-        # + issue #275) — the flat jar carries neither, nor any native.
+        # Stock zstd-jni rides in jarJar (issue #275); SQLite stays in the
+        # private capsule. The outer jar exposes neither library nor its natives.
         check_store_natives_neoforge(jar, problems)
         check_third_party_notices(jar, False, problems)
         if fab:
@@ -1383,16 +1379,14 @@ def _selftest_fixtures():
             out[d + "libzstd-jni-1.5.7-3" + ext] = "elf"
         return out
 
-    def _store_neoforge_entries(group="org.xerial", drop_native=None, drop_nested_jar=False,
-                                bad_version=False, drop_license=False, raw_meta=None,
-                                stock=True, drop_metadata=False, undeclared_extra=False,
+    def _store_neoforge_entries(bad_version=False, raw_meta=None,
+                                drop_metadata=False, undeclared_extra=False,
                                 zstd_group="com.github.luben", zstd_drop_native=None,
                                 zstd_drop_nested_jar=False, zstd_stock=True,
                                 flat_zstd=False, flat_native=False, drop_zstd_entry=False):
-        # The jarjar nested shape (neoforge-jarjar-sqlite-plan.md + issue #275): NOTHING
-        # native-carrying flat — sqlite AND zstd-jni as synthesized stock-like nested
-        # jars + a two-entry metadata.json. One VER literal per library so a version
-        # edit cannot half-update the fixture.
+        # Private SQLite capsule plus one stock-like zstd jarJar entry. Neither
+        # library exposes flat classes or natives. A single zstd version literal
+        # keeps its filename and metadata in sync.
         ZVER = "1.5.7-3"
         out = dict(sqlite_capsule.fixture_entries())
         if flat_zstd:

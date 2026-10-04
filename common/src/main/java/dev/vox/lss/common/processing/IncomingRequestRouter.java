@@ -136,6 +136,13 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             var frontierPass = new FrontierPass();
             while (!stopPass && (req = state.pollBacklog()) != null) {
                 long packed = PositionUtil.packPosition(req.cx(), req.cz());
+                // Access filter first: a denied column gets no disk read, generation or
+                // stamp answer — only "not generated", which ends the client's asking.
+                if (!dev.vox.lss.common.ColumnAccess.allows(playerUuid, dimension, req.cx(), req.cz())) {
+                    this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
+                    this.ctx.diagnostics().incrementRequestRouted();
+                    continue;
+                }
                 var duplicate = resolvedAsDuplicate(state, playerUuid, req, packed);
                 if (duplicate != Duplicate.NO) {
                     // In-flight duplicates (pending read/generation, enqueued payload) are

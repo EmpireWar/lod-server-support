@@ -5,6 +5,10 @@ pluginManagement {
             url = 'https://maven.fabricmc.net/'
         }
         maven {
+            name = 'Sponge'
+            url = 'https://repo.spongepowered.org/repository/maven-public/'
+        }
+        maven {
             name = 'PaperMC'
             url = 'https://repo.papermc.io/repository/maven-public/'
         }
@@ -13,4 +17,4 @@ pluginManagement {
     }
 }
 
-include ':common', ':fabric', ':paper', ':neoforge'
+include ':common', ':fabric', ':paper', ':neoforge', ':sponge'

@@ -1,0 +1,2322 @@
+package dev.vox.lss.sponge;
+
+import dev.vox.lss.common.processing.RequestRegistration;
+import dev.vox.lss.common.processing.AbstractPlayerRequestState;
+
+import dev.vox.lss.common.DiagnosticsFormatter;
+import dev.vox.lss.common.LSSConstants;
+import dev.vox.lss.common.LSSLogger;
+import dev.vox.lss.common.PositionUtil;
+import dev.vox.lss.common.SharedBandwidthLimiter;
+import dev.vox.lss.common.compat.V16CompatManager;
+import dev.vox.lss.common.compat.WireDialectTracker;
+import dev.vox.lss.common.processing.IncomingBatch;
+import dev.vox.lss.common.processing.IncomingRequest;
+import dev.vox.lss.common.processing.LoadedColumnData;
+import dev.vox.lss.common.processing.OffThreadProcessor;
+import dev.vox.lss.common.processing.TickDiagnostics;
+import dev.vox.lss.common.processing.TickSnapshot;
+import dev.vox.lss.common.tracking.DirtyColumnTracker;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.storage.LevelResource;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+/**
+ * Core orchestrator for per-player LOD request processing on Paper.
+ * Adapted from Fabric's RequestProcessingService with Plugin Messaging send
+ * calls.
+ */
+public class SpongeRequestProcessingService {
+    private final Map<UUID, SpongePlayerRequestState> players;
+    // Service gate (service-permission-gate-plan.md §2.3): the denied-handshake memo,
+    // the once-per-episode denial-log latch, and the revocation streaks — dying with
+    // this service (onDisable's shutdown() is the C1-9 clear).
+    private final dev.vox.lss.common.ServiceGateState serviceGateState =
+            new dev.vox.lss.common.ServiceGateState();
+    /** The recheck cadence (plan §2.3): both sweeps run every 200 ticks (~10 s). */
+    static final int PERMISSION_RECHECK_TICKS = 200;
+    private int permissionRecheckCounter;
+    /** The sweep's permission read — pump-thread Bukkit permissible reads (the
+     *  SpongeFarPlayerSnapshots Folia precedent); seam-injected for tests. A throwing
+     *  probe is contained at the sweep site (counts as HOLDING — fail-open). */
+    private java.util.function.BiPredicate<ServerPlayer, String> permissionProbe =
+            SpongePlayers::holds;
+    /** The grant sweep's replay hook — wired to the plugin's production handshake body
+     *  by the production constructor (the full ladder re-runs; the reply lands via the
+     *  registrar's DEFERRED path, so the Folia pre-registration gap stays closed);
+     *  null in bare test wirings until injected. */
+    private java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.ServiceGateState.DeniedHandshake> handshakeReplayer;
+
+    /** Test seam. */
+    public void setPermissionProbeForTest(
+            java.util.function.BiPredicate<ServerPlayer, String> probe) {
+        this.permissionProbe = probe;
+    }
+
+    /** Test seam (production wiring: the constructor). */
+    public void setHandshakeReplayer(java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.ServiceGateState.DeniedHandshake> replayer) {
+        this.handshakeReplayer = replayer;
+    }
+    private final MinecraftServer server;
+    private final SpongeChunkDiskReader diskReader;
+    private final SpongeChunkGenerationService generationService;
+    private final SharedBandwidthLimiter bandwidthLimiter;
+    private final SpongeConfig config;
+    private final SpongeOffThreadProcessor offThreadProcessor;
+    // Null while lodStore=off or when the codec native cannot load (degrade, never crash).
+    private final dev.vox.lss.common.store.LodStoreService lodStore;
+    // Region freshness stamps (region-summary-sync-plan.md): the P1 header rung's oracle.
+    // Null in pre-region-stamps test wirings (rung inert there).
+    private final dev.vox.lss.common.region.RegionStampTable regionStamps;
+    // Region summaries (P2): null iff regionStamps is null.
+    private final dev.vox.lss.common.region.RegionSummaryService regionSummaries;
+    private final DirtyColumnTracker dirtyTracker;
+    private final SpongeDirtyColumnBroadcaster dirtyBroadcaster;
+    // The v16 compat shim's per-player sessions (legacy protocol-16 clients). The pipeline
+    // never consults it: a v16 player is an ordinary registered player whose want-set is
+    // declared by the shim at 1 Hz. See docs/planning/v16-compat-design.md.
+    private final V16CompatManager v16Compat = new V16CompatManager();
+    // Every session's wire dialect (cross-version-identity-encoding-plan §4.3): the
+    // single source of truth for egress shape decisions — replaces the old v18 bare set
+    // AND the v16 egress checks (the manager keeps its session objects for the ingress
+    // shim). Marked ONLY on the pump (the dialectFlip runnable) — see
+    // docs/planning/v18-compat-design.md §2.3.
+    private final WireDialectTracker dialects = new WireDialectTracker();
+    // Far players (E1, FARP §3.2): subscription identity at the service level (the
+    // dialect-tracker precedent) — subscribed on the PUMP in the Register drain (after
+    // the dialectFlip, so the CURRENT-dialect gate reads post-flip state), dropped at
+    // the quit-originated mailbox Remove, notified (never removed) on dimension change.
+    // Vanish bridge seam null until the reflective ladder lands (E2/E3).
+    private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService =
+            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null);
+    private int farPlayerTickCounter;
+
+    private final long startTimeNanos = System.nanoTime();
+    // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
+    // retains every world an LSS player ever visited — including unloaded ones on
+    // world-cycling Paper servers (Multiverse/minigames). The dimension string is derivable
+    // from the key.
+    private final Map<ResourceKey<Level>, String> dimensionStringCache = new HashMap<>();
+
+    private int diagLogCounter = 0;
+
+    private volatile boolean shuttingDown = false;
+
+    private final TickDiagnostics diag = new TickDiagnostics();
+
+
+
+    private static final int DIAG_LOG_INTERVAL_TICKS = 100;
+    private static final int MAX_PROBES_PER_TICK_PER_PLAYER = 512;
+    // Global ceiling on in-memory column SERIALIZATIONS across ALL players in one pump tick — the
+    // per-player cap bounds one player, but N backfilling players would otherwise cost up to
+    // 512*N serializations on the pump. Counts serializations (the expensive work), not
+    // examinations. Applies to the non-Folia pump probe below; the Folia region-probe path runs
+    // off-pump on owning region threads, so the per-player cap suffices there — with one honest
+    // caveat: "distributed" assumes players in DIFFERENT regions. N players clustered in one
+    // region all probe on that region's single thread (up to 512*N there, uncapped globally);
+    // NOTE the R1 published-want-set arm (2026-08-27) widened this window: the regionized
+    // probe now fires on EVERY tick a player's backlog is non-empty (the whole backfill/
+    // retention phase), not just arrival ticks — the accepted ceiling is the same but its
+    // duty cycle is ~5-20x higher. Acceptable while Folia support is experimental, revisit
+    // if clustered-players soak shows region-tick pressure. Once spent, later players fall through to the disk-read path and
+    // the 1 Hz re-declaration heals it.
+    // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
+    // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
+    // not-found, and answers NOT_GENERATED — session-permanent on the client despite the
+    // chunk being live in memory. Heals on its first save (dirty broadcast) or reconnect;
+    // needs disabled generation + an exhausted budget + a never-saved chunk in one tick.
+    private static final int MAX_PROBES_PER_TICK_GLOBAL = 2048;
+    /** Rotating start index for the lifecycle pass (pump thread only) — see the loop comment. */
+    private int probeRotation;
+
+    /** Test seam: puts one encoded voxel-column frame on the wire. Production default is the
+     *  raw NMS payload send; tests inject recording/throwing senders. */
+    @FunctionalInterface
+    interface ColumnPayloadSender {
+        void send(SpongePlayerRequestState state, byte[] data) throws Exception;
+    }
+
+    /** Test seam: resolves a loaded chunk into pre-serialized column data, or null when the
+     *  chunk is not loaded. Production default probes the chunk source on the main thread. */
+    @FunctionalInterface
+    interface LoadedColumnProbe {
+        LoadedColumnData probe(ServerLevel level, int cx, int cz);
+    }
+
+    /** Warn-once latch for the v16 egress splice guard (pump thread only). */
+    private boolean v16SpliceWarned;
+    /** Warn-once latch for the v18 egress splice guard (pump thread only). */
+    private boolean v18SpliceWarned;
+
+    /** The per-player column egress (PUMP): {@link #routeColumnFrame} over the real
+     *  NMS send. The routing itself is package-private so the Tier-1 twin can drive
+     *  the dialect ladder with a capturing sender. */
+    private ColumnPayloadSender columnPayloadSender = (state, data) ->
+            routeColumnFrame(state, data, bytes -> SpongePayloadHandler.sendRawNmsPayload(
+                    state.getPlayer(), SpongePayloadHandler.ID_VOXEL_COLUMN, bytes));
+
+    /** The column egress routing (PUMP). Legacy (v19/v18/v16) sessions' BODIES are
+     *  already native: the C2 translation runs at the per-recipient ENQUEUE choke point
+     *  ({@code SpongeOffThreadProcessor.buildAndEnqueueColumnPayload}) so every queued
+     *  size — gauges, bandwidth budget, diag books, soak law A2 — matches what the
+     *  legacy client decodes. This seam applies only the HEADER shapes: v16 splices to
+     *  the source-less layout and prunes the synthetic want-set (satisfied-by-data;
+     *  load-bearing, design §4.4), v18 strips the codec byte, v19 IS the current
+     *  header. Every failure shape is a warn-once DROP (design §5): letting the
+     *  exception propagate would make flushSendQueue drop the player's WHOLE queue,
+     *  and honest re-resolution would re-enqueue the same frame forever. */
+    void routeColumnFrame(SpongePlayerRequestState state, byte[] data,
+                          java.util.function.Consumer<byte[]> rawSend) {
+        var uuid = state.getPlayerUUID();
+        if (this.dialects.isV16(uuid)) {
+            byte[] legacy;
+            long packedPos;
+            try {
+                legacy = SpongePayloadHandler.rewriteColumnToV16(data);
+                packedPos = SpongePayloadHandler.readColumnPackedPos(data);
+            } catch (Exception e) {
+                if (!this.v16SpliceWarned) {
+                    this.v16SpliceWarned = true;
+                    LSSLogger.error("v16-compat: dropping unspliceable column frame for "
+                            + state.getPlayerName() + " (further drops are silent)", e);
+                }
+                return;
+            }
+            rawSend.accept(legacy);
+            this.v16Compat.onColumnSent(uuid, packedPos);
+            return;
+        }
+        if (this.dialects.isV18(uuid)) {
+            // v18 egress (v18-compat design §2.6): strip the codec byte, keep the
+            // source byte. No prune — there is no synthetic want-set; the client's
+            // own re-declaration heals any drop. The splice THROWS on a non-RAW
+            // codec (the narrow cross-dialect downgrade window); the warn-drop
+            // contains it, mirroring the v16 branch above.
+            byte[] v18Frame;
+            try {
+                v18Frame = SpongePayloadHandler.rewriteColumnToV18(data);
+            } catch (Exception e) {
+                if (!this.v18SpliceWarned) {
+                    this.v18SpliceWarned = true;
+                    LSSLogger.error("v18-compat: dropping unspliceable column frame for "
+                            + state.getPlayerName() + " (further drops are silent)", e);
+                }
+                return;
+            }
+            rawSend.accept(v18Frame);
+            return;
+        }
+        // CURRENT and V19 ship verbatim — the v19 header IS the current header, and a
+        // v19 session's body was translated at enqueue.
+        rawSend.accept(data);
+    }
+
+    private LoadedColumnProbe loadedColumnProbe = (level, cx, cz) -> {
+        LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
+        return chunk != null ? SpongeSectionSerializer.serializeColumn(level, chunk, cx, cz) : null;
+    };
+
+    void setColumnPayloadSender(ColumnPayloadSender sender) {
+        this.columnPayloadSender = sender;
+    }
+
+    void setLoadedColumnProbe(LoadedColumnProbe probe) {
+        this.loadedColumnProbe = probe;
+    }
+
+    // ---- Regionized loaded-chunk probing (Folia) ----
+    //
+    // On Folia the pump runs on the global region thread, which owns no chunks — yet
+    // getChunkNow still RETURNS loaded chunks there (Moonrise's full-chunk map has no
+    // ownership check; Folia soak baselines show ~150 in-memory serves per fresh-backfill).
+    // Every one of those serves serialized a chunk the owning region thread may have been
+    // mutating concurrently: a torn palette read shipped to the client as "up to date".
+    // Regionized probing removes that race: the pump dispatches a probe task to each
+    // player's owning region via the EntityScheduler; the task serializes only chunks that
+    // region owns (isOwnedByCurrentRegion) and publishes an immutable-after-publish batch
+    // the pump consumes into a later snapshot.
+    //
+    // Probe results are useless if they trail their requests: the router drains the whole
+    // incoming queue every cycle, so a probe published between ticks T and T+1 describes
+    // requests that were already routed at cycle T (a soak run measured exactly 0 in-memory
+    // serves with that shape). The pump therefore HOLDS each tick's fresh arrivals for one
+    // tick: at tick T it drains them, schedules their probe task, and parks them; at T+1 it
+    // consumes the published batch and re-injects the parked requests, so routing cycle T+1
+    // sees request and probe result in the same snapshot. Costs ~50 ms added latency per
+    // request on Folia only — noise against the client's 1 s scan cadence. A probe task
+    // that runs late simply misses: the release is unconditional, the requests route to
+    // disk/generation as before, and the orphan batch is discarded on its next consume.
+
+    /** Test seam: runs a task on the player's owning region. Production default is the
+     *  EntityScheduler (the main thread on Paper); a task whose entity is removed before
+     *  it runs is silently retired. */
+    @FunctionalInterface
+    interface RegionTaskScheduler {
+        void schedule(ServerPlayer player, Runnable task);
+    }
+
+    /** Test seam: whether the current thread owns the chunk. getChunkNow + section reads
+     *  are only race-free for chunks the executing region owns — a player's request disc
+     *  can overlap a foreign region (another player's loaded area). */
+    @FunctionalInterface
+    interface RegionOwnershipCheck {
+        boolean ownsChunk(ServerLevel level, int cx, int cz);
+    }
+
+    // Sponge has one main thread, which owns every chunk: these seams only matter for
+    // tests that switch regionized probing on.
+    private RegionTaskScheduler regionTaskScheduler = (player, task) -> player.level().getServer().execute(task);
+
+    private RegionOwnershipCheck regionOwnershipCheck = (level, cx, cz) -> true;
+
+    /** Probing mode. Never regionized on Sponge: the sync probe is both correct and a
+     *  tick fresher. Package-visible for tests. */
+    private boolean regionizedProbing = false;
+
+    void setRegionizedProbing(boolean regionized) {
+        this.regionizedProbing = regionized;
+    }
+
+    void setRegionTaskScheduler(RegionTaskScheduler scheduler) {
+        this.regionTaskScheduler = scheduler;
+    }
+
+    void setRegionOwnershipCheck(RegionOwnershipCheck check) {
+        this.regionOwnershipCheck = check;
+    }
+
+    /** Region-thread → pump hand-off. The dimension is captured on the region thread so a
+     *  dimension change between publish and consume discards the batch instead of serving
+     *  old-dimension bytes under the new dimension. The probes map is mutated only inside
+     *  {@code regionProbeResults.compute} (merge) and owned by the pump after {@code remove}. */
+    record RegionProbeBatch(String dimension, RequestRegistration registration, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
+
+    private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
+
+    /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
+     *  probe task has had a region tick to publish — carrying the offer generation recorded
+     *  BEFORE the take, so the release can refuse a batch that was passed-through during the
+     *  hold (see {@code AbstractPlayerRequestState.republishHeldBatch}). */
+    private record HeldBatch(IncomingBatch batch, long offerGeneration) {}
+
+    private final Map<UUID, HeldBatch> heldForProbe = new HashMap<>();
+
+    /** Collaborator set for the package-private constructor. Tests build it over recording
+     *  collaborators; production wiring lives in {@link #productionWiring} only. */
+    record Wiring(Map<UUID, SpongePlayerRequestState> players,
+                  SpongeChunkDiskReader diskReader,
+                  SpongeChunkGenerationService generationService,
+                  SpongeOffThreadProcessor offThreadProcessor,
+                  DirtyColumnTracker dirtyTracker,
+                  SpongeDirtyColumnBroadcaster dirtyBroadcaster,
+                  dev.vox.lss.common.store.LodStoreService lodStore,
+                  SpongeXrayMaskManager xrayMasks,
+                  boolean wireCompressionLive,
+                  dev.vox.lss.common.region.RegionStampTable regionStamps,
+                  java.util.Map<String, java.nio.file.Path> regionDirs) {
+
+        /** Static region-dir set (tests): worlds loaded later are not tracked. */
+        Wiring(Map<UUID, SpongePlayerRequestState> players,
+               SpongeChunkDiskReader diskReader,
+               SpongeChunkGenerationService generationService,
+               SpongeOffThreadProcessor offThreadProcessor,
+               DirtyColumnTracker dirtyTracker,
+               SpongeDirtyColumnBroadcaster dirtyBroadcaster,
+               dev.vox.lss.common.store.LodStoreService lodStore,
+               SpongeXrayMaskManager xrayMasks,
+               boolean wireCompressionLive,
+               dev.vox.lss.common.region.RegionStampTable regionStamps) {
+            this(players, diskReader, generationService, offThreadProcessor, dirtyTracker,
+                    dirtyBroadcaster, lodStore, xrayMasks, wireCompressionLive, regionStamps, null);
+        }
+
+        /** Pre-region-stamps full shape — test wirings that don't exercise the header
+         *  rung (null table = rung inert, exactly the bare-reader behavior). */
+        Wiring(Map<UUID, SpongePlayerRequestState> players,
+               SpongeChunkDiskReader diskReader,
+               SpongeChunkGenerationService generationService,
+               SpongeOffThreadProcessor offThreadProcessor,
+               DirtyColumnTracker dirtyTracker,
+               SpongeDirtyColumnBroadcaster dirtyBroadcaster,
+               dev.vox.lss.common.store.LodStoreService lodStore,
+               SpongeXrayMaskManager xrayMasks,
+               boolean wireCompressionLive) {
+            this(players, diskReader, generationService, offThreadProcessor,
+                    dirtyTracker, dirtyBroadcaster, lodStore, xrayMasks,
+                    wireCompressionLive, null);
+        }
+
+        /** Pre-compression full shape (no wire codec attached) — store-era test wirings. */
+        Wiring(Map<UUID, SpongePlayerRequestState> players,
+               SpongeChunkDiskReader diskReader,
+               SpongeChunkGenerationService generationService,
+               SpongeOffThreadProcessor offThreadProcessor,
+               DirtyColumnTracker dirtyTracker,
+               SpongeDirtyColumnBroadcaster dirtyBroadcaster,
+               dev.vox.lss.common.store.LodStoreService lodStore,
+               SpongeXrayMaskManager xrayMasks) {
+            this(players, diskReader, generationService, offThreadProcessor,
+                    dirtyTracker, dirtyBroadcaster, lodStore, xrayMasks, false);
+        }
+
+        /** Pre-store test-wiring shape (no store attached, no mask manager published —
+         *  a test-wired service must retract nothing at shutdown). */
+        Wiring(Map<UUID, SpongePlayerRequestState> players,
+               SpongeChunkDiskReader diskReader,
+               SpongeChunkGenerationService generationService,
+               SpongeOffThreadProcessor offThreadProcessor,
+               DirtyColumnTracker dirtyTracker,
+               SpongeDirtyColumnBroadcaster dirtyBroadcaster) {
+            this(players, diskReader, generationService, offThreadProcessor,
+                    dirtyTracker, dirtyBroadcaster, null, null, false);
+        }
+    }
+
+    // Null in test wiring (the test ctor never publishes the static mask manager, so its
+    // shutdown must retract nothing) — published by productionWiring BEFORE the store
+    // Environment snapshots mask fingerprints (R2-M1).
+    private SpongeXrayMaskManager xrayMasks;
+    // Compressed-column shipping is live: useCompressedColumns AND the server-side zstd
+    // native probe succeeded (latched in productionWiring — plan §0.11). A term of every
+    // session's wantsCompressedColumns derivation at registration; false in test wirings
+    // unless injected.
+    private final boolean wireCompressionLive;
+    // The live region-dir map the stamp table and store read through; null in test wirings.
+    private final java.util.Map<String, java.nio.file.Path> regionDirs;
+
+    public SpongeRequestProcessingService(MinecraftServer server, LSSSpongePlugin plugin, SpongeConfig config) {
+        this(server, config, productionWiring(server, config));
+        if (plugin != null) {
+            var lss = plugin;
+            // The grant sweep's re-offer: the stored handshake replays through the
+            // plugin's PRODUCTION receiver body — full ladder, real gate, deferred reply.
+            this.handshakeReplayer = lss::replayServiceGateHandshake;
+        }
+    }
+
+    /** Test seam: same field wiring as production, collaborators injected. */
+    SpongeRequestProcessingService(MinecraftServer server, SpongeConfig config, Wiring wiring) {
+        this.server = server;
+        this.config = config;
+        this.advertisedGeneration = config.enableChunkGeneration();
+        this.refreshedGeneration = this.advertisedGeneration;
+        this.advertisedLod = config.snapshot().lod();
+        this.adoptedServicePolicy = config.snapshot().service();
+        this.adoptedFarPlayerPolicy = config.snapshot().farPlayers();
+        this.players = wiring.players();
+        this.diskReader = wiring.diskReader();
+        this.generationService = wiring.generationService();
+        this.bandwidthLimiter = new SharedBandwidthLimiter(config.bytesPerSecondGlobal());
+        this.offThreadProcessor = wiring.offThreadProcessor();
+        this.dirtyTracker = wiring.dirtyTracker();
+        this.dirtyBroadcaster = wiring.dirtyBroadcaster();
+        this.lodStore = wiring.lodStore();
+        this.regionStamps = wiring.regionStamps();
+        this.regionDirs = wiring.regionDirs();
+        // Region summaries (P2, plan §5): sweeper + mailboxes over the stamp table.
+        // Null table (pre-region-stamps test wirings) = feature inert. Disconnect
+        // cleanup is TTL-based (see the Fabric twin's field comment).
+        this.regionSummaries = this.regionStamps == null ? null
+                : new dev.vox.lss.common.region.RegionSummaryService(
+                        this.regionStamps::tileStampSeconds,
+                        this.config::maxConfiguredLodDistanceChunks);
+        // Null in test wiring: the guarded retract at shutdown must clear only a
+        // manager this service actually published.
+        this.xrayMasks = wiring.xrayMasks();
+        this.wireCompressionLive = wiring.wireCompressionLive();
+        // C2: the per-recipient enqueue consults the session dialect to translate
+        // legacy (v19/v18/v16) column bodies to the native layout at build time.
+        if (this.offThreadProcessor != null) {
+            this.offThreadProcessor.attachDialectTracker(this.dialects);
+        }
+        // Stamped up_to_date (stamped-up-to-date-plan.md §9.2, the Fabric twin's
+        // wiring): compare-backed rungs stamp "verified now" unless the position's
+        // change is marked-but-undrained or the region latch is armed. Null table
+        // (pre-region-stamps test wirings) keeps the NEVER default — no stamps.
+        // Paper residual (plan §9.3 as corrected by §10 item 5, accepted-with-eyes-
+        // open and UNCANARIED): an event-blind content change (the unfired-event
+        // class) is invisible to BOTH guards; its stamp seals until the chunk's next
+        // save — the store resweep bounds the store-rung arm. No soak canaries the
+        // class (paper-store-unfired-event's client is summary-gated off — the canary
+        // is structurally impossible); theEventBlindStateStampsByAcceptedDesign pins
+        // the residual as deliberate.
+        if (this.offThreadProcessor != null && this.regionStamps != null
+                && this.dirtyTracker != null) {
+            this.offThreadProcessor.setUpToDateStampSource((player, dim, packed) -> {
+                // Eligibility FIRST (3-Opus fold — see the Fabric twin).
+                var s = this.regionSummaries;
+                if (s == null || !s.hasRequestedThisSession(player)) return -1L;
+                if (this.dirtyTracker.isPending(dim, packed)) return -1L;
+                if (this.regionStamps.isClaimSuppressed(dim,
+                        PositionUtil.unpackX(packed), PositionUtil.unpackZ(packed))) {
+                    return -1L;
+                }
+                return LSSConstants.epochSeconds();
+            });
+        }
+    }
+
+    private static Wiring productionWiring(MinecraftServer server, SpongeConfig config) {
+        // The x-ray mask manager MUST be published before anything below consults it
+        // (4-agent round R2-M1): the store Environment snapshots each level's mask
+        // fingerprint via entryForActive, and Java evaluates this whole method BEFORE
+        // the delegating ctor body runs — the old ctor-body activate left the holder
+        // unset here, every dimension fingerprinted "off", and the mask-drift
+        // drop-and-rebuild permanently inert on Paper (an x-ray leak on any mask
+        // widening). The Fabric twin activates before its Environment for the same
+        // reason.
+        var xrayMasks = SpongeXrayMaskManager.activate(config);
+        Map<UUID, SpongePlayerRequestState> players = new ConcurrentHashMap<>();
+        // Paper/Folia reads ALWAYS route through Moonrise at Priority.LOW, so the prioritized
+        // AUTO tier applies whenever background priority is on (unlike Fabric, which must
+        // also probe for Moonrise). With the flag off the reads run FOREGROUND, so the pool
+        // must be sized by the unprioritized tier — see the Fabric twin. (v0.9.0 review.)
+        // Sponge has no Moonrise, so reads always run through vanilla's foreground IOWorker
+        // and the pool is sized by the unprioritized tier (useBackgroundReadPriority is inert).
+        int readerThreads = config.effectiveDiskReaderThreads(false);
+        var diskReader = new SpongeChunkDiskReader(readerThreads, config.useNbtTranscode());
+        SpongeChunkGenerationService generationService = new SpongeChunkGenerationService(config);
+
+        var dataDir = server.getWorldPath(LevelResource.ROOT).resolve("data");
+        var offThreadProcessor = new SpongeOffThreadProcessor(
+                players, diskReader, config.enableChunkGeneration(), dataDir,
+                config.effectiveTimestampCacheMB(), config.missMemoTtlSeconds(),
+                config.maxConfiguredLodDistanceChunks() + LSSConstants.LOD_DISTANCE_BUFFER
+                        + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
+
+        // Compressed-column shipping (protocol 19, plan §0.11) — twin of the Fabric
+        // service's latch: one server-side native probe; failure degrades to raw
+        // sessions with one warning (zstd-jni publishes no musl natives, and musl
+        // servers are common). Independent of the store's own probe below.
+        boolean wireCompressionLive = false;
+        if (config.useCompressedColumns()) {
+            var wireCodec = dev.vox.lss.common.store.StoreCodec.zstdOrNull();
+            if (wireCodec == null) {
+                LSSLogger.warn("useCompressedColumns is enabled but the "
+                        + dev.vox.lss.common.store.StoreCodec.NAME + " native cannot load"
+                        + " on this platform — LOD columns will ship uncompressed for"
+                        + " every session");
+            } else {
+                offThreadProcessor.attachWireCodec(wireCodec);
+                // Frame-form store serving (plan §3) — twin of the Fabric latch.
+                diskReader.setServeStoreFrames(true);
+                wireCompressionLive = true;
+            }
+        }
+        // LOD store: the SQLite engine for "on"/"full" (the memory tier is deleted) —
+        // attached to both consumers BEFORE the processor starts / any submit. Environment resolved
+        // eagerly on the construction thread (levels loaded at plugin enable); the
+        // periodic re-sweep (lodStoreResweepSeconds) is PAPER's stale bound for its
+        // unfired-event dirty gaps. A failed codec/native probe degrades to store-off
+        // with one warning (the Fabric twin is identical).
+        dev.vox.lss.common.store.LodStoreService lodStore = null;
+        // enabled=false must not open the store (Fabric twin: the same guard). Paper
+        // has no backfill so the cost is a DB file and a sweep thread rather than a
+        // full-world walk, but "LSS is off" should still mean nothing is created.
+        var storeMode = config.enabled()
+                ? dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
+                : dev.vox.lss.common.store.LodStoreMode.OFF;
+        if (storeMode == dev.vox.lss.common.store.LodStoreMode.OFF) {
+            // Suppressed on Folia: the store is unvalidated there (validate() WARNS on
+            // an explicit full) — recommending what we warn about is incoherent.
+            var advice = dev.vox.lss.common.store.LodStores
+                    .offRecommendationOrNull(config.enabled(), false);
+            if (advice != null) {
+                LSSLogger.info(advice);
+            }
+        }
+        // Region-dir resolver, HOISTED out of the store branch (region-summary-sync-plan.md
+        // §5 integration M2 — the P1 header rung must work store-LESS). The per-line
+        // layout invariant (surfaces row 17) lives on resolveRegionDirs below.
+        var worldRoot = server.getWorldPath(LevelResource.ROOT).normalize();
+        var regionDirs = resolveRegionDirs(server, worldRoot);
+        var regionStamps = new dev.vox.lss.common.region.RegionStampTable(regionDirs::get);
+        diskReader.attachRegionStamps(regionStamps);
+        // Tracker + mark listener BEFORE the processor starts (the Fabric twin's
+        // ordering): every dirty mark from the first tick onward must bump the region's
+        // live save mark. Paper's Bukkit events register later either way; this keeps
+        // the two platforms' wiring order identical.
+        var dirtyTracker = new DirtyColumnTracker();
+        // Marks fire at EDIT time on Paper — strictly no later than the save, so the
+        // latch arms before the write can lag the header. Region threads under Folia —
+        // the bump is atomic.
+        dirtyTracker.setMarkListener((dim, cx, cz) -> regionStamps
+                .bumpLiveSaveMark(dim, cx, cz, LSSConstants.epochSeconds()));
+
+        if (storeMode != dev.vox.lss.common.store.LodStoreMode.OFF) {
+            var maskFingerprints = new java.util.HashMap<String, String>();
+            for (ServerLevel level : server.getAllLevels()) {
+                String dim = level.dimension().identifier().toString();
+                var maskEntry = SpongeXrayMaskManager.entryForActive(level);
+                maskFingerprints.put(dim, maskEntry == null ? "off"
+                        : maskEntry.sourceLabel() + ":"
+                                + Long.toHexString(maskEntry.mask().fingerprint()));
+            }
+            // ONE registry walk feeds both fingerprints (plan §3.2) — the twin of
+            // the Fabric service's call, pinned the same way by the Paper contract
+            // test (of()/contentOf() delegation named at the call site).
+            var registryIds = storeRegistryIdentity(server);
+            var env = new dev.vox.lss.common.store.SqliteLodStore.Environment(
+                    dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
+                    LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
+                    config.lodStoreResweepSeconds(), config.lodStoreMaxBytes(),
+                    dev.vox.lss.common.store.RegistryFingerprint.of(
+                            registryIds.states(), registryIds.biomes()),
+                    dev.vox.lss.common.store.RegistryFingerprint.contentOf(
+                            registryIds.states(), registryIds.biomes()));
+            lodStore = dev.vox.lss.common.store.LodStores.createOrNull(env);
+            if (lodStore == null) {
+                // LodStores.createOrNull logged the per-cause warn (codec vs SQLite init —
+                // final-review A-M1: one shared message here misattributed SQLite failures).
+            } else {
+                diskReader.attachStore(lodStore);
+                // C4: pre-migration wirefmt=19 store rows translate to the canonical
+                // v20 form at the serve rung, against this server's own registries.
+                diskReader.setStoreLegacyTranslator(nativeRaw ->
+                        SpongeNbtSectionSerializer.toV20(nativeRaw, server.registryAccess()));
+                lodStore.setLegacyMigrationTranslator(nativeRaw ->
+                        SpongeNbtSectionSerializer.toV20(nativeRaw, server.registryAccess()));
+                offThreadProcessor.attachStore(lodStore);
+            }
+        }
+
+        // Disk-read concurrency gate K (twin of the Fabric wiring): resolved against
+        // the POST-DEGRADE store state — `lodStore != null`, never the config string,
+        // or half-pool K would re-arm on exactly the store-less servers the
+        // store-conditional AUTO carves out (failed codec probe, enabled=false).
+        int gateCapacity = config.effectiveMaxConcurrentDiskReads(readerThreads,
+                lodStore != null);
+        diskReader.configureReadGate(gateCapacity);
+        // Script-consumed contract: the measurement harnesses assert their staged knobs
+        // against this line (ServerConfigBase.effectiveConfigEcho). Deliberately AFTER
+        // the zstd probe (the compression value echoed is the LIVE state, not the
+        // request — B0 review M1) and AFTER store attachment (the echoed K is the
+        // store-conditional resolution, which does not exist until the store's own
+        // degrade ladder has run — v1.3 review MAJOR).
+        LSSLogger.info(config.effectiveConfigEcho(readerThreads, wireCompressionLive,
+                gateCapacity));
+
+        offThreadProcessor.start();
+
+        var dirtyBroadcaster = new SpongeDirtyColumnBroadcaster(
+                server, players, dirtyTracker, offThreadProcessor);
+        return new Wiring(players, diskReader, generationService, offThreadProcessor,
+                dirtyTracker, dirtyBroadcaster, lodStore, xrayMasks, wireCompressionLive,
+                regionStamps, regionDirs);
+    }
+
+    /** Region-dir resolution for the P1 freshness rungs (one call site in the wiring
+     *  builder above). The per-line layout question (surfaces row 17) does not arise on
+     *  Sponge: see {@link #putRegionDir}. */
+    static java.util.concurrent.ConcurrentHashMap<String, java.nio.file.Path> resolveRegionDirs(
+            MinecraftServer server, java.nio.file.Path worldRoot) {
+        var regionDirs = new java.util.concurrent.ConcurrentHashMap<String, java.nio.file.Path>();
+        for (ServerLevel level : server.getAllLevels()) {
+            putRegionDir(regionDirs, level);
+        }
+        return regionDirs;
+    }
+
+    /**
+     * Sponge loads worlds after startup too (and each has its own storage root), so the
+     * folder is read from the level's own chunk storage — the directory the game really
+     * writes — and {@link #onLevelLoaded} adds worlds as they appear. Per-level belt: an
+     * unresolvable level degrades that one dimension to UNKNOWN (the table's designed
+     * fail-safe), never takes down service start.
+     */
+    static void putRegionDir(java.util.Map<String, java.nio.file.Path> regionDirs, ServerLevel level) {
+        String dim = null;
+        try {
+            dim = level.dimension().identifier().toString();
+            regionDirs.put(dim, level.getChunkSource().chunkMap.worker.storage.folder.normalize());
+        } catch (Throwable t) {
+            LSSLogger.warn("Could not resolve the region directory for "
+                    + (dim != null ? dim : "<unresolvable dimension>")
+                    + " — region freshness there falls through to full reads", t);
+        }
+    }
+
+    /** Main thread, from the plugin's world-load listener. */
+    public void onLevelLoaded(ServerLevel level) {
+        var dirs = this.regionDirs;
+        if (dirs != null) putRegionDir(dirs, level);
+    }
+
+    private record RegistryIdentity(java.util.List<String> states,
+                                    java.util.List<String> biomes) {}
+
+    /** Registry identity for the LOD store meta guard (4-agent round R2-M3) — textual
+     *  twin of {@code RequestProcessingService.storeRegistryIdentity}: both identity
+     *  lists are id-ordered (review A3 — the old block half was a bare COUNT, so an
+     *  id-permuting registry change of identical total size served every warm column
+     *  as the wrong blocks with no self-heal); a mod/datapack change shifts the
+     *  global ids the stored wire bytes embed while no freshness rule can fire. The
+     *  store construction derives the ordered {@code of} AND order-insensitive
+     *  {@code contentOf} fingerprints from this ONE walk (v0.13.1 permutation plan
+     *  §3.2). */
+    private static RegistryIdentity storeRegistryIdentity(MinecraftServer server) {
+        var states = new java.util.ArrayList<String>();
+        for (var state : net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY) {
+            states.add(String.valueOf(state));
+        }
+        var biomeKeys = new java.util.ArrayList<String>();
+        var biomes = server.registryAccess()
+                .lookupOrThrow(net.minecraft.core.registries.Registries.BIOME);
+        for (var biome : biomes) {
+            var key = biomes.getKey(biome);
+            biomeKeys.add(key == null ? "?" : key.toString());
+        }
+        return new RegistryIdentity(states, biomeKeys);
+    }
+
+    /** The live LOD store (null while lodStore=off OR after the codec-probe degrade). */
+    public dev.vox.lss.common.store.LodStoreService getLodStore() {
+        return this.lodStore;
+    }
+
+    /** Ops (/lsslod store invalidate all) — twin of the Fabric service's method: drop
+     *  every stored row + backfill progress (batcher-side, tombstoned). The tscache is
+     *  deliberately untouched: its stamps describe REGION truth, not store contents —
+     *  re-asks re-resolve via tscache/probe/NBT as normal and re-warm the store. Only
+     *  meaningful for the persistent store. Safe from any thread (Folia command
+     *  dispatch is region-threaded): tombstones + a control-queue offer. */
+    public boolean invalidateStoreAllDimensions() {
+        if (this.lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite) {
+            sqlite.requestDropAllRows();
+            return true;
+        }
+        return false;
+    }
+
+    public DirtyColumnTracker getDirtyTracker() {
+        return this.dirtyTracker;
+    }
+
+    /** The region freshness stamp table (P1 header rung; P2 summary sweeper). Null in
+     *  pre-region-stamps test wirings. */
+    public dev.vox.lss.common.region.RegionStampTable getRegionStamps() {
+        return this.regionStamps;
+    }
+
+    /** Cross-thread lifecycle ingress. On Folia, handshakes and PlayerQuit arrive on region
+     *  threads; registerPlayer/removePlayer mutate pump-owned state (including the generation
+     *  service's non-concurrent maps), so region-thread callers enqueue here and tick() drains
+     *  first — one queue preserves arrival order across a kick→rejoin of the same UUID. */
+    private sealed interface LifecycleEvent {
+        /** {@code beforeRegister} runs on the PUMP immediately before registerPlayer;
+         *  {@code replyAfterRegister} immediately after. See the enqueueRegister javadoc
+         *  for why the dialect flip must be the former and the reply the latter. */
+        record Register(ServerPlayer player, int capabilities,
+                        Runnable beforeRegister, Runnable replyAfterRegister)
+                implements LifecycleEvent {}
+        /** {@code connectionEpoch} = the dying connection's epoch at quit time —
+         *  the R4 guard's comparator (Folia review 2026-08-27). */
+        record Remove(UUID uuid, long connectionEpoch) implements LifecycleEvent {}
+    }
+
+    private final ConcurrentLinkedQueue<LifecycleEvent> lifecycleMailbox = new ConcurrentLinkedQueue<>();
+
+    /** Any thread. Applied at the top of the next tick(). */
+    public void enqueueRegister(ServerPlayer player, int capabilities) {
+        enqueueRegister(player, capabilities, () -> { }, () -> { });
+    }
+
+    /** Any thread; no pre-register hook. */
+    public void enqueueRegister(ServerPlayer player, int capabilities, Runnable replyAfterRegister) {
+        enqueueRegister(player, capabilities, () -> { }, replyAfterRegister);
+    }
+
+    /**
+     * Any thread. Applied at the top of the next tick(); {@code replyAfterRegister} runs on
+     * the pump IMMEDIATELY AFTER the player state exists. This ordering is the fix for the
+     * Folia pre-registration drop (soak-diagnosed 2026-07-27): the handshake used to reply
+     * SessionConfig inline on the region thread while the registration waited here, so a
+     * well-behaved client's FIRST want-set could arrive before any state existed and was
+     * dropped uncounted. Replying only after the drain makes that window unreachable for
+     * clients that declare only after receiving SessionConfig (all of them).
+     */
+    public void enqueueRegister(ServerPlayer player, int capabilities,
+                                Runnable beforeRegister, Runnable replyAfterRegister) {
+        this.lifecycleMailbox.add(new LifecycleEvent.Register(
+                player, capabilities, beforeRegister, replyAfterRegister));
+    }
+
+    /** Any thread. Applied at the top of the next tick(). */
+    public void enqueueRemove(UUID uuid) {
+        this.lifecycleMailbox.add(new LifecycleEvent.Remove(uuid,
+                this.connectionEpochs.getOrDefault(uuid, 0L)));
+    }
+
+    // Connection epochs (Folia review 2026-08-27 R4): the mailboxed Remove drains up
+    // to a pump tick (or more, on a lagging Folia global thread) after the quit, and
+    // two structures are written SYNCHRONOUSLY on the successor session's region
+    // threads — the service gate's denial memo (at handshake) and the region-summary
+    // request + eligibility mark (at dimension entry). A fast rejoin landing between
+    // the old quit and the old Remove's drain would have that fresh state wiped by
+    // the Remove's connection-scoped belts: the gate case strands a disarmed rejoiner
+    // with no re-offer; the summary case leaves summaries + stamped up_to_date dark
+    // for the whole dimension visit (the client requests only at entry). Every
+    // handshake marks its connection's epoch (region thread, CHM); the Remove carries
+    // the epoch captured at quit; the two belts run only when no NEWER connection has
+    // handshaked since. Mailbox-FIFO-protected structures (dialects, far players —
+    // whose rejoin writes ride the mailbox or the runtime-task queue, both drained
+    // after this) need no guard. Known residual: a duplicate-login kick whose NEW
+    // handshake precedes the OLD quit event captures the new epoch and the belts run
+    // — the pre-fix window, now needing an ordering inversion as well.
+    private final ConcurrentHashMap<UUID, Long> connectionEpochs = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong connectionEpochCounter =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    /** Any thread (the plugin's handshake ingress, region threads on Folia). */
+    public void markConnection(UUID uuid) {
+        this.connectionEpochs.put(uuid, this.connectionEpochCounter.incrementAndGet());
+    }
+
+    // Fire-and-forget lifecycle notices share the pump queue. Settings commits use
+    // submitSettingsControl instead, which owns a terminal receipt through shutdown.
+    private final ConcurrentLinkedQueue<Runnable> runtimeTasks = new ConcurrentLinkedQueue<>();
+
+    /** Any thread; lifecycle notice only. No settings publication or reload reply. */
+    public void enqueueRuntimeTask(Runnable task) {
+        if (!this.shuttingDown) this.runtimeTasks.add(task);
+    }
+
+    private void drainRuntimeTasks() {
+        Runnable task;
+        while ((task = this.runtimeTasks.poll()) != null) {
+            try {
+                task.run();
+            } catch (Exception e) {
+                // Exception, not Throwable: an Error (OOM, linkage) must propagate —
+                // swallowing it here would hide a dying JVM behind a log line.
+                LSSLogger.error("Runtime settings task failed", e);
+            }
+        }
+    }
+
+    // The tick-poll appliers (v0.11.0 stage C, twin of the Fabric block): each formerly
+    // capture-at-construction consumer re-applies config at the top of the tick on the
+    // pump. Change-guarded so the steady state costs a few field compares.
+    private int lastAppliedGenGlobal = -1;
+    private int lastAppliedGenPerPlayer = -1;
+
+    private void applyRuntimeConfig() {
+        this.bandwidthLimiter.reconfigure(this.config.bytesPerSecondGlobal());
+        this.diskReader.reapplyGateCapacity(this.config);
+        this.offThreadProcessor.updateSweepRadius(this.config.maxConfiguredLodDistanceChunks()
+                + LSSConstants.LOD_DISTANCE_BUFFER
+                + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
+        var generationLimits = this.config.generationLimits();
+        int genGlobal = generationLimits.global();
+        int genPerPlayer = generationLimits.perPlayer();
+        if (genGlobal != this.lastAppliedGenGlobal || genPerPlayer != this.lastAppliedGenPerPlayer) {
+            if (this.generationService != null) {
+                this.generationService.updateCaps(genGlobal, genPerPlayer);
+            }
+            for (var state : this.players.values()) {
+                state.updateGenSlotCap(genPerPlayer);
+            }
+            this.lastAppliedGenGlobal = genGlobal;
+            this.lastAppliedGenPerPlayer = genPerPlayer;
+        }
+    }
+
+    /**
+     * Push a fresh SessionConfig to every CURRENT-dialect (v20) session (twin of the
+     * Fabric method; SET plan §"Pushing the new distance"). PUMP-ONLY, and only via a
+     * runtime task drained AFTER the lifecycle mailbox — the ordering pin: a
+     * registered-but-flip-pending player must never be enumerated as CURRENT (the
+     * tracker defaults untracked to CURRENT, and the flip applies in the drain's
+     * beforeRegister). Legacy sessions (v19/v18/v16) are skipped; they keep the
+     * handshake distance until rejoin.
+     *
+     * @return {pushed, legacySkipped}
+     */
+    /** Test seam: sends one v20 SessionConfig frame. Production default is the raw
+     *  plugin-message send (the broadcaster's setDirtySender pattern). */
+    @FunctionalInterface
+    interface SessionConfigSender {
+        /** {@code enabled} is passed explicitly (not read off the config): the service
+         *  gate's revocation push advertises {@code false} at a player on a server whose
+         *  config says {@code true}. */
+        void send(ServerPlayer player, SpongeConfig config, boolean enabled) throws Exception;
+    }
+
+    private SessionConfigSender sessionConfigSender = (player, cfg, enabled) ->
+            SpongePayloadHandler.sendSessionConfig(player,
+                    LSSConstants.PROTOCOL_VERSION, enabled,
+                    SpongeWorldLod.distance(cfg, player), generationEnabledForSession());
+
+    void setSessionConfigSender(SessionConfigSender sender) {
+        this.sessionConfigSender = sender;
+    }
+
+    public int[] repushSessionConfig() {
+        int pushed = 0;
+        int legacy = 0;
+        for (var state : this.players.values()) {
+            if (this.dialects.dialectOf(state.getPlayerUUID())
+                    != dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT) {
+                legacy++;
+                continue;
+            }
+            try {
+                this.sessionConfigSender.send(state.getPlayer(), this.config, this.config.enabled());
+                pushed++;
+            } catch (Exception e) {
+                LSSLogger.error("Session-config re-push failed for "
+                        + state.getPlayer().getName().getString(), e);
+            }
+        }
+        return new int[]{pushed, legacy};
+    }
+
+    /**
+     * The two service-gate sweeps (service-permission-gate-plan.md §2.3) — the textual
+     * twin of {@code RequestProcessingService.runServiceGateSweeps}, with the Paper
+     * differences: Bukkit permissible reads on the pump, the widened
+     * {@link SessionConfigSender} for the enabled=false push, and the replay through
+     * the plugin's production receiver via {@link #setHandshakeReplayer} (deferred
+     * reply — the Folia pre-registration gap stays closed). Public so tests drive one
+     * sweep directly; the one production caller is the tick cadence. Pump thread only.
+     */
+    public void runServiceGateSweeps() {
+        var gateState = this.serviceGateState;
+        var config = this.config;
+        if (config.requireServicePermission()) {
+            for (var state : this.players.values()) {
+                UUID uuid = state.getPlayerUUID();
+                if (this.dialects.dialectOf(uuid)
+                        != dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT) {
+                    continue; // legacy sessions heal at rejoin — recorded accepted-open
+                }
+                var player = state.getPlayer();
+                boolean holds;
+                try {
+                    holds = this.permissionProbe.test(player,
+                                    dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
+                            && this.permissionProbe.test(player,
+                                    dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+                } catch (Throwable e) {
+                    if (e instanceof VirtualMachineError vme) throw vme;
+                    holds = true; // contained: a throwing backend counts as HOLDING
+                }
+                if (holds) {
+                    gateState.resetRevocationStreak(uuid);
+                    continue;
+                }
+                if (!gateState.bumpRevocationStreak(uuid)) continue;
+                try {
+                    this.sessionConfigSender.send(player, config, false);
+                } catch (Exception e) {
+                    LSSLogger.error("Service-gate disable push failed for "
+                            + player.getName().getString(), e);
+                }
+                gateState.rememberDenied(uuid, player.getName().getString(),
+                        LSSConstants.PROTOCOL_VERSION, state.getCapabilities());
+                unregisterForServiceGate(uuid);
+                LSSLogger.info("LOD service revoked for " + player.getName().getString()
+                        + ": requireServicePermission is on and a permission recheck found "
+                        + "a negative grant on " + dev.vox.lss.common.LSSPermissions.SERVICE_LSS
+                        + " or " + dev.vox.lss.common.LSSPermissions.SERVICE_VSS
+                        + " (either spelling denies) — the session was told "
+                        + dev.vox.lss.common.Brand.shortName() + " is disabled; it is re-offered automatically "
+                        + "if the grant returns");
+            }
+        } else {
+            // Disarmed: no streak may survive into a later re-arm (the two-sweep
+            // hysteresis must start fresh).
+            gateState.clearRevocationStreaks();
+        }
+        if (gateState.hasDenied()) {
+            for (UUID uuid : gateState.deniedSnapshot()) {
+                if (this.players.containsKey(uuid)) {
+                    // SKIP, never clear (implementation review, 2026-08-27): a denied
+                    // re-handshake deposits the memo on a region thread while the
+                    // unregister composite is still queued behind the lifecycle drain —
+                    // clearing here would wipe the deposit and strand the player past
+                    // its own revocation. A stale entry is retained one sweep and
+                    // replays correctly on the next.
+                    continue;
+                }
+                var player = this.server.getPlayerList().getPlayer(uuid);
+                if (player == null) {
+                    // Offline: EVERYTHING gate-side is session-scoped — sweeping only
+                    // the memo would leak the log latch (a same-UUID rejoin would then
+                    // be denied silently) and any streak.
+                    gateState.onDisconnect(uuid);
+                    continue;
+                }
+                boolean cleared;
+                if (!config.requireServicePermission()) {
+                    cleared = true; // a disarmed gate trivially clears everyone
+                } else {
+                    try {
+                        cleared = this.permissionProbe.test(player,
+                                        dev.vox.lss.common.LSSPermissions.SERVICE_LSS)
+                                && this.permissionProbe.test(player,
+                                        dev.vox.lss.common.LSSPermissions.SERVICE_VSS);
+                    } catch (Throwable e) {
+                        if (e instanceof VirtualMachineError vme) throw vme;
+                        cleared = true; // fail-open, the doctrine
+                    }
+                }
+                if (!cleared) continue;
+                if (this.handshakeReplayer == null) continue; // bare test wiring: RETAIN
+                var remembered = gateState.takeDenied(uuid);
+                if (remembered == null) continue;
+                LSSLogger.info("Re-offering " + dev.vox.lss.common.Brand.shortName() + " to "
+                        + remembered.playerName() + " (re-offer): "
+                        + (config.requireServicePermission()
+                                ? "the service permission cleared"
+                                : "requireServicePermission was disarmed")
+                        + " — replaying the stored handshake");
+                try {
+                    this.handshakeReplayer.accept(player, remembered);
+                } catch (Exception e) {
+                    // Contained — twin of the Fabric sweep: a throwing replay must not
+                    // abort the remaining re-offers; the entry stays dropped (rejoin heals).
+                    LSSLogger.error("Service-gate re-offer failed for "
+                            + remembered.playerName(), e);
+                }
+            }
+        }
+    }
+
+    private void drainLifecycleMailbox() {
+        LifecycleEvent ev;
+        while ((ev = this.lifecycleMailbox.poll()) != null) {
+            // Contained per event: one throwing register/remove must not abort the rest of
+            // the drain (a register after it would silently never apply) — and a register
+            // that DID publish state before throwing must still run its deferred reply, or
+            // the client sits SessionConfig-less until the v16 discovery timer degrades the
+            // session (final review 2026-07-27).
+            try {
+                switch (ev) {
+                    case LifecycleEvent.Register r -> {
+                        // On the PUMP, before registration: the wire-dialect flip. It must
+                        // be here rather than on the calling thread, because on Folia the
+                        // handshake arrives on a REGION thread and the flip takes effect
+                        // instantly, while the SessionConfig that re-arms the client's
+                        // decoder is deferred to this drain — so a flip made off-pump can
+                        // land mid-tick and let the rest of that tick's flush ship
+                        // NEW-dialect columns to a decoder still armed for the OLD one,
+                        // which the client reads as a malformed frame and disconnects on.
+                        // It must also be before registerPlayer, which derives
+                        // wantsCompressedColumns from the dialect. (Round-3 review.)
+                        r.beforeRegister().run();
+                        try {
+                            registerPlayer(r.player(), r.capabilities());
+                            // Service gate: a HANDSHAKE registration (the grant replay's deferred
+                            // Register rides this same drain) ends the denied episode — memo gone,
+                            // log latch re-armed. Not in registerPlayer: that is the dim-change
+                            // reuse path (R3).
+                            this.serviceGateState.onRegistered(r.player().getUUID());
+                            // Far players: post-flip, so the CURRENT-dialect gate is
+                            // reliable (legacy layouts predate the capability bit).
+                            if ((r.capabilities() & LSSConstants.CAPABILITY_FAR_PLAYERS) != 0
+                                    && !this.dialects.isV16(r.player().getUUID())
+                                    && !this.dialects.isV18(r.player().getUUID())
+                                    && !this.dialects.isV19(r.player().getUUID())) {
+                                this.farPlayerService.subscribeViewer(r.player().getUUID());
+                            } else {
+                                // Re-handshake without the bit / on a legacy dialect
+                                // sheds any prior subscription (review: a same-session
+                                // downgrade must not keep streaming far-player frames
+                                // to a decoder that no longer expects them).
+                                this.farPlayerService.removeViewer(r.player().getUUID());
+                            }
+                        } finally {
+                            if (this.players.containsKey(r.player().getUUID())) {
+                                // State exists from this line on — the deferred SessionConfig
+                                // reply may now invite the client's first declaration.
+                                r.replyAfterRegister().run();
+                            }
+                        }
+                    }
+                    case LifecycleEvent.Remove r -> {
+                        removePlayer(r.uuid());
+                        // Quit-race leak guard (v18-compat §2.3, review F2): the quit's
+                        // direct onDisconnect can run BEFORE a deferred Register's
+                        // dialectFlip marked membership, leaking the entry forever. The
+                        // mailbox Remove is quit-originated ONLY (the dimension-change
+                        // cycle calls removePlayer directly), so dropping here is exactly
+                        // the network-disconnect semantics and cannot break the
+                        // identity-survives-dim-change contract.
+                        this.dialects.onDisconnect(r.uuid());
+                        this.farPlayerService.onDisconnect(r.uuid());
+                        // R4: the two belts over REGION-THREAD-WRITTEN state run only
+                        // when no newer connection handshaked since the quit — see the
+                        // connectionEpochs comment. A skipped sweep leaves at most the
+                        // OLD session's residue in UUID-keyed maps the successor session
+                        // overwrites/merges; the pump's anchor-less summary eligibility
+                        // sweep and the gate's grant sweep are the belts for true leaks.
+                        boolean noNewerConnection = r.connectionEpoch()
+                                >= this.connectionEpochs.getOrDefault(r.uuid(), 0L);
+                        if (noNewerConnection) {
+                            // Service gate: connection-scoped sweep (memo, log latch,
+                            // streak) — idempotent beside the quit hook's own call.
+                            this.serviceGateState.onDisconnect(r.uuid());
+                            // Region summaries: connection-scoped cleanup, never the
+                            // dim-change cycle.
+                            if (this.regionSummaries != null) this.regionSummaries.removePlayer(r.uuid());
+                            this.connectionEpochs.remove(r.uuid());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                LSSLogger.error("Lifecycle event failed to apply (" + ev.getClass().getSimpleName()
+                        + ") — continuing the drain", e);
+            }
+        }
+    }
+
+    public SpongePlayerRequestState registerPlayer(ServerPlayer player, int capabilities) {
+        var state = this.players.computeIfAbsent(player.getUUID(), uuid -> {
+            var s = new SpongePlayerRequestState(player,
+                    LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
+                    this.config.generationLimits().perPlayer());
+            if (this.regionizedProbing) s.requireProbeHandoff();
+            // Session identity for the router's stale-snapshot guard (set before the map
+            // publish so the processing thread never sees it null on a live state).
+            s.setRegisteredDimension(player.level().dimension().identifier().toString());
+            // Transport-pressure gauge (elytra-wall §8.3), Fabric-parity.
+            s.setChannelPressureProbe(SpongeChannelPressure.forPlayer(player));
+            return s;
+        });
+        this.diskReader.registerPlayer(player.getUUID(), state.registration());
+        state.setCapabilities(capabilities);
+        // The five-term AND (plan §2 + v18-compat §2.5) — twin of the Fabric derivation.
+        // Both dialect marks run in the drain's beforeRegister (the dialectFlip, pump
+        // thread) immediately before this, and the drain runs registerPlayer before the
+        // deferred reply, so no serve precedes the flag.
+        state.setWantsCompressedColumns(this.wireCompressionLive
+                && (capabilities & LSSConstants.CAPABILITY_ZSTD_COLUMNS) != 0
+                && !this.dialects.isV16(player.getUUID())
+                && !this.dialects.isV18(player.getUUID()));
+        state.markHandshakeComplete();
+        // Service gate: deliberately NOT cleared here (Folia review 2026-08-27 R3) —
+        // registerPlayer is also the dimension-change reuse path (see the Register
+        // drain, which clears it for handshake registrations).
+        return state;
+    }
+
+    public void removePlayer(UUID uuid) {
+        var removed = this.players.remove(uuid);
+        if (removed != null) removed.registration().retire();
+        this.regionProbeResults.remove(uuid);
+        this.heldForProbe.remove(uuid);
+        // STAMP, don't clear: a removal (dimension change on Folia, quit) makes the very
+        // next state==null batch the EXPECTED remove→register race, not an orphan — the
+        // prompt interval doubles as a post-removal grace, so the Folia window can never
+        // fire a spurious prompt at a healthy mid-stream client, and a dimension hop
+        // extends the 60 s bound instead of resetting it. Quit entries are pruned by the
+        // size-bounded sweep below; a genuine orphan (plugin /reload) hits a FRESH map —
+        // the service instance died with the reload — and still prompts immediately.
+        this.reattachPromptAt.put(uuid, System.nanoTime() / 1_000_000L);
+        if (this.reattachPromptAt.size() > REATTACH_PROMPT_MAP_BOUND) {
+            long cutoff = System.nanoTime() / 1_000_000L - REATTACH_PROMPT_INTERVAL_MS;
+            this.reattachPromptAt.values().removeIf(stamp -> stamp < cutoff);
+        }
+        if (removed != null) {
+            removed.discardProbeHandoff();
+            this.offThreadProcessor.notifyPlayerRemoved(uuid, removed.registration());
+            cleanupPlayerServices(uuid, removed.registration());
+        }
+        // Resets the v16 want-set + arms the ingress grace. Identity survives (dropped only
+        // by the PlayerQuit hook), mirroring how capabilities ride the dim-change
+        // remove+register cycle. No-op for v18 players.
+        this.v16Compat.onServiceRemove(uuid);
+    }
+
+    private void cleanupPlayerServices(UUID uuid, RequestRegistration registration) {
+        this.diskReader.removePlayerResults(uuid, registration);
+        if (this.generationService != null)
+            this.generationService.removePlayer(uuid, registration);
+    }
+
+    /**
+     * The service-gate unregistration composite (service-permission-gate-plan.md
+     * §2.3): {@code removePlayer} + the far-player viewer shed + the region-summary
+     * cleanup — the departed-player sweep's trio, NEVER a modified removePlayer
+     * (that is the dimension-change reuse path on Folia; teaching it to shed viewers
+     * would break every dimension change). The dialect mark and v16 identity are
+     * deliberately KEPT — connection-lifecycle facts, and the mark is what any
+     * per-player disable push read. No-op for an unregistered uuid. Pump thread only.
+     */
+    void unregisterForServiceGate(UUID uuid) {
+        if (!this.players.containsKey(uuid)) return;
+        removePlayer(uuid);
+        this.farPlayerService.removeViewer(uuid);
+        if (this.regionSummaries != null) this.regionSummaries.removePlayer(uuid);
+    }
+
+    /** Any thread (the handshake's denial hook runs on a region thread on Folia):
+     *  marshals the composite onto the pump, where the registered-check happens at
+     *  drain time. A registration RACING the denial (two opposite-outcome handshakes
+     *  in one drain window) can still invert — the lifecycle Register applies before
+     *  this runtime task regardless of arrival order, so the composite may unregister
+     *  the newer granted registration; the client keeps declaring (its last config was
+     *  the deferred enabled=true), so the 60 s re-attach prompt forces a re-handshake
+     *  that settles the correct terminal state. Accepted: vanishingly rare and
+     *  self-healing. */
+    public void enqueueServiceGateUnregister(UUID uuid) {
+        enqueueRuntimeTask(() -> unregisterForServiceGate(uuid));
+    }
+
+    /** The service-gate bookkeeping — see {@link dev.vox.lss.common.ServiceGateState}. */
+    public dev.vox.lss.common.ServiceGateState getServiceGateState() {
+        return this.serviceGateState;
+    }
+
+    /** Minimum interval between re-attach prompts per player — also the post-removal grace
+     *  (removePlayer stamps the map; see maybeSendReattachPrompt). */
+    static final long REATTACH_PROMPT_INTERVAL_MS = 60_000;
+
+    /** Prompt-stamp map size that triggers a stale-entry sweep (quit players' entries have
+     *  no per-UUID removal anymore — removals stamp instead). Generous: the map only grows
+     *  via removals and prompts, one Long per UUID. */
+    static final int REATTACH_PROMPT_MAP_BOUND = 256;
+
+    /** Test seam: the re-attach prompt send (production: the v16-dialect SessionConfig —
+     *  see maybeSendReattachPrompt for why that dialect specifically). */
+    @FunctionalInterface
+    interface ReattachPromptSender {
+        void send(ServerPlayer player);
+    }
+
+    ReattachPromptSender reattachPromptSender = this::sendReattachPromptPayload;
+
+    private void sendReattachPromptPayload(ServerPlayer player) {
+        // C5 note (review m14): this is the one SessionConfig send outside the
+        // handshake gate, so it is not Via-guarded. Reachable only through the
+        // narrow registered-then-denied window (a no-signal FIRST handshake during
+        // Via init) — there it produces a prompt→handshake→denial cycle bounded to
+        // one prompt per REATTACH_PROMPT_INTERVAL, which the guard's INFO line makes
+        // visible; a rejoin heals it.
+        SpongePayloadHandler.sendSessionConfigV16(player,
+                this.config.enabled(), SpongeWorldLod.distance(this.config, player),
+                LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
+                this.config.generationLimits().perPlayer(),
+                generationEnabledForSession());
+    }
+    // Per-UUID last-prompt/last-removal stamps (millis). Concurrent: batches arrive on
+    // region threads on Folia. removePlayer STAMPS entries (the post-removal grace) and
+    // size-bounded-sweeps stale ones.
+    private final java.util.concurrent.ConcurrentHashMap<UUID, Long> reattachPromptAt =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * /reload re-attach prompt (R2-3). A successfully-DECODED batch from a player with NO
+     * state is proof of an orphaned LSS session: vanilla clients never speak the channel,
+     * a live client cannot declare before its deferred-reply registration ran, and after a
+     * plugin reload the fresh service has an empty player map while every connected LSS
+     * client keeps declaring its want-set at 1 Hz forever — silently dropped here until
+     * the player manually rejoined.
+     *
+     * <p>The prompt is the V16-DIALECT 6-field SessionConfig, deliberately: a
+     * current-protocol client's downgrade guard treats an unexpected v16 config on an
+     * established session as a raced discovery and RE-ANNOUNCES its own version — which
+     * re-registers it through the normal deferred path. That is the heal, and it ships
+     * with zero client-side changes. It covers v18-compat sessions too: the v0.7.x–v0.8.x
+     * client carries the same downgrade guard, its re-announce (protocol 18) lands on the
+     * v18 rung, and the in-order echo-18 config disarms its sourceless-decode flag before
+     * any post-re-registration column (v18-compat design §4). A genuine v16 client (whose
+     * post-reload batches also land here — the fresh compat manager has no session for
+     * it) parses the 6-field shape harmlessly and stays broken-until-rejoin, exactly
+     * today's behavior; the current 4-field shape would buffer-underflow its decoder and
+     * hard-kick it.
+     *
+     * <p>Rate-limited per UUID (60 s), and removePlayer STAMPS the same map, so the Folia
+     * dimension-change remove→register window sits inside a post-removal grace and cannot
+     * fire a spurious prompt at a healthy mid-stream client (the client-side backstop:
+     * V16ClientWire's announce gate keeps even a delivered stray prompt from flipping
+     * column decode). Sent directly from the message-handler thread (netty is any-thread
+     * safe — the v16 overflow valve precedent above).
+     *
+     * <p><b>The heal is DECLARATION-triggered</b> (live-smoke finding, 2026-07-29): a
+     * client whose want-set had CONVERGED before the /reload sends nothing — silence at
+     * convergence is the v17 protocol — so it stays orphaned, invisibly, until movement
+     * mints new rings (its next declaration prompts and heals within a scan) or it
+     * rejoins. Until then it also has no dirty-broadcast subscription (the fresh service
+     * has no state for it), so post-reload edits don't reach it. Accepted residual: the
+     * un-orphaned failure mode (pre-fix: orphaned FOREVER even while declaring) is fixed;
+     * the converged-and-stationary corner heals on the first movement, and a converged
+     * client's LOD is complete by definition — only edit staleness is at risk.
+     */
+    private void maybeSendReattachPrompt(ServerPlayer player) {
+        var uuid = player.getUUID();
+        long now = System.nanoTime() / 1_000_000L;
+        boolean[] fire = {false};
+        this.reattachPromptAt.compute(uuid, (k, prev) -> {
+            if (prev != null && now - prev < REATTACH_PROMPT_INTERVAL_MS) return prev;
+            fire[0] = true;
+            return now;
+        });
+        if (!fire[0]) return;
+        LSSLogger.info("Re-attach prompt for " + player.getName().getString()
+                + " — declared a want-set with no registered session (plugin reloaded?)");
+        this.reattachPromptSender.send(player);
+    }
+
+    public void handleBatchRequest(ServerPlayer player, SpongePayloadHandler.DecodedBatchChunkRequest batch) {
+        int playerCx = player.getBlockX() >> 4;
+        int playerCz = player.getBlockZ() >> 4;
+        int maxDist = SpongeWorldLod.distance(this.config, player) + LSSConstants.LOD_DISTANCE_BUFFER;
+
+        // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
+        // pump tick is the sole declarer) instead of replacing the backlog. Placed before the
+        // state guard: merges are session-only and must not depend on registration timing —
+        // on Paper the handshake reply outruns the mailboxed registration by up to a tick.
+        var v16Merge = this.v16Compat.onClientBatch(player.getUUID(), batch.packedPositions(),
+                batch.clientTimestamps(), batch.count(), playerCx, playerCz, maxDist);
+        if (v16Merge != null) {
+            var v16State = this.players.get(player.getUUID());
+            if (v16State != null && v16Merge.rangeFiltered() > 0) {
+                v16State.recordRangeFiltered(v16Merge.rangeFiltered());
+            }
+            long[] bounced = v16Merge.overflowBounced();
+            if (bounced.length > 0) {
+                // Overflow valve: byte 0 comes back to life for exactly this — the old client
+                // backs off ~1 s and retries. Sent directly (netty is any-thread safe), off
+                // the pipeline's SendActionBatcher.
+                var types = new byte[bounced.length];
+                java.util.Arrays.fill(types, LSSConstants.RESPONSE_RATE_LIMITED_V16);
+                SpongePayloadHandler.sendBatchResponse(player,
+                        types, bounced, bounced.length);
+            }
+            return;
+        }
+
+        var state = this.players.get(player.getUUID());
+        if (state == null) {
+            // STRICTLY state == null: a registered-but-mid-handshake state (the guard
+            // below) is a healthy client whose own deferred reply is in flight.
+            maybeSendReattachPrompt(player);
+            return;
+        }
+        if (!state.hasCompletedHandshake()) return;
+
+        var accepted = new ArrayList<IncomingRequest>(batch.count());
+        for (int i = 0; i < batch.count(); i++) {
+            long packedPosition = batch.packedPositions()[i];
+            int cx = PositionUtil.unpackX(packedPosition);
+            int cz = PositionUtil.unpackZ(packedPosition);
+            if (PositionUtil.chebyshevDistance(cx, cz, playerCx, playerCz) > maxDist) continue;
+            accepted.add(new IncomingRequest(cx, cz, batch.clientTimestamps()[i]));
+        }
+        state.recordRangeFiltered(batch.count() - accepted.size());
+        // Offer even when empty: an empty batch is the client's explicit backpressure
+        // clear and must replace the backlog with nothing.
+        state.offerIncomingBatch(new IncomingBatch(accepted.toArray(new IncomingRequest[0])));
+    }
+
+    // Per-owner progress survives failure in another owner. Publication's previous
+    // snapshot cannot describe partial adoption, especially when the next edit reverts.
+    private dev.vox.lss.common.config.ServerSettings.Lod advertisedLod;
+    private dev.vox.lss.common.config.ServerSettings.Service adoptedServicePolicy;
+    private dev.vox.lss.common.config.ServerSettings.FarPlayers adoptedFarPlayerPolicy;
+    private boolean refreshedGeneration;
+    private volatile boolean advertisedGeneration;
+    public boolean generationEnabledForSession() { return advertisedGeneration; }
+
+    private volatile boolean settingsStopped;
+    private volatile long settingsRevision;
+    private volatile int settingsLegacyReconnects;
+    public record SettingsFeedback(long revision, int legacyReconnects, java.util.List<String> draining) {
+        public SettingsFeedback { draining = java.util.List.copyOf(draining); }
+    }
+    private volatile SettingsFeedback settingsFeedback = new SettingsFeedback(0, 0, java.util.List.of());
+    public SettingsFeedback settingsFeedback() { return settingsFeedback; }
+    public long lastSettingsRevision() { return settingsRevision; }
+    public int lastSettingsLegacyReconnects() { return settingsLegacyReconnects; }
+    public java.util.List<String> settingsDrainingStatus() {
+        var status = new java.util.ArrayList<String>();
+        if (!generationEnabledForSession() && generationService != null && generationService.getActiveCount() > 0)
+            status.add("Generation disabled; " + generationService.getActiveCount() + " admitted job(s) draining");
+
+        return java.util.List.copyOf(status);
+    }
+    private volatile boolean generationRefreshPending;
+    private final java.util.Set<java.util.concurrent.CompletableFuture<?>> settingsReceipts =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Owner dispatch with a terminal shutdown outcome, unlike fire-and-forget tasks. */
+    public <T> java.util.concurrent.CompletableFuture<T> submitSettingsControl(java.util.function.Supplier<T> action) {
+        var receipt = new java.util.concurrent.CompletableFuture<T>();
+        settingsReceipts.add(receipt);
+        receipt.whenComplete((value, failure) -> settingsReceipts.remove(receipt));
+        Runnable task = () -> {
+            if (receipt.isDone()) return;
+            if (settingsStopped) { receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped")); return; }
+            try { receipt.complete(action.get()); }
+            catch (Throwable failure) { receipt.completeExceptionally(failure); }
+        };
+        try {
+            if (settingsStopped) throw new java.util.concurrent.RejectedExecutionException("Server stopped");
+            runtimeTasks.add(task);
+            if (settingsStopped) receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped"));
+        } catch (Throwable failure) { receipt.completeExceptionally(failure); }
+        return receipt;
+    }
+
+    private void cancelSettingsReceipts() {
+        settingsStopped = true;
+        for (var receipt : settingsReceipts)
+            receipt.completeExceptionally(new java.util.concurrent.CancellationException("Server stopped"));
+    }
+
+    /** Called on the service owner after one immutable publication. No cross-owner waits. */
+    public java.util.concurrent.CompletableFuture<Void> reconcileSettings(
+            dev.vox.lss.common.config.ServerSettings previous,
+            dev.vox.lss.common.config.ServerSettings next, long revision) {
+        if (settingsStopped) return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("Server stopped"));
+        if (revision < settingsRevision) return java.util.concurrent.CompletableFuture.failedFuture(
+                new java.util.concurrent.CancellationException("Superseded settings revision"));
+        // Keep the session owner's reconnect count while retrying an operation
+        // that another owner failed; a successful prior report starts fresh.
+        if (settingsFeedback.revision() == settingsRevision) settingsLegacyReconnects = 0;
+        settingsRevision = revision;
+        var view = new dev.vox.lss.common.config.ServerConfigBase(next, true);
+        boolean generationChanged = refreshedGeneration != next.generation().enabled();
+        if (generationChanged) generationRefreshPending = true;
+        var generation = next.generation();
+        if (generationService != null) generationService.updatePolicy(generation.enabled(),
+                generation.concurrency().global(), generation.concurrency().perPlayer(), generation.timeoutTicks(), revision);
+        for (var state : players.values()) state.updateGenSlotCap(generation.concurrency().perPlayer());
+        bandwidthLimiter.reconfigure(view.bytesPerSecondGlobal());
+        diskReader.reapplyGateCapacity(view);
+        diskReader.updateSerializationPolicy(next.serialization().nbtTranscode(), next.serialization().selectiveNbtParse());
+        offThreadProcessor.updateSweepRadius(view.maxConfiguredLodDistanceChunks()
+                + LSSConstants.LOD_DISTANCE_BUFFER + dev.vox.lss.common.processing.OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS);
+        var processor = offThreadProcessor.updateSettingsPolicy(generation.enabled(),
+                view.effectiveTimestampCacheMB() * 1024L * 1024L,
+                java.util.concurrent.TimeUnit.SECONDS.toNanos(next.storage().missMemoTtlSeconds()), revision);
+        java.util.concurrent.CompletableFuture<Void> store = java.util.concurrent.CompletableFuture.completedFuture(null);
+        var newStore = next.storage().lodStore();
+        long desiredCap = view.lodStoreMaxBytes() <= 0 ? Long.MAX_VALUE : view.lodStoreMaxBytes();
+        if (lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite) {
+            var adopted = sqlite.adoptedPolicy();
+            if (desiredCap != adopted.maxDbBytes()
+                    || newStore.resweepIntervalSeconds() != adopted.resweepSeconds())
+                store = sqlite.updatePolicy(view.lodStoreMaxBytes(), newStore.resweepIntervalSeconds(), revision);
+        }
+
+        // Generation/session ordering waits for its processing owner, never an unrelated
+        // long store sweep or backfill read. Overall reporting still awaits every owner.
+        var session = processor.thenCompose(ignored -> submitSettingsControl(() -> {
+            if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
+            advertisedGeneration = next.generation().enabled();
+            if (generationChanged || !advertisedLod.equals(next.lod()))
+                settingsLegacyReconnects = repushSessionConfig()[1];
+            refreshedGeneration = next.generation().enabled();
+            advertisedLod = next.lod();
+            generationRefreshPending = false;
+            if (!adoptedServicePolicy.equals(next.service())) {
+                runServiceGateSweeps();
+                adoptedServicePolicy = next.service();
+            }
+            if (!adoptedFarPlayerPolicy.equals(next.farPlayers())) {
+                farPlayerTickCounter = Integer.MAX_VALUE - 1;
+                tickFarPlayers();
+                adoptedFarPlayerPolicy = next.farPlayers();
+            }
+            return (Void) null;
+        }));
+        var result = java.util.concurrent.CompletableFuture.allOf(session, store)
+                .thenCompose(ignored -> submitSettingsControl(() -> {
+                    if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
+                    settingsFeedback = new SettingsFeedback(revision, settingsLegacyReconnects, settingsDrainingStatus());
+                    return (Void) null;
+                }));
+        settingsReceipts.add(result);
+        result.whenComplete((value, failure) -> {
+            settingsReceipts.remove(result);
+            if (revision == settingsRevision && failure != null) generationRefreshPending = false;
+        });
+        return result;
+    }
+
+    public void tick() {
+        // shuttingDown FIRST: an overlapped tick during a runtime plugin-manager disable must
+        // not apply lifecycle events into mid-teardown collaborators (registerPlayer racing
+        // players.clear() / a shut-down disk reader). Post-shutdown mailbox growth is bounded:
+        // onDisable nulls the service field, so producers stop within a tick.
+        if (this.shuttingDown)
+            return;
+        // ...but BEFORE the enabled guard: a disabled server still receives quits (onPlayerQuit
+        // enqueues unconditionally) and the queue must not grow unbounded. Draining while
+        // disabled is safe by construction: HandshakeGate never invokes the registrar when
+        // disabled, and removePlayer of an unregistered UUID is a no-op.
+        drainLifecycleMailbox();
+        // Settings control tasks are drained AFTER the lifecycle
+        // mailbox, deliberately — the SessionConfig re-push enumerates dialects, and a
+        // registered-but-flip-pending player must have its dialect flip APPLIED before
+        // enumeration (the SET review's ordering MAJOR: an off-pump enumeration could
+        // read the untracked-defaults-to-CURRENT dialect and push a protocol-20 config
+        // at a legacy client, killing its session until rejoin).
+        drainRuntimeTasks();
+        if (!this.config.enabled())
+            return;
+
+        this.diag.reset(this.offThreadProcessor.getDiagnostics());
+
+        applyRuntimeConfig();
+        // Service gate (plan §2.3): tick-cadenced permission rechecks, ordered AFTER
+        // drainLifecycleMailbox above — a registered-but-flip-pending player must have
+        // its dialect applied before the CURRENT-only revocation enumerates (the same
+        // ordering MAJOR the set re-push closed).
+        if (++this.permissionRecheckCounter >= PERMISSION_RECHECK_TICKS) {
+            this.permissionRecheckCounter = 0;
+            runServiceGateSweeps();
+        }
+        var generationReady = tickGenerationService();
+        // v16 declares BEFORE the lifecycle pass: the sync probe reads the mailbox during
+        // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads the mailbox
+        // first (falling back to the published want-set when it is empty — the R1 arm) — a
+        // declare offered after that pass would lose the race to the processing thread's
+        // take and route with reduced probe coverage (release-review finding 1).
+        tickV16Compat();
+        var lifecycle = processPlayerLifecycle(generationReady);
+
+        if (lifecycle.toRemove != null) {
+            for (UUID uuid : lifecycle.toRemove) {
+                this.removePlayer(uuid);
+                // The sweep IS a disconnect (entity removed, no PlayerList entry — the
+                // quit event never fired for this player), so drop BOTH compat
+                // identities like the quit hook would; without this the entries and the
+                // diag clients= counts leak until a same-UUID rejoin (execution-review
+                // finding 2 for v18; 2026-08-05 review H2 closed the v16 twin —
+                // removePlayer's onServiceRemove deliberately keeps identity, so the
+                // sweep was the one removal path that leaked it).
+                this.dialects.onDisconnect(uuid);
+                this.v16Compat.onDisconnect(uuid);
+                // E1 review M1: the sweep must shed the far-player subscription like
+                // the other two identities, or a swept viewer's roster state leaks and
+                // keeps charging the broadcast loop until a same-UUID rejoin. The
+                // onDisconnect flavor also drops the retained target prefs — the
+                // player's connection is gone.
+                this.farPlayerService.onDisconnect(uuid);
+                // Region summaries: same connection-scoped cleanup (pending request,
+                // queued job, re-sweep cooldown mark).
+                if (this.regionSummaries != null) this.regionSummaries.removePlayer(uuid);
+                // Service gate: the sweep IS a disconnect — without this a denied
+                // joiner whose quit event never fired leaks its log latch and streak
+                // for the service's life (implementation review, 2026-08-27).
+                this.serviceGateState.onDisconnect(uuid);
+                this.connectionEpochs.remove(uuid);
+            }
+        }
+
+        if (this.regionizedProbing && !this.regionProbeResults.isEmpty()) {
+            // A region task can publish after its player was removed (late publish); without
+            // this sweep the batch would pin its column data until the same UUID rejoined.
+            this.regionProbeResults.keySet().removeIf(uuid -> !this.players.containsKey(uuid));
+        }
+
+        postSnapshot(lifecycle, generationReady);
+        this.drainSendActions();
+        this.drainGenerationTicketRequests();
+        flushSendQueues(lifecycle.activeCount);
+        this.dirtyBroadcaster.tick(this.config);
+        tickFarPlayers();
+        tickRegionSummaries();
+        tickDiagnosticsLog();
+    }
+
+    /** Region summaries (P2, plan §5) — the Fabric twin's pump: admit dimension-matched
+     *  requests into sweep jobs and drain ready frames onto the dedicated send lane.
+     *  Player state is only read HERE (the pump thread); ingress stored pure data. */
+    private void tickRegionSummaries() {
+        if (this.regionSummaries == null) return; // pre-region-stamps test wirings
+        try {
+            this.regionSummaries.pump(uuid -> {
+                var state = this.players.get(uuid);
+                if (state == null || !state.hasCompletedHandshake()) return null;
+                String dim = state.registeredDimension();
+                long pc = state.playerChunkPackedOrSentinel();
+                if (dim == null || pc == Long.MIN_VALUE) return null;
+                return new dev.vox.lss.common.region.RegionSummaryService.PlayerAnchor(
+                        dim, PositionUtil.unpackX(pc), PositionUtil.unpackZ(pc));
+            }, (uuid, frame) -> {
+                var player = this.server.getPlayerList().getPlayer(uuid);
+                if (player == null) { // disconnected while assembling — unsendable forever
+                    return dev.vox.lss.common.region.RegionSummaryService.SendOutcome.DROP;
+                }
+                // CURRENT-dialect re-check at the sink (final panel — the stamps
+                // lane's rule, mirrored): a pre-handshake request reads as CURRENT
+                // (untracked UUID) and a session can re-handshake DOWN before the
+                // frame drains; a legacy session must never receive a summary frame.
+                if (this.dialects.dialectOf(uuid)
+                        != dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT) {
+                    return dev.vox.lss.common.region.RegionSummaryService.SendOutcome.DROP;
+                }
+                // The far-player lane's writability discipline (final review F2), with
+                // RETENTION (live-diagnosed 2026-08-20 — see the Fabric twin): the
+                // frame drains at the join/portal moment, exactly when the serve flood
+                // makes the channel unwritable, and the client never re-requests — so
+                // unwritable answers RETRY (service retains, TTL-bounded) instead of
+                // eating the session's whole exchange.
+                var snap = SpongeChannelPressure.forPlayer(player).snapshot();
+                if (snap.writable() == dev.vox.lss.common.processing.ChannelPressureProbe
+                        .Writability.NOT_WRITABLE) {
+                    return dev.vox.lss.common.region.RegionSummaryService.SendOutcome.RETRY;
+                }
+                return SpongePayloadHandler.sendRegionSummary(player, frame)
+                        ? dev.vox.lss.common.region.RegionSummaryService.SendOutcome.SENT
+                        : dev.vox.lss.common.region.RegionSummaryService.SendOutcome.DROP;
+            });
+        } catch (Exception e) {
+            if (!this.regionSummaryTickErrorWarned) {
+                this.regionSummaryTickErrorWarned = true;
+                LSSLogger.error("Region-summary pump failed — contained (once per session)", e);
+            }
+        }
+    }
+
+    private boolean regionSummaryTickErrorWarned;
+
+    /** Ingress for {@code lss:region_summary_req} (messenger/region thread — stores
+     *  pure data, no entity access). The HANDLER-checked kill switch (plan §5). */
+    public void handleRegionSummaryRequest(UUID player, byte[] body) throws Exception {
+        if (this.regionSummaries == null) return;
+        if (!this.config.enabled() || !this.config.enableRegionSummaries()) return;
+        // A malformed frame throws out into dispatchPluginMessage's hostile-frame
+        // containment (throttled) — the Fabric twin contains at its own receiver.
+        var request = dev.vox.lss.common.region.RegionSummaryWire.decodeRequest(body);
+        // CURRENT dialect only (plan §9.4 — the far-player subscription discipline):
+        // a legacy-dialect session must not become stamps-eligible.
+        if (this.dialects.dialectOf(player)
+                != dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT) {
+            return;
+        }
+        this.regionSummaries.offerRequest(player, request);
+    }
+
+    /** The region-summary service (diag + tests); null in pre-region-stamps wirings. */
+    public dev.vox.lss.common.region.RegionSummaryService getRegionSummaries() {
+        return this.regionSummaries;
+    }
+
+    /** The v16 shim's 1 Hz declare pass (PUMP): the SOLE declarer for legacy sessions. A
+     *  server without v16 clients pays one no-op map lookup per player per tick. MUST run
+     *  before processPlayerLifecycle: the declare then sits in the mailbox when the sync
+     *  probe (or, on Folia, the hold-release take) reads it, giving shim batches the same
+     *  arrival-tick probe alignment a network-received client batch gets. */
+    private void tickV16Compat() {
+        for (var state : this.players.values()) {
+            if (!state.hasCompletedHandshake()) continue;
+            var player = state.getPlayer();
+            int maxDist = SpongeWorldLod.distance(this.config, player) + LSSConstants.LOD_DISTANCE_BUFFER;
+            this.v16Compat.tickPlayer(player.getUUID(), state,
+                    player.chunkPosition().x, player.chunkPosition().z, maxDist);
+        }
+    }
+
+    private List<TickSnapshot.GenerationReadyData> tickGenerationService() {
+        if (this.generationService == null)
+            return List.of();
+        return this.generationService.tick();
+    }
+
+    private record LifecycleResult(
+            Map<UUID, String> playerDimensions,
+            Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes,
+            int activeCount,
+            List<UUID> toRemove) {
+    }
+
+    private LifecycleResult processPlayerLifecycle(
+            List<TickSnapshot.GenerationReadyData> generationReady) {
+        // Allocated fresh each tick: the snapshot owns these maps after postSnapshot, so the
+        // processing thread can iterate them without racing the next tick's lifecycle pass.
+        Map<UUID, String> playerDimensions = new HashMap<>();
+        Map<UUID, Long2ObjectMap<LoadedColumnData>> loadedChunkProbes = new HashMap<>();
+
+        // Per-player set of generation-outcome positions to skip in probeLoadedChunks
+        Map<RequestRegistration, LongOpenHashSet> genReadyPositions = TickSnapshot.groupPositionsByRegistration(generationReady);
+
+        int activeCount = 0;
+        int globalProbeBudget = MAX_PROBES_PER_TICK_GLOBAL;
+        List<UUID> toRemove = null;
+        // Rotate the iteration start each tick: ConcurrentHashMap's iteration order is
+        // stable, so when the global probe budget exhausts mid-pass the SAME trailing
+        // players would otherwise get zero probe coverage every tick.
+        var states = new ArrayList<>(this.players.values());
+        int playerCount = states.size();
+        int start = playerCount == 0 ? 0 : Math.floorMod(this.probeRotation++, playerCount);
+        for (int i = 0; i < playerCount; i++) {
+            var state = states.get((start + i) % playerCount);
+            if (!state.hasCompletedHandshake())
+                continue;
+            this.diag.updateQueuePeak(state.getSendQueueSize());
+
+            boolean removed = false;
+
+            if (state.getPlayer().isRemoved()) {
+                var current = this.server.getPlayerList().getPlayer(state.getPlayer().getUUID());
+                if (current == null) {
+                    if (toRemove == null)
+                        toRemove = new ArrayList<>();
+                    toRemove.add(state.getPlayer().getUUID());
+                    removed = true;
+                } else {
+                    state.updatePlayer(current);
+                }
+            }
+
+            if (removed)
+                continue;
+            // Counted AFTER the removal check (R2-11) — see the Fabric twin.
+            activeCount++;
+
+            // Captured BEFORE checkDimensionChange() mutates the stored dimension.
+            var prevDim = state.getLastDimension();
+            if (state.checkDimensionChange()) {
+                // A dimension change abandons all in-flight work. Reuse the (well-tested)
+                // disconnect teardown + a fresh registration instead of a second, hand-rolled
+                // partial-reset protocol: the processing thread unwinds the old state's dedup
+                // groups via the removal event, and the fresh state starts clean next tick.
+                var changed = state.getPlayer();
+                int capabilities = state.getCapabilities();
+                removePlayer(changed.getUUID());
+                registerPlayer(changed, capabilities);
+                // Far players: identity SURVIVES the cycle (v18-rung checklist); the
+                // roster does not — a bumped-epoch full roster follows.
+                this.farPlayerService.onViewerDimensionChange(changed.getUUID());
+                // Re-push ONLY when the new world's distance differs — the client rebuilds
+                // its whole request manager on any SessionConfig, so an unconditional push
+                // would tax every portal even with no overrides (see the Fabric twin). The
+                // previous world's distance resolves from its ResourceKey via the loaded
+                // level so a Bukkit-name-keyed override still matches.
+                int newDist = SpongeWorldLod.distance(this.config, changed);
+                int prevDist = SpongeWorldLod.distanceForDimKey(this.config, prevDim);
+                if (newDist != prevDist && this.dialects.isCurrent(changed.getUUID())) {
+                    try {
+                        this.sessionConfigSender.send(changed, this.config, this.config.enabled());
+                    } catch (Exception e) {
+                        LSSLogger.error("Session-config dimension-change push failed for "
+                                + changed.getName().getString(), e);
+                    }
+                }
+                continue;
+            }
+
+            var player = state.getPlayer();
+            var level = player.level();
+            // Ring origin for the generation order-spread gate — must be the REAL player
+            // chunk (the want-set's first entry sits at ~viewDistance on a ring perimeter,
+            // which wedged the gate — see AbstractPlayerRequestState.updatePlayerChunk).
+            state.updatePlayerChunk(player.chunkPosition().x, player.chunkPosition().z);
+            String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                    k -> k.identifier().toString());
+
+            this.offThreadProcessor.updateDimensionContext(dimension, level);
+
+            playerDimensions.put(player.getUUID(), dimension);
+
+            var skipPositions = genReadyPositions != null
+                    ? genReadyPositions.get(state.registration()) : null;
+            Long2ObjectMap<LoadedColumnData> probes;
+            if (this.regionizedProbing) {
+                // Consume last tick's region-published batch, then advance the hold-release
+                // pipeline (release last tick's arrivals, park + probe this tick's). The
+                // sync probe is skipped entirely: the pump owns no chunks on Folia.
+                probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
+                holdAndScheduleRegionProbe(state, player, level, skipPositions, probes);
+            } else {
+                probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
+                globalProbeBudget -= probes.size();   // charge only actual serializations (pump path)
+            }
+            if (probes != null && !probes.isEmpty()) {
+                loadedChunkProbes.put(player.getUUID(), probes);
+            }
+        }
+
+        return new LifecycleResult(playerDimensions, loadedChunkProbes, activeCount, toRemove);
+    }
+
+    private void postSnapshot(LifecycleResult lifecycle,
+            List<TickSnapshot.GenerationReadyData> generationReady) {
+        var snapshot = new TickSnapshot(
+                lifecycle.playerDimensions, lifecycle.loadedChunkProbes,
+                this.config.sendQueueLimitPerPlayer(), false);
+        this.offThreadProcessor.postSnapshot(snapshot, generationReady);
+    }
+
+    private void flushSendQueues(int activeCount) {
+        long perPlayerAllocation = this.bandwidthLimiter.getPerPlayerAllocation(activeCount);
+        long perPlayerCap = Math.min(perPlayerAllocation, this.config.bytesPerSecondPerPlayer());
+
+        // The ping backstop's observe pass (Mechanism B) — the Fabric twin's comment:
+        // observed on the pump, applied to the flush allocation (m12), reset when the
+        // kill switch is off so a live flip cannot leave a stale cut.
+        if (this.config.enablePingBackstop()) {
+            long now = System.currentTimeMillis();
+            for (var state : this.players.values()) {
+                int ping = -1;
+                try {
+                    ping = state.getPlayer().connection.latency();
+                } catch (Throwable ignored) {
+                }
+                state.getPingBackstop().observe(now, ping, state.getTotalBytesSent(),
+                        perPlayerCap);
+            }
+        } else {
+            for (var state : this.players.values()) {
+                state.getPingBackstop().resetFactor();
+            }
+        }
+
+        for (var state : this.players.values()) {
+            if (!state.hasCompletedHandshake())
+                continue;
+            long[] dropped = state.flushSendQueue(
+                    state.getPingBackstop().apply(perPlayerCap), this.bandwidthLimiter, this.diag,
+                    data -> this.columnPayloadSender.send(state, data),
+                    this.config.lodYieldsToVanillaTransport(),
+                    // Prune gated on the yield (review B-2) — the Fabric twin's comment.
+                    this.config.lodYieldsToVanillaTransport()
+                            ? this.config.maxConfiguredLodDistanceChunks()
+                                    + LSSConstants.LOD_DISTANCE_BUFFER
+                                    + OffThreadProcessor.SWEEP_RADIUS_MARGIN_CHUNKS
+                            : 0,
+                    this.config.enableSendPacing());
+            if (dropped.length > 0) {
+                // A send failure or the relevance prune discarded resolved-but-undelivered
+                // columns: clear their done-bits so the client's re-requests re-resolve
+                // instead of being answered up-to-date for data that never arrived.
+                this.offThreadProcessor.clearDiskReadDone(state.getPlayerUUID(), dropped);
+            }
+        }
+    }
+
+    private void tickDiagnosticsLog() {
+        if (++this.diagLogCounter >= DIAG_LOG_INTERVAL_TICKS) {
+            this.diagLogCounter = 0;
+            DiagnosticsFormatter.logDebugSummary(this.diag, this.getUptimeSeconds(),
+                    this.config.bytesPerSecondGlobal(), this.bandwidthLimiter, this.players.values());
+        }
+    }
+
+    /**
+     * Probe loaded chunks for positions the player still wants (Paper's sync path — Folia
+     * uses the regionized hold-release instead).
+     *
+     * <p><b>Source: the mailbox first, then the published want-set.</b> The MAILBOX holds a
+     * batch that arrived since the last routing cycle; probing it on its ARRIVAL tick is what
+     * puts its probes in the snapshot the router routes it against. Without that a freshly
+     * declared position is never probed on its first routing cycle, and a want-set that fits
+     * under the per-player slot cap — the converged steady state, and every single-position
+     * dirty-broadcast re-request — has no second cycle, so it disk-reads. Folia's one-tick
+     * hold-release makes the same alignment deterministic for the ARRIVAL-tick arm, and
+     * since the 2026-08-27 review (R1) the regionized path carries the published-want-set
+     * arm too — before that it probed only on arrival ticks, collapsing coverage to the
+     * client's declaration cadence. The PUBLISHED want-set covers the other ~19 ticks of each second
+     * ({@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while batches
+     * arrive at only 1-4 Hz — the client's adaptive cadence) and carries a want-set too large for the slot cap across the
+     * cycles that work it off (published exactly while the backlog is non-empty).
+     *
+     * <p>Both sources may list already-routed positions; such a probe is simply unused by the
+     * router, bounded by {@link #MAX_PROBES_PER_TICK_PER_PLAYER}. Positions whose payload
+     * sits in the send pipeline, left it within the probe-suppress TTL, or were answered
+     * up_to_date are filtered by {@code skipProbe} (review P1 — the Fabric twin's javadoc
+     * carries the full story), leaving a sub-tick residual between a processing-thread
+     * up_to_date resolution and the next pump action drain.
+     */
+    private Long2ObjectMap<LoadedColumnData> probeLoadedChunks(
+            SpongePlayerRequestState state, ServerLevel level,
+            LongOpenHashSet skipPositions, int globalBudgetRemaining) {
+        var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
+        int probed = 0;
+
+        var wantSet = state.peekIncomingBatch();
+        if (wantSet == null)
+            wantSet = state.peekWantSet();
+        if (wantSet == null)
+            return probes;   // nothing pending — converged player, no probe cost
+        for (var req : wantSet.requests()) {
+            if (probed >= MAX_PROBES_PER_TICK_PER_PLAYER)
+                break;   // per-player examination cap
+            // Global serialization ceiling: probes.size() counts columns actually serialized, so
+            // this stops the moment this player would exceed the tick's remaining pump budget.
+            if (probes.size() >= globalBudgetRemaining)
+                break;
+            long packed = PositionUtil.packPosition(req.cx(), req.cz());
+            if (probes.containsKey(packed))
+                continue;
+            if (skipPositions != null && skipPositions.contains(packed))
+                continue;
+            // Served-head filter: a payload in the send pipeline, recently sent, or just
+            // answered up_to_date means the router resolves this position without the
+            // probe — the serialization is guaranteed-unused, and under backlog retention
+            // the published want-set re-lists it every tick until the next declaration
+            // (review P1: the enqueued-only filter left served/answered heads
+            // re-serializing for up to a second). Both structures are any-thread safe
+            // (pendingByPosition/diskReadDone are single-threaded and stay unconsulted).
+            if (state.skipProbe(packed))
+                continue;
+
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, state.registration());
+            var column = this.loadedColumnProbe.probe(level, req.cx(), req.cz());
+            if (column != null) {
+                probes.put(packed, capture.bind(column));
+            }
+            probed++;
+        }
+
+        return probes;
+    }
+
+    /** Pump only. Takes ownership of the player's published batch (if any) and applies the
+     *  same skip contract the sync probe honors: a position with a generation outcome in
+     *  this snapshot must not also appear as a probe. Returns null when nothing usable. */
+    private Long2ObjectMap<LoadedColumnData> consumeRegionProbes(UUID uuid, String dimension,
+                                                                 LongOpenHashSet skipPositions) {
+        var batch = this.regionProbeResults.remove(uuid);
+        if (batch == null) return null;
+        var current = this.players.get(uuid);
+        if (this.shuttingDown || current == null || current.registration() != batch.registration()
+                || batch.registration().isRetired()) return null;
+        // Serialized under the dimension the player was in when the task ran; a dimension
+        // change in between must not serve old-dimension bytes under the new dimension.
+        if (!batch.dimension().equals(dimension)) return null;
+        if (skipPositions != null) {
+            for (long packed : skipPositions) {
+                batch.probes().remove(packed);
+            }
+        }
+        return batch.probes();
+    }
+
+    /** Pump only. Release the previous tick's held declaration unconditionally, with
+     * currently ready, generation-filtered probes in the same atomic envelope. A late
+     * callback never extends the hold. Newer offers still defeat both generation/CAS guards.
+     * Only fresh ingress is taken below; released envelopes remain router-owned across
+     * later pump snapshots, so a slow worker cannot lose their ready probes by re-holding.
+     */
+    private void holdAndScheduleRegionProbe(SpongePlayerRequestState state, ServerPlayer player,
+                                            ServerLevel level, LongOpenHashSet skipPositions,
+                                            Long2ObjectMap<LoadedColumnData> readyProbes) {
+        state.updateLateProbeRange(SpongeWorldLod.distance(this.config, level) + LSSConstants.LOD_DISTANCE_BUFFER);
+        var released = this.heldForProbe.remove(player.getUUID());
+        if (released != null
+                && state.republishHeldBatch(released.batch(), released.offerGeneration(), readyProbes)) {
+            return;
+        }
+
+        // Either nothing was held, or the held batch lost the republish (a newer arrival in
+        // the mailbox, or a pass-through the offer-generation guard caught — dropped and
+        // counted superseded either way). Whatever is pending now is the newest declaration.
+        // The generation is recorded BEFORE the take: an offer slipping between the two can
+        // only make the eventual republish refuse spuriously (a healed drop), never let a
+        // stale batch resurrect.
+        long heldAtGeneration = state.offerGeneration();
+        var fresh = state.takeFreshIncomingBatchForProbe();
+        if (fresh == null) {
+            // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
+            // existed, Folia probed ONLY on a declaration's arrival tick — the probe
+            // window advanced at the client's 1-4 Hz cadence instead of every tick, so
+            // any want-set larger than the 512-position window (or the sync slot cap)
+            // routed its later cycles with ZERO probe coverage: loaded chunks took
+            // disk reads, and on gen-disabled servers the loaded-but-never-saved
+            // NOT_GENERATED park became the steady state. This is the sync path's
+            // peekWantSet arm, regionized: same per-player cap, same served-head/
+            // suppress filters (probes are position-keyed, so results merge into the
+            // same consume path regardless of which arm scheduled them). Runs only on
+            // no-fresh-batch ticks, so the one-region-task-per-player-per-tick shape
+            // holds; a release-success tick returns above and the arm picks up next
+            // tick.
+            var late = state.claimLateProbes(MAX_PROBES_PER_TICK_PER_PLAYER);
+            var positions = new LongOpenHashSet();
+            for (var request : late) {
+                if (skipPositions != null && skipPositions.contains(request.position()))
+                    state.cancelLateProbe(request);
+                else positions.add(request.position());
+            }
+            var published = state.peekWantSet();
+            if (published != null) {
+                for (long pos : snapshotProbePositions(state, published, skipPositions)) {
+                    if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
+                    positions.add(pos);
+                }
+            }
+            if (positions.isEmpty()) return;
+            long[] selected = positions.toLongArray();
+            UUID uuid = player.getUUID();
+            try {
+                this.regionTaskScheduler.schedule(player,
+                        () -> runRegionProbe(uuid, state, level, selected, -1, late));
+            } catch (Exception e) {
+                // A rejected schedule must not keep a claimed one-shot obligation alive.
+                for (var request : late) state.completeLateProbe(request, null);
+            }
+            return;
+        }
+        this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
+
+        long[] positions = snapshotProbePositions(state, fresh, skipPositions);
+        if (positions.length == 0) return;
+        UUID uuid = player.getUUID();
+        try {
+            this.regionTaskScheduler.schedule(player,
+                    () -> runRegionProbe(uuid, state, level, positions, heldAtGeneration));
+        } catch (Exception e) {
+            // A plugin-manager disable from a region thread can land between tick()'s
+            // shuttingDown check and this schedule: the EntityScheduler then throws
+            // IllegalPluginAccessException (Folia review R5 — the identical containment
+            // SpongeChunkGenerationService's MainThreadScheduler documents). The probe is
+            // simply lost — the held batch still releases next tick (or dies with the
+            // service), and probe misses are the designed degrade.
+        }
+    }
+
+    private static final long[] NO_POSITIONS = new long[0];
+
+    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch.
+     *  Served-head filter mirrors the sync probes (incl. the review-P1 suppress rung): a
+     *  payload in the send pipeline, recently sent, or just answered up_to_date resolves
+     *  without the probe, so probing it wastes a region-thread serialization (both
+     *  structures are safe off the processing thread). */
+    private long[] snapshotProbePositions(SpongePlayerRequestState state, IncomingBatch held,
+                                          LongOpenHashSet skipPositions) {
+        LongOpenHashSet positions = null;
+        for (var req : held.requests()) {
+            long packed = PositionUtil.packPosition(req.cx(), req.cz());
+            if (skipPositions != null && skipPositions.contains(packed)) continue;
+            if (state.skipProbe(packed)) continue;
+            if (positions == null) positions = new LongOpenHashSet();
+            if (!positions.add(packed)) continue;
+            if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
+        }
+        return positions == null ? NO_POSITIONS : positions.toLongArray();
+    }
+
+    /** Region-thread task body. Touches no pump state: reads the level behind the ownership
+     *  guard, serializes matches through the shared probe seam, and publishes one batch via
+     *  compute (merge under the bin lock; the pump takes ownership atomically via remove). */
+    private void runRegionProbe(UUID uuid, SpongePlayerRequestState capturedState, ServerLevel level, long[] positions, long heldGeneration) {
+        runRegionProbe(uuid, capturedState, level, positions, heldGeneration,
+                new AbstractPlayerRequestState.LateProbeRequest[0]);
+    }
+
+    private void runRegionProbe(UUID uuid, SpongePlayerRequestState capturedState, ServerLevel level,
+            long[] positions, long heldGeneration, AbstractPlayerRequestState.LateProbeRequest[] late) {
+        var claims = new Long2ObjectOpenHashMap<AbstractPlayerRequestState.LateProbeRequest>();
+        for (var request : late) claims.put(request.position(), request);
+        var registration = capturedState.registration();
+        if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return;
+        Long2ObjectOpenHashMap<LoadedColumnData> found = null;
+        for (long packed : positions) {
+            int cx = PositionUtil.unpackX(packed);
+            int cz = PositionUtil.unpackZ(packed);
+            var claim = claims.get(packed);
+            if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) {
+                if (claim != null) capturedState.completeLateProbe(claim, null);
+                continue;
+            }
+            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, registration);
+            var column = this.loadedColumnProbe.probe(level, cx, cz);
+            if (column != null) {
+                if (found == null) found = new Long2ObjectOpenHashMap<>();
+                var bound = capture.bind(column);
+                found.put(packed, bound);
+                if (claim != null) capturedState.completeLateProbe(claim, bound);
+                else if (heldGeneration >= 0) capturedState.publishLateProbe(heldGeneration, bound);
+            } else if (claim != null) {
+                capturedState.completeLateProbe(claim, null);
+            }
+        }
+        if (found == null) return;
+        var batch = new RegionProbeBatch(level.dimension().identifier().toString(), registration, found);
+        this.regionProbeResults.compute(uuid, (k, prev) -> {
+            if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return prev;
+            if (prev == null || prev.registration() != registration || !prev.dimension().equals(batch.dimension())) return batch;
+            prev.probes().putAll(batch.probes());
+            return prev;
+        });
+    }
+
+    private void drainSendActions() {
+        if (generationRefreshPending) return;
+        this.offThreadProcessor.drainSendActions((state, types, positions, count) -> {
+            // v16 observation: UP_TO_DATE / NOT_GENERATED terminally answer their positions —
+            // prune them from the synthetic want-set. The frame itself is wire-identical.
+            this.v16Compat.observeBatchResponse(state.getPlayerUUID(), types, positions, count);
+            SpongePayloadHandler.sendBatchResponse(state.getPlayer(),
+                    types, positions, count);
+        }, new OffThreadProcessor.StampsSink<>() {
+            // Stamped up_to_date (plan §3): the summary request is the eligibility
+            // declaration; fire-and-forget, counted on a completed send only.
+            @Override public boolean eligible(UUID uuid) {
+                // CURRENT dialect conjunct (3-Opus fold — see the Fabric twin).
+                var s = SpongeRequestProcessingService.this.regionSummaries;
+                return s != null
+                        && SpongeRequestProcessingService.this.dialects.dialectOf(uuid)
+                                == dev.vox.lss.common.HandshakeGate.WireDialect.CURRENT
+                        && s.hasRequestedThisSession(uuid);
+            }
+            @Override public void send(SpongePlayerRequestState state, byte[] frame, int entries) {
+                // Writability drop (3-Opus fold — see the Fabric twin): uncounted, no
+                // retry; loss is the designed-tolerant case.
+                var snap = SpongeChannelPressure.forPlayer(state.getPlayer()).snapshot();
+                if (snap.writable() == dev.vox.lss.common.processing.ChannelPressureProbe
+                        .Writability.NOT_WRITABLE) {
+                    return;
+                }
+                if (SpongePayloadHandler.sendColumnStamps(state.getPlayer(), frame)) {
+                    SpongeRequestProcessingService.this.regionSummaries.diagnostics()
+                            .recordStampsFrame(entries, frame.length);
+                }
+            }
+        });
+    }
+
+    private void drainGenerationTicketRequests() {
+        if (this.generationService == null)
+            return;
+
+        OffThreadProcessor.GenerationTicketRequest req;
+        while ((req = this.offThreadProcessor.pollGenerationTicketRequest()) != null) {
+            var state = this.players.get(req.playerUuid());
+            if (state == null || state.registration() != req.registration()
+                    || req.registration().isRetired() || !state.hasCompletedHandshake())
+                continue;
+
+            var player = state.getPlayer();
+            var level = player.level();
+            String dimension = this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                    k -> k.identifier().toString());
+            // Ticket queued before a dimension change targets the old dimension's coordinates.
+            // Dropping it leaks nothing: in the common shape the admitting state was discarded
+            // by removePlayer+registerPlayer (its slot dies with it), AND that same removePlayer
+            // enqueues the removal event that sweeps the processing thread's registration-keyed
+            // generation in-flight tracking (removeGenerationTracking) — without that sweep the
+            // dropped ticket's tracking would leak (do not add a drop path that skips it).
+            // Folia timing corner (review 2026-08-27 R17): a region-thread dimension flip
+            // landing BETWEEN this tick's lifecycle pass and this drain reaches the mismatch
+            // with the OLD state still admitting — its pending GENERATION entry then gets no
+            // outcome this tick and the slot is held until the NEXT tick's dimension-change
+            // cycle sweeps the whole state. Bounded to one tick, no leak.
+            if (!dimension.equals(req.dimension())) continue;
+            boolean accepted = req.policyRevision() == this.settingsRevision
+                    && !player.isRemoved() && this.generationService.submitGeneration(
+                    req.playerUuid(), req.registration(), level, req.cx(), req.cz(),
+                    req.submissionOrder());
+            if (!accepted) {
+                // Capacity rejection or removed player — TRANSIENT: feed a transient outcome
+                // so the processing thread frees the pending slot silently (superseded); the
+                // client's re-declaration retries. Never NOT_GENERATED (session-permanent).
+                this.offThreadProcessor.feedGenerationFailure(
+                        req.playerUuid(), req.registration(), req.cx(), req.cz(), dimension, req.submissionOrder(), true);
+            }
+        }
+    }
+
+    public Map<UUID, SpongePlayerRequestState> getPlayers() {
+        return Collections.unmodifiableMap(this.players);
+    }
+
+    public V16CompatManager getV16CompatManager() {
+        return this.v16Compat;
+    }
+
+    private boolean farPlayerSnapshotWarned;
+
+    /** Far players (E1): one broadcast pass every farPlayersUpdateIntervalTicks while
+     *  armed and subscribed. Mode transitions drain control frames every tick;
+     *  mode "off" skips position and equipment snapshots. Pump thread (Folia: cross-region position/equipment
+     *  reads are stale-tolerant by design — accepted for display-only data, the
+     *  experimental label covers it). */
+    private void tickFarPlayers() {
+        if (this.farPlayerService.subscriberCount() == 0) return;
+        try {
+            if (!this.farPlayerService.applyMode(this.config.farPlayers(), this::sendFarPlayerFrame)) return;
+            if (++this.farPlayerTickCounter < this.config.farPlayersUpdateIntervalTicks()) return;
+            this.farPlayerTickCounter = 0;
+            var online = buildFarPlayerSnapshots(this.server.getPlayerList().getPlayers());
+            this.farPlayerService.tick(System.currentTimeMillis(), online,
+                    new dev.vox.lss.common.farplayers.FarPlayerBroadcastService.Settings(
+                            this.config.farPlayers(), this.config.farPlayersMaxDistanceBlocks(),
+                            this.config.farPlayersMinDistanceBlocks(),
+                            this.config.farPlayersSendSpectators(),
+                            this.config.farPlayersExclude(),
+                            this.config.farPlayersUpdateIntervalTicks()),
+                    this::sendFarPlayerFrame);
+        } catch (Exception e) {
+            // Containment (review): a snapshot/encode bug must degrade far players,
+            // never the pump tick (which owns lifecycle + column serving).
+            if (!this.farPlayerTickErrorWarned) {
+                this.farPlayerTickErrorWarned = true;
+                LSSLogger.error("Far-player broadcast pass failed — contained (once per session)", e);
+            }
+        }
+    }
+
+    private boolean farPlayerTickErrorWarned;
+
+    /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
+     *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
+     *  the hiddenFor belt did not cover) must not abort the pass for every other
+     *  player — the pre-fix shape, where the only catch was around the whole pass.
+     *  The skipped player reads as absent this interval; the roster reconciles next
+     *  tick (stale-tolerant by the same doctrine as the reads themselves). The
+     *  pass-level catch in tickFarPlayers stays as the final belt. Package-private
+     *  for the R10 battery. */
+    java.util.List<dev.vox.lss.common.farplayers.FarPlayerBroadcastService.PlayerSnapshot>
+            buildFarPlayerSnapshots(java.util.List<ServerPlayer> players) {
+        var online = new java.util.ArrayList<dev.vox.lss.common.farplayers
+                .FarPlayerBroadcastService.PlayerSnapshot>(players.size());
+        for (var p : players) {
+            try {
+                online.add(SpongeFarPlayerSnapshots.snapshot(p));
+            } catch (Exception e) {
+                if (!this.farPlayerSnapshotWarned) {
+                    this.farPlayerSnapshotWarned = true;
+                    LSSLogger.warn("Far-player snapshot failed for "
+                            + p.getName().getString()
+                            + " — skipped this interval (once per session): " + e);
+                }
+            }
+        }
+        return online;
+    }
+
+    /** The dedicated far-player send lane — twin of the Fabric sender: writability
+     *  consult (NOT_WRITABLE withholds) + bandwidth governor charge, over the registered
+     *  Sponge channel. */
+    private boolean sendFarPlayerFrame(UUID viewer, String channel, byte[] body) {
+        var player = this.server.getPlayerList().getPlayer(viewer);
+        if (player == null || player.connection == null) return false;
+        var snap = SpongeChannelPressure.forPlayer(player).snapshot();
+        if (snap.writable() == dev.vox.lss.common.processing.ChannelPressureProbe
+                .Writability.NOT_WRITABLE) {
+            return false;
+        }
+        if (!SpongeChannels.send(player, channel, body)) return false;
+        this.bandwidthLimiter.recordSend(body.length);
+        return true;
+    }
+
+
+    public dev.vox.lss.common.farplayers.FarPlayerBroadcastService getFarPlayerService() {
+        return this.farPlayerService;
+    }
+
+    public WireDialectTracker getDialectTracker() {
+        return this.dialects;
+    }
+
+    public SpongeChunkDiskReader getDiskReader() {
+        return this.diskReader;
+    }
+
+    public SpongeChunkGenerationService getGenerationService() {
+        return this.generationService;
+    }
+
+    public SharedBandwidthLimiter getBandwidthLimiter() {
+        return this.bandwidthLimiter;
+    }
+
+    public String getTickDiagnostics() {
+        return this.diag.format(this.config.sendQueueLimitPerPlayer());
+    }
+
+    public TickDiagnostics getTickDiag() {
+        return this.diag;
+    }
+
+    public long getWindowBandwidthRate() {
+        return this.diag.getWindowBytesPerSecond();
+    }
+
+    public long getUptimeSeconds() {
+        return (System.nanoTime() - this.startTimeNanos) / LSSConstants.NANOS_PER_SECOND;
+    }
+
+    public OffThreadProcessor<?> getOffThreadProcessor() {
+        return this.offThreadProcessor;
+    }
+
+    public SpongeConfig getConfig() {
+        return this.config;
+    }
+
+    public void shutdown() {
+        cancelSettingsReceipts();
+        // Normal stop and /reload are serialized with the pump (region shutdown thread /
+        // global tick thread), but a runtime plugin manager can disable us from a player
+        // region thread — this flag shrinks the tick-vs-shutdown overlap to at most the one
+        // in-flight tick (runtime disables are documented best-effort on Folia).
+        this.shuttingDown = true;
+        this.runtimeTasks.clear();
+        this.serviceGateState.clear();
+        try {
+            // Own containment, FIRST (P2 review I-m2): no ordering dependency on the
+            // dirty drain, and a throw there must not leak the sweeper daemon across
+            // /reload cycles (each would hold the old stamp table + world resolver).
+            if (this.regionSummaries != null) this.regionSummaries.shutdown();
+        } catch (Exception e) {
+            LSSLogger.error("Error shutting down region-summary sweeper", e);
+        }
+        try {
+            // Marks accumulated since the last broadcast interval must still invalidate the
+            // timestamp cache BEFORE its final save (the invalidations ride the shutdown
+            // sentinel take) — otherwise the persisted stamps answer false up_to_date for
+            // edited columns across the restart.
+            for (var entry : this.dirtyTracker.drainAll().entrySet()) {
+                this.offThreadProcessor.invalidateTimestamps(entry.getKey(), entry.getValue());
+            }
+            this.offThreadProcessor.shutdown();
+        } catch (Exception e) {
+            LSSLogger.error("Error shutting down off-thread processor", e);
+        }
+        for (var state : this.players.values()) {
+            state.registration().retire();
+            state.discardProbeHandoff();
+        }
+        this.players.clear();
+        try {
+            this.diskReader.shutdown();
+        } catch (Exception e) {
+            LSSLogger.error("Error shutting down disk reader", e);
+        }
+        try {
+            // After the reader (no more store rung callers) and after the processor (its
+            // sentinel take fanned the final invalidations into the store).
+            if (this.lodStore != null) {
+                this.lodStore.shutdown();
+            }
+        } catch (Exception e) {
+            LSSLogger.error("Error shutting down LOD store", e);
+        }
+        try {
+            if (this.generationService != null) {
+                this.generationService.shutdown();
+            }
+        } catch (Exception e) {
+            LSSLogger.error("Error shutting down generation service", e);
+        }
+        SpongeXrayMaskManager.deactivate(this.xrayMasks);
+    }
+}

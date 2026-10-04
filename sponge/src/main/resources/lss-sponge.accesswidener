@@ -1,0 +1,10 @@
+accessWidener v2 named
+# The region folder a level's chunks are really stored in (Sponge worlds have their own
+# storage roots, so it is read from the chunk storage instead of derived from the key).
+accessible field net/minecraft/world/level/chunk/storage/SimpleRegionStorage worker Lnet/minecraft/world/level/chunk/storage/IOWorker;
+accessible field net/minecraft/world/level/chunk/storage/IOWorker storage Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
+accessible field net/minecraft/world/level/chunk/storage/RegionFileStorage folder Ljava/nio/file/Path;
+# Headless section serialization: the palette + storage pair, as in the Fabric widener
+# (Paper's Moonrise patch makes these public; vanilla keeps them private).
+accessible class net/minecraft/world/level/chunk/PalettedContainer$Data
+accessible field net/minecraft/world/level/chunk/PalettedContainer data Lnet/minecraft/world/level/chunk/PalettedContainer$Data;

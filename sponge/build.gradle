@@ -1,0 +1,98 @@
+import org.spongepowered.gradle.plugin.config.PluginLoaders
+import org.spongepowered.gradle.vanilla.repository.MinecraftPlatform
+import org.spongepowered.plugin.metadata.model.PluginDependency
+
+plugins {
+    id 'java'
+    id 'org.spongepowered.gradle.plugin' version '2.3.1-SNAPSHOT'
+    id 'org.spongepowered.gradle.vanilla' version '0.2.2'
+    id 'com.gradleup.shadow' version '9.4.2'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+}
+
+minecraft {
+    version(project.minecraft_version)
+    platform(MinecraftPlatform.SERVER)
+    accessWideners(file('src/main/resources/lss-sponge.accesswidener'))
+}
+
+sponge {
+    apiVersion('18.0.0-SNAPSHOT')
+    license('MIT')
+    loader {
+        name(PluginLoaders.JAVA_PLAIN)
+        version('1.0')
+    }
+    plugin('lodserversupport') {
+        displayName('LOD Server Support')
+        entrypoint('dev.vox.lss.sponge.LSSSpongePlugin')
+        description('Voxy multiplayer support (unofficial). Enables players with Voxy to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first.')
+        links {
+            homepage('https://modrinth.com/plugin/lod-server-support')
+            source('https://github.com/VoX/lod-server-support')
+        }
+        contributor('VoX') {
+            description('Author')
+        }
+        dependency('spongeapi') {
+            loadOrder(PluginDependency.LoadOrder.AFTER)
+            optional(false)
+        }
+    }
+}
+
+dependencies {
+    implementation project(':common')
+    // zstd remains unrelocated and native-stripped, as on Paper. Common carries SQLite as
+    // an opaque capsule loaded privately.
+    implementation 'com.github.luben:zstd-jni:1.5.7-3'
+    compileOnly 'org.spongepowered:mixin:0.8.7'
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+// Native strip lists — keep in sync with paper/build.gradle.
+def storeNativeKeep = [
+    'linux/amd64/', 'linux/aarch64/', 'win/amd64/', 'win/aarch64/',
+    'darwin/x86_64/', 'darwin/aarch64/',
+]
+def storeNativeRoots = ['linux/', 'win/', 'darwin/', 'freebsd/', 'aix/']
+def storeNativeStrip = { el ->
+    def p = el.relativePath.pathString
+    storeNativeRoots.any { p.startsWith(it) } && !storeNativeKeep.any { p.startsWith(it) }
+}
+
+jar {
+    manifest.attributes('Access-Widener': 'lss-sponge.accesswidener')
+}
+
+shadowJar {
+    archiveBaseName = 'lod-server-support-sponge'
+    archiveClassifier = ''
+    archiveVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
+            ? "${project.mod_version}+${project.minecraft_version}" : ''
+    configurations = [project.configurations.runtimeClasspath]
+    // Sponge provides slf4j, fastutil and gson.
+    exclude 'org/slf4j/**'
+    exclude 'META-INF/maven/org.slf4j/**'
+    exclude storeNativeStrip
+    from(rootProject.file("LICENSE")) {
+        rename { "${it}_lod-server-support-sponge" }
+    }
+    from(rootProject.file("THIRD-PARTY-NOTICES"))
+}
+
+tasks.named('assemble') { dependsOn tasks.named('shadowJar') }

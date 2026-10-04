@@ -906,6 +906,30 @@ class IncomingRequestRouterTest {
     }
 
     @Test
+    void deniedColumnAnswersNotGeneratedWithoutAnyWork() throws Exception {
+        var players = new ConcurrentHashMap<UUID, TestState>();
+        var p1 = addPlayer(players, 2, 1);
+        var proc = new TestProcessor(players, new StubDiskReader(), true, null);
+        dev.vox.lss.common.ColumnAccess.setFilter((player, dim, cx, cz) -> cx < 10);
+        try {
+            proc.start();
+            offer(p1, new IncomingRequest(50, 0, -1), new IncomingRequest(5, 0, -1));
+            proc.postSnapshot(snapshot(p1), List.of());
+
+            var delivered = drainUntil(proc, contains(LSSConstants.RESPONSE_NOT_GENERATED, packed(50, 0)));
+            assertEquals(1, count(delivered, LSSConstants.RESPONSE_NOT_GENERATED, packed(50, 0)));
+            waitFor(() -> !proc.submits.isEmpty(), "allowed column's disk read");
+            assertEquals(List.of(packed(5, 0)), submitPositions(proc),
+                    "only the allowed column reaches the disk");
+            assertFalse(p1.hasPendingRequest(50, 0), "a denied column holds no slot");
+            assertNull(proc.pollGenerationTicketRequest(), "a denied column never generates");
+        } finally {
+            dev.vox.lss.common.ColumnAccess.setFilter(null);
+            proc.shutdown();
+        }
+    }
+
+    @Test
     void generationRequestWithNoDiskAndNoGenerationAnswersNotGenerated() throws Exception {
         var players = new ConcurrentHashMap<UUID, TestState>();
         var p1 = addPlayer(players, 2, 1);

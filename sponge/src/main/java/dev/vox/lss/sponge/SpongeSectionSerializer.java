@@ -11,19 +11,13 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
 /**
- * Serializes loaded chunk columns into MC-native wire format for Paper.
+ * Serializes loaded chunk columns into MC-native wire format for Sponge.
  * Uses {@link LevelChunkSection#write(FriendlyByteBuf)} for block states + biomes,
  * plus raw DataLayer nibble bytes for light data.
  *
- * <p>Thread contract: called concurrently from chunk-load completion threads (the owning
- * region thread on Folia, the main thread on Paper — {@code completeAsyncLoad}) and from the
- * pump's loaded-chunk probes (on Folia probing moved to the chunk's OWNING region thread via
- * the EntityScheduler hold-release — the pump no longer reads foreign-region palettes, but
- * the audit still covers completion threads vs region ticks). All state is method-local, so
- * the class must stay stateless/reentrant; the MC reads
- * are legal and tear-free off-thread — getChunkNow is a concurrent-map lookup, light
- * listeners clone SWMR state, PalettedContainer.write is synchronized (audited for the Folia
- * port, spec §3/§5).
+ * <p>Thread contract: called on the main thread, from generation completion and the
+ * pump's loaded-chunk probes. All state is method-local, so the class stays
+ * stateless/reentrant.
  */
 final class SpongeSectionSerializer {
     private SpongeSectionSerializer() {}
@@ -36,10 +30,6 @@ final class SpongeSectionSerializer {
                                DataLayer blLayer, boolean hasBlockLight,
                                DataLayer slLayer, boolean hasSkyLight) {}
 
-    // LevelChunkSection.write(buf) is @Deprecated on Paper (an anti-xray overload was added),
-    // but the 1-arg form is the canonical vanilla serialization and is byte-identical to the
-    // Fabric path. The wire format must match Fabric exactly, so keep this call (do not migrate).
-    @SuppressWarnings("deprecation")
     static LoadedColumnData serializeColumn(ServerLevel level, LevelChunk chunk, int cx, int cz) {
         int minSectionY = level.getMinSectionY();
         var sections = chunk.getSections();

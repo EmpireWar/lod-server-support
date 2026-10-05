@@ -8,7 +8,8 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 
 /**
- * The Paper per-tick snapshot builder (NMS via paperweight — Mojang-mapped twin of the Fabric builder; pump thread, Folia cross-region reads stale-tolerant by design) (E1, FARP §3.2): one snapshot per ONLINE player
+ * The Sponge per-tick snapshot builder (Mojang-mapped twin of the Fabric builder) (E1,
+ * FARP §3.2): one snapshot per ONLINE player
  * per broadcast tick — never per viewer×target pair. Server thread only (plain entity
  * field reads). Equipment and vehicle types cross as identity strings (R-7 wire
  * neutrality — never numeric registry ids).

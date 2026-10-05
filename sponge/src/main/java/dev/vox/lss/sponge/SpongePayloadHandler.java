@@ -13,12 +13,7 @@ import java.util.function.Function;
 
 /**
  * Encodes S2C payloads and decodes C2S payloads using the same wire format as Fabric.
- *
- * S2C packets are sent directly via NMS using {@link DiscardedPayload} to wrap
- * raw bytes in a {@link ClientboundCustomPayloadPacket}. This bypasses Bukkit's
- * {@code sendPluginMessage()} which silently drops messages when the client hasn't
- * registered the channel via {@code minecraft:register} — a common issue with
- * Fabric clients connecting to Paper servers in 1.20.5+.
+ * S2C frames go out over the registered Sponge channels ({@link SpongeChannels}).
  */
 public final class SpongePayloadHandler {
     private SpongePayloadHandler() {}

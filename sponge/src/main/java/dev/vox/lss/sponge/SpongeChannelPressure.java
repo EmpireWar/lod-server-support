@@ -11,7 +11,7 @@ import net.minecraft.server.network.ServerCommonPacketListenerImpl;
 import java.lang.reflect.Field;
 
 /**
- * Paper adapter for the per-player outbound-buffer gauge — the twin of Fabric's
+ * Sponge adapter for the per-player outbound-buffer gauge — the twin of Fabric's
  * {@code FabricChannelPressure}, using reflection where Fabric uses accessor mixins:
  * {@code ServerCommonPacketListenerImpl.connection} is {@code protected} and
  * {@code Connection.channel} is {@code private}, neither reachable from this package.
@@ -22,8 +22,7 @@ import java.lang.reflect.Field;
  * gauge blank and the deference gate inert rather than misreporting.
  *
  * <p>Public since the probe-snapshot refactor (mega plan R-2), matching the Fabric twin's
- * factory widening — the combined shape is owned by the tracer PR even though only the
- * transport yield consumes {@code snapshot()} on Paper.
+ * factory widening — only the transport yield consumes {@code snapshot()} here.
  */
 public final class SpongeChannelPressure {
 

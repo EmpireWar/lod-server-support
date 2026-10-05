@@ -18,8 +18,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Logging bounds mirror the Fabric twin: one info line per ACTIVE world, silence on the
  * common inactive path, fallback list resolved (and its warnings emitted) at most once.
- * Folia-safe: evaluation is a read of the immutable world config, cached in a concurrent
- * map, callable from any serializing thread.
+ * Thread-safe: evaluation reads the immutable config, cached in a concurrent map, callable
+ * from any serializing thread.
  */
 final class SpongeXrayMaskManager {
 

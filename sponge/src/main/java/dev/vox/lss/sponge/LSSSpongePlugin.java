@@ -77,14 +77,11 @@ public class LSSSpongePlugin {
     /**
      * Service-gate permission nodes, consulted only while {@link SpongeConfig#requireServicePermission}
      * is on. BOTH spellings must be held — a negative grant on EITHER denies (see
-     * {@link #holdsServicePermission}). The dual declaration in plugin.yml is load-bearing for the
-     * same reason as the far-player privacy nodes (see SpongeFarPlayerSnapshots): Bukkit resolves
-     * an UNDECLARED node to the op default, so a single-brand declaration paired with a
-     * cross-brand check would silently deny (or silently admit) every op on the jar that lacks
-     * the spelling — and declaring both keeps an operator's grant alive across an LSS&lt;-&gt;VSS
-     * jar swap. Both are declared {@code default: true} (user decision, 2026-08-25): arming
-     * the gate alone therefore changes nothing for anyone, and a denial is always an explicit
-     * negative grant an admin made in their permission plugin.
+     * {@link #holdsServicePermission}). Checking both keeps an operator's grant alive across an
+     * LSS&lt;-&gt;VSS jar swap. Both default to allowed ({@link SpongePlayers#holds}: only an
+     * explicit false denies — user decision, 2026-08-25): arming the gate alone therefore
+     * changes nothing for anyone, and a denial is always an explicit negative grant an admin
+     * made in their permission plugin.
      */
     static final String PERMISSION_SERVICE_LSS = dev.vox.lss.common.LSSPermissions.SERVICE_LSS;
     /** The VSS spelling of {@link #PERMISSION_SERVICE_LSS} — see there. */
@@ -141,8 +138,8 @@ public class LSSSpongePlugin {
         };
     }
 
-    /** Once-per-JVM warn latch for a throwing Bukkit permissible (CAS — on Folia the
-     *  handshake read and the pump sweep can race; test seam resets). */
+    /** Once-per-JVM warn latch for a throwing permission read (CAS — the handshake read
+     *  and the pump sweep may run on different threads; test seam resets). */
     private static final java.util.concurrent.atomic.AtomicBoolean PERMISSIBLE_THROW_WARNED =
             new java.util.concurrent.atomic.AtomicBoolean();
 
@@ -162,8 +159,7 @@ public class LSSSpongePlugin {
     /**
      * The onEnable step set, in the order {@link #runEnablePlan} drives them. The
      * production implementation lives in {@link #onEnable}; the interface is a test
-     * seam (the plan's step order and enabled gate are pinned without a Bukkit server,
-     * and /reload re-runs the identical sequence).
+     * seam (the plan's step order and enabled gate are pinned without a server).
      */
     interface EnableSteps {
         void loadBranding();
@@ -272,7 +268,7 @@ public class LSSSpongePlugin {
         }, Brand.serverCommand());
     }
 
-    /** Bukkit-style argument split: a trailing space starts an empty next argument. */
+    /** Argument split matching Bukkit's: a trailing space starts an empty next argument. */
     static String[] args(String remaining) {
         String trimmed = remaining.stripLeading();
         return trimmed.isEmpty() ? new String[0] : trimmed.split(" +", -1);
@@ -433,9 +429,9 @@ public class LSSSpongePlugin {
 
     /**
      * Channel switch + exception containment for {@link #onPluginMessageReceived},
-     * extracted so hostile-frame containment is testable without a CraftPlayer: one
-     * malformed frame must be caught and logged — never propagate into Bukkit's
-     * messenger — and later messages must still dispatch. Unknown channels are ignored.
+     * extracted so hostile-frame containment is testable without a player: one
+     * malformed frame must be caught and logged — never propagate into Sponge's
+     * channel dispatch — and later messages must still dispatch. Unknown channels are ignored.
      * Errors deliberately propagate (only Exception is contained).
      */
     static void dispatchPluginMessage(String channel, String playerName, byte[] message,
@@ -478,11 +474,10 @@ public class LSSSpongePlugin {
 
     /**
      * Test seam: player registration, production-wired to
-     * {@link SpongeRequestProcessingService#enqueueRegister} — on Folia the handshake message
-     * arrives on the player's region thread, so registration is mailboxed and the pump
-     * applies it next tick. EVERY dialect identity mark (v16 and v18 alike) rides that
-     * mailbox too, as the {@link #dialectFlipFor} runnable the pump runs during its
-     * lifecycle drain — never directly from the region thread. (This javadoc used to
+     * {@link SpongeRequestProcessingService#enqueueRegister} — registration is mailboxed and
+     * the pump applies it next tick. EVERY dialect identity mark (v16 and v18 alike) rides
+     * that mailbox too, as the {@link #dialectFlipFor} runnable the pump runs during its
+     * lifecycle drain — never directly from the handshake handler. (This javadoc used to
      * describe a pre-round-3 design where V16 marked its session identity directly; that
      * direct mark IS the hard-kick race the round-3 review fixed — a column egress
      * deciding its wire shape off a half-published identity — so do not reintroduce it.
@@ -499,10 +494,9 @@ public class LSSSpongePlugin {
 
     private void handleHandshake(ServerPlayer nmsPlayer, byte[] data) {
         var service = this.requestService;
-        // R4 (Folia review 2026-08-27): every handshake stamps its connection's epoch
-        // BEFORE any gate/summary state can be written for it — the late mailboxed
-        // Remove of a PREVIOUS connection compares against this and skips its
-        // region-thread-state belts for a fast rejoiner.
+        // R4 (review 2026-08-27): every handshake stamps its connection's epoch BEFORE any
+        // gate/summary state can be written for it — the late mailboxed Remove of a
+        // PREVIOUS connection compares against this and skips its belts for a fast rejoiner.
         if (service != null) service.markConnection(nmsPlayer.getUUID());
         // XVER §7: capture Via's answer once per handshake (the && keeps a disabled
         // guard from ever triggering probe resolution); the pure seam applies the rule.
@@ -511,9 +505,7 @@ public class LSSSpongePlugin {
                 : dev.vox.lss.common.compat.ViaProbe.NO_SIGNAL;
         handleHandshake(data, nmsPlayer.getName().getString(), nmsPlayer, this.lssConfig, service != null,
                 viaProtocol, net.minecraft.SharedConstants.getProtocolVersion(),
-                // Ticket #6: the per-player service gate. Read inline on this thread (region
-                // thread on Folia) — no scheduling, and an online player's permissible is
-                // safe to read there, the same shape SpongeFarPlayerSnapshots already uses.
+                // Ticket #6: the per-player service gate, read inline in the handshake handler.
                 serviceGateFor(node -> SpongePlayers.holds(nmsPlayer, node), nmsPlayer.getUUID(),
                         nmsPlayer.getName().getString(),
                         service == null ? null : service.getServiceGateState(),
@@ -525,8 +517,8 @@ public class LSSSpongePlugin {
                     // NOT — otherwise columns keep shipping the old dialect's shape and
                     // hard-kick the re-armed decoder. Placed on the sender seam because it
                     // fires for every replying outcome (REGISTER and NO_CONSUMER/DISABLED
-                    // alike); reply-only sheds run inline on the region thread, an
-                    // inherited accepted residual (v18-compat design §2.3).
+                    // alike); reply-only sheds run inline in the handler, an inherited
+                    // accepted residual (v18-compat design §2.3).
                     if (service != null) {
                         if (dialect != HandshakeGate.WireDialect.V16) {
                             service.getV16CompatManager().onNonV16Handshake(nmsPlayer.getUUID());
@@ -554,16 +546,16 @@ public class LSSSpongePlugin {
                     //     which is what the sender seam amounts to for a REGISTER outcome,
                     //     since the drain runs replyAfterRegister last — left a v16 ->
                     //     current re-handshake running its whole session uncompressed.
-                    //   * ON THE PUMP, because on Folia the handshake arrives on a REGION
-                    //     thread. A flip applied there takes effect instantly while the
-                    //     SessionConfig that re-arms the client's decoder waits for the next
-                    //     drain, so the remainder of that tick's flush could ship
+                    //   * ON THE PUMP, not in the handshake handler. A flip applied there
+                    //     takes effect instantly while the SessionConfig that re-arms the
+                    //     client's decoder waits for the next drain, so a flush in between
+                    //     could ship
                     //     new-dialect columns to a decoder still armed for the old one — a
                     //     malformed frame, and a disconnect. (Round-3 review; the first
                     //     bullet's fix originally introduced the second bullet's race.)
                     // All directions go through the hook so none can drift off-pump: each
                     // dialect marks its own identity and sheds the other's (the v18
-                    // membership especially must NEVER be marked on the region thread —
+                    // membership especially must NEVER be marked in the handler —
                     // v18-compat design §2.3, review F1).
                     service.enqueueRegister(nmsPlayer, capabilities,
                             dialectFlipFor(dialect, service.getV16CompatManager(),
@@ -768,10 +760,10 @@ public class LSSSpongePlugin {
 
         if (decision.registerPlayer()) {
             // REGISTERING outcome: the reply is DEFERRED into the registration so the
-            // client cannot declare before its state exists (the Folia pre-registration
-            // drop, soak-diagnosed 2026-07-27 — on Folia this handler runs on the region
-            // thread while the pump applies registrations next tick; a SessionConfig sent
-            // from here invited a first want-set into the gap, dropped uncounted).
+            // client cannot declare before its state exists (the pre-registration drop,
+            // soak-diagnosed 2026-07-27 — the pump applies registrations next tick, and a
+            // SessionConfig sent from here invited a first want-set into the gap, dropped
+            // uncounted).
             registrar.register(handshake.capabilities(), decision.dialect(), reply);
             LSSLogger.info("Player " + playerName
                     + " registered for " + Brand.shortName() + " LOD request processing (caps="
@@ -796,7 +788,7 @@ public class LSSSpongePlugin {
      * the remembered handshake frame and drives it through the PRODUCTION receiver body
      * — the full ladder re-runs (version, Via, consumer, enabled, gate), the reply
      * lands in the client's own dialect, and a REGISTER outcome takes the registrar's
-     * DEFERRED reply (the Folia pre-registration gap stays closed). Called on the pump;
+     * DEFERRED reply (the pre-registration gap stays closed). Called on the pump;
      * the player reference was freshly resolved by the sweep this tick.
      */
     void replayServiceGateHandshake(ServerPlayer nmsPlayer,
@@ -837,11 +829,11 @@ public class LSSSpongePlugin {
         CLIENT_DATA_VERSIONS.remove(profile.uuid());
         // Service gate: the denied-handshake memo, the denial-log latch, and the
         // revocation streak are swept by the EPOCH-GUARDED mailbox Remove drain
-        // (enqueueRemove above), NOT here. On Folia this event can fire on a stalled
-        // region thread AFTER a same-UUID reconnection already deposited a fresh
-        // denial memo on its own region thread; an un-guarded sweep here would wipe
-        // the successor's memo and strand a disarmed rejoiner with no re-offer (the
-        // R4 belt exists precisely to skip the sweep when a newer connection exists).
+        // (enqueueRemove above), NOT here, matching the platform twins: a same-UUID
+        // reconnection may already have deposited a fresh denial memo, and an un-guarded
+        // sweep would wipe the successor's memo and strand a disarmed rejoiner with no
+        // re-offer (the R4 belt exists precisely to skip the sweep when a newer
+        // connection exists).
     }
 
     public SpongeRequestProcessingService getRequestService() {

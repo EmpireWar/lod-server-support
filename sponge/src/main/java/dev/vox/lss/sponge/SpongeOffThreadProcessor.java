@@ -16,8 +16,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Paper-specific off-thread processor. Produces encoded byte[] payloads
- * that will be sent via Plugin Messaging on the main thread.
+ * Sponge off-thread processor. Produces encoded byte[] payloads that the main thread
+ * sends over the registered Sponge channels.
  */
 public class SpongeOffThreadProcessor extends OffThreadProcessor<SpongePlayerRequestState> {
 
@@ -28,8 +28,8 @@ public class SpongeOffThreadProcessor extends OffThreadProcessor<SpongePlayerReq
     private final SpongeChunkDiskReader diskReader;
 
     // Maps a dimension id to its live ServerLevel for disk-read submission. Refreshed every
-    // tick (put, not putIfAbsent): a Paper world unloaded and recreated under the same name
-    // (Multiverse/arena resets) reuses the dimension id, so a stale putIfAbsent entry would
+    // tick (put, not putIfAbsent): a world unloaded and recreated under the same key
+    // (arena resets) reuses the dimension id, so a stale putIfAbsent entry would
     // aim every disk read at the dead world's closed ChunkMap (mass not-found). Cleared on
     // shutdown. (Residual: a permanently-unloaded, never-recreated world's level stays until
     // shutdown — bounded, and vanilla dimensions never unload.)

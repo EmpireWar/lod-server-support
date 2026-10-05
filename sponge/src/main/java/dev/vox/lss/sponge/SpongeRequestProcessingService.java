@@ -38,9 +38,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Core orchestrator for per-player LOD request processing on Paper.
- * Adapted from Fabric's RequestProcessingService with Plugin Messaging send
- * calls.
+ * Core orchestrator for per-player LOD request processing on Sponge, ported from the
+ * Paper twin. Everything that touches the world runs on the server main thread (the
+ * pump); serialization and disk reads run on the off-thread processor.
  */
 public class SpongeRequestProcessingService {
     private final Map<UUID, SpongePlayerRequestState> players;
@@ -52,14 +52,14 @@ public class SpongeRequestProcessingService {
     /** The recheck cadence (plan §2.3): both sweeps run every 200 ticks (~10 s). */
     static final int PERMISSION_RECHECK_TICKS = 200;
     private int permissionRecheckCounter;
-    /** The sweep's permission read — pump-thread Bukkit permissible reads (the
-     *  SpongeFarPlayerSnapshots Folia precedent); seam-injected for tests. A throwing
-     *  probe is contained at the sweep site (counts as HOLDING — fail-open). */
+    /** The sweep's permission read — a pump-thread Sponge permission read; seam-injected
+     *  for tests. A throwing probe is contained at the sweep site (counts as HOLDING —
+     *  fail-open). */
     private java.util.function.BiPredicate<ServerPlayer, String> permissionProbe =
             SpongePlayers::holds;
     /** The grant sweep's replay hook — wired to the plugin's production handshake body
      *  by the production constructor (the full ladder re-runs; the reply lands via the
-     *  registrar's DEFERRED path, so the Folia pre-registration gap stays closed);
+     *  registrar's DEFERRED path, after the registration is applied);
      *  null in bare test wirings until injected. */
     private java.util.function.BiConsumer<ServerPlayer,
             dev.vox.lss.common.ServiceGateState.DeniedHandshake> handshakeReplayer;
@@ -112,8 +112,8 @@ public class SpongeRequestProcessingService {
     private final long startTimeNanos = System.nanoTime();
     // Keyed by the lightweight ResourceKey (not ServerLevel): a ServerLevel key strongly
     // retains every world an LSS player ever visited — including unloaded ones on
-    // world-cycling Paper servers (Multiverse/minigames). The dimension string is derivable
-    // from the key.
+    // world-cycling servers (plugin-managed worlds, minigames). The dimension string is
+    // derivable from the key.
     private final Map<ResourceKey<Level>, String> dimensionStringCache = new HashMap<>();
 
     private int diagLogCounter = 0;
@@ -129,16 +129,8 @@ public class SpongeRequestProcessingService {
     // Global ceiling on in-memory column SERIALIZATIONS across ALL players in one pump tick — the
     // per-player cap bounds one player, but N backfilling players would otherwise cost up to
     // 512*N serializations on the pump. Counts serializations (the expensive work), not
-    // examinations. Applies to the non-Folia pump probe below; the Folia region-probe path runs
-    // off-pump on owning region threads, so the per-player cap suffices there — with one honest
-    // caveat: "distributed" assumes players in DIFFERENT regions. N players clustered in one
-    // region all probe on that region's single thread (up to 512*N there, uncapped globally);
-    // NOTE the R1 published-want-set arm (2026-08-27) widened this window: the regionized
-    // probe now fires on EVERY tick a player's backlog is non-empty (the whole backfill/
-    // retention phase), not just arrival ticks — the accepted ceiling is the same but its
-    // duty cycle is ~5-20x higher. Acceptable while Folia support is experimental, revisit
-    // if clustered-players soak shows region-tick pressure. Once spent, later players fall through to the disk-read path and
-    // the 1 Hz re-declaration heals it.
+    // examinations. Once spent, later players fall through to the disk-read path and the
+    // 1 Hz re-declaration heals it.
     // Gen-disabled corner (accepted): with enableChunkGeneration=false, a LOADED but
     // never-saved chunk whose probe this cap deferred falls through to a disk read, resolves
     // not-found, and answers NOT_GENERATED — session-permanent on the client despite the
@@ -242,83 +234,6 @@ public class SpongeRequestProcessingService {
     void setLoadedColumnProbe(LoadedColumnProbe probe) {
         this.loadedColumnProbe = probe;
     }
-
-    // ---- Regionized loaded-chunk probing (Folia) ----
-    //
-    // On Folia the pump runs on the global region thread, which owns no chunks — yet
-    // getChunkNow still RETURNS loaded chunks there (Moonrise's full-chunk map has no
-    // ownership check; Folia soak baselines show ~150 in-memory serves per fresh-backfill).
-    // Every one of those serves serialized a chunk the owning region thread may have been
-    // mutating concurrently: a torn palette read shipped to the client as "up to date".
-    // Regionized probing removes that race: the pump dispatches a probe task to each
-    // player's owning region via the EntityScheduler; the task serializes only chunks that
-    // region owns (isOwnedByCurrentRegion) and publishes an immutable-after-publish batch
-    // the pump consumes into a later snapshot.
-    //
-    // Probe results are useless if they trail their requests: the router drains the whole
-    // incoming queue every cycle, so a probe published between ticks T and T+1 describes
-    // requests that were already routed at cycle T (a soak run measured exactly 0 in-memory
-    // serves with that shape). The pump therefore HOLDS each tick's fresh arrivals for one
-    // tick: at tick T it drains them, schedules their probe task, and parks them; at T+1 it
-    // consumes the published batch and re-injects the parked requests, so routing cycle T+1
-    // sees request and probe result in the same snapshot. Costs ~50 ms added latency per
-    // request on Folia only — noise against the client's 1 s scan cadence. A probe task
-    // that runs late simply misses: the release is unconditional, the requests route to
-    // disk/generation as before, and the orphan batch is discarded on its next consume.
-
-    /** Test seam: runs a task on the player's owning region. Production default is the
-     *  EntityScheduler (the main thread on Paper); a task whose entity is removed before
-     *  it runs is silently retired. */
-    @FunctionalInterface
-    interface RegionTaskScheduler {
-        void schedule(ServerPlayer player, Runnable task);
-    }
-
-    /** Test seam: whether the current thread owns the chunk. getChunkNow + section reads
-     *  are only race-free for chunks the executing region owns — a player's request disc
-     *  can overlap a foreign region (another player's loaded area). */
-    @FunctionalInterface
-    interface RegionOwnershipCheck {
-        boolean ownsChunk(ServerLevel level, int cx, int cz);
-    }
-
-    // Sponge has one main thread, which owns every chunk: these seams only matter for
-    // tests that switch regionized probing on.
-    private RegionTaskScheduler regionTaskScheduler = (player, task) -> player.level().getServer().execute(task);
-
-    private RegionOwnershipCheck regionOwnershipCheck = (level, cx, cz) -> true;
-
-    /** Probing mode. Never regionized on Sponge: the sync probe is both correct and a
-     *  tick fresher. Package-visible for tests. */
-    private boolean regionizedProbing = false;
-
-    void setRegionizedProbing(boolean regionized) {
-        this.regionizedProbing = regionized;
-    }
-
-    void setRegionTaskScheduler(RegionTaskScheduler scheduler) {
-        this.regionTaskScheduler = scheduler;
-    }
-
-    void setRegionOwnershipCheck(RegionOwnershipCheck check) {
-        this.regionOwnershipCheck = check;
-    }
-
-    /** Region-thread → pump hand-off. The dimension is captured on the region thread so a
-     *  dimension change between publish and consume discards the batch instead of serving
-     *  old-dimension bytes under the new dimension. The probes map is mutated only inside
-     *  {@code regionProbeResults.compute} (merge) and owned by the pump after {@code remove}. */
-    record RegionProbeBatch(String dimension, RequestRegistration registration, Long2ObjectOpenHashMap<LoadedColumnData> probes) {}
-
-    private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
-
-    /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
-     *  probe task has had a region tick to publish — carrying the offer generation recorded
-     *  BEFORE the take, so the release can refuse a batch that was passed-through during the
-     *  hold (see {@code AbstractPlayerRequestState.republishHeldBatch}). */
-    private record HeldBatch(IncomingBatch batch, long offerGeneration) {}
-
-    private final Map<UUID, HeldBatch> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -452,13 +367,10 @@ public class SpongeRequestProcessingService {
         // wiring): compare-backed rungs stamp "verified now" unless the position's
         // change is marked-but-undrained or the region latch is armed. Null table
         // (pre-region-stamps test wirings) keeps the NEVER default — no stamps.
-        // Paper residual (plan §9.3 as corrected by §10 item 5, accepted-with-eyes-
-        // open and UNCANARIED): an event-blind content change (the unfired-event
-        // class) is invisible to BOTH guards; its stamp seals until the chunk's next
-        // save — the store resweep bounds the store-rung arm. No soak canaries the
-        // class (paper-store-unfired-event's client is summary-gated off — the canary
-        // is structurally impossible); theEventBlindStateStampsByAcceptedDesign pins
-        // the residual as deliberate.
+        // Residual (plan §9.3 as corrected by §10 item 5, the Paper twin's accepted
+        // shape): a content change Sponge records no block change for (a plugin writing
+        // chunk data directly) is invisible to BOTH guards; its stamp seals until the
+        // chunk's next save — the store resweep bounds the store-rung arm.
         if (this.offThreadProcessor != null && this.regionStamps != null
                 && this.dirtyTracker != null) {
             this.offThreadProcessor.setUpToDateStampSource((player, dim, packed) -> {
@@ -481,17 +393,12 @@ public class SpongeRequestProcessingService {
         // fingerprint via entryForActive, and Java evaluates this whole method BEFORE
         // the delegating ctor body runs — the old ctor-body activate left the holder
         // unset here, every dimension fingerprinted "off", and the mask-drift
-        // drop-and-rebuild permanently inert on Paper (an x-ray leak on any mask
-        // widening). The Fabric twin activates before its Environment for the same
-        // reason.
+        // drop-and-rebuild permanently inert (an x-ray leak on any mask widening). The
+        // Fabric twin activates before its Environment for the same reason.
         var xrayMasks = SpongeXrayMaskManager.activate(config);
         Map<UUID, SpongePlayerRequestState> players = new ConcurrentHashMap<>();
-        // Paper/Folia reads ALWAYS route through Moonrise at Priority.LOW, so the prioritized
-        // AUTO tier applies whenever background priority is on (unlike Fabric, which must
-        // also probe for Moonrise). With the flag off the reads run FOREGROUND, so the pool
-        // must be sized by the unprioritized tier — see the Fabric twin. (v0.9.0 review.)
         // Sponge has no Moonrise, so reads always run through vanilla's foreground IOWorker
-        // and the pool is sized by the unprioritized tier (useBackgroundReadPriority is inert).
+        // and the pool is sized by the unprioritized tier — see the Fabric twin.
         int readerThreads = config.effectiveDiskReaderThreads(false);
         var diskReader = new SpongeChunkDiskReader(readerThreads, config.useNbtTranscode());
         SpongeChunkGenerationService generationService = new SpongeChunkGenerationService(config);
@@ -524,20 +431,18 @@ public class SpongeRequestProcessingService {
         }
         // LOD store: the SQLite engine for "on"/"full" (the memory tier is deleted) —
         // attached to both consumers BEFORE the processor starts / any submit. Environment resolved
-        // eagerly on the construction thread (levels loaded at plugin enable); the
-        // periodic re-sweep (lodStoreResweepSeconds) is PAPER's stale bound for its
-        // unfired-event dirty gaps. A failed codec/native probe degrades to store-off
-        // with one warning (the Fabric twin is identical).
+        // eagerly on the construction thread; the periodic re-sweep
+        // (lodStoreResweepSeconds) bounds staleness from content changes no block-change
+        // event reports. A failed codec/native probe degrades to store-off with one
+        // warning (the Fabric twin is identical).
         dev.vox.lss.common.store.LodStoreService lodStore = null;
-        // enabled=false must not open the store (Fabric twin: the same guard). Paper
-        // has no backfill so the cost is a DB file and a sweep thread rather than a
+        // enabled=false must not open the store (Fabric twin: the same guard). There is
+        // no backfill here, so the cost is a DB file and a sweep thread rather than a
         // full-world walk, but "LSS is off" should still mean nothing is created.
         var storeMode = config.enabled()
                 ? dev.vox.lss.common.store.LodStoreMode.normalize(config.lodStore())
                 : dev.vox.lss.common.store.LodStoreMode.OFF;
         if (storeMode == dev.vox.lss.common.store.LodStoreMode.OFF) {
-            // Suppressed on Folia: the store is unvalidated there (validate() WARNS on
-            // an explicit full) — recommending what we warn about is incoherent.
             var advice = dev.vox.lss.common.store.LodStores
                     .offRecommendationOrNull(config.enabled(), false);
             if (advice != null) {
@@ -552,31 +457,28 @@ public class SpongeRequestProcessingService {
         diskReader.attachRegionStamps(regionStamps);
         // Tracker + mark listener BEFORE the processor starts (the Fabric twin's
         // ordering): every dirty mark from the first tick onward must bump the region's
-        // live save mark. Paper's Bukkit events register later either way; this keeps
-        // the two platforms' wiring order identical.
+        // live save mark; this keeps the platforms' wiring order identical.
         var dirtyTracker = new DirtyColumnTracker();
-        // Marks fire at EDIT time on Paper — strictly no later than the save, so the
-        // latch arms before the write can lag the header. Region threads under Folia —
-        // the bump is atomic.
+        // Marks fire at EDIT time (ChangeBlockEvent.Post) — strictly no later than the
+        // save, so the latch arms before the write can lag the header.
         dirtyTracker.setMarkListener((dim, cx, cz) -> regionStamps
                 .bumpLiveSaveMark(dim, cx, cz, LSSConstants.epochSeconds()));
 
         if (storeMode != dev.vox.lss.common.store.LodStoreMode.OFF) {
-            var maskFingerprints = new java.util.HashMap<String, String>();
-            for (ServerLevel level : server.getAllLevels()) {
-                String dim = level.dimension().identifier().toString();
-                var maskEntry = SpongeXrayMaskManager.entryForActive(level);
-                maskFingerprints.put(dim, maskEntry == null ? "off"
-                        : maskEntry.sourceLabel() + ":"
-                                + Long.toHexString(maskEntry.mask().fingerprint()));
-            }
+            // Resolved per dimension on demand: the mask decision needs no level on
+            // Sponge, so worlds loaded after startup get their real fingerprint too.
+            java.util.function.Function<String, String> maskFingerprints = dim -> {
+                var maskEntry = xrayMasks.entryFor(dim);
+                return maskEntry == null ? "off"
+                        : maskEntry.sourceLabel() + ":" + Long.toHexString(maskEntry.mask().fingerprint());
+            };
             // ONE registry walk feeds both fingerprints (plan §3.2) — the twin of
-            // the Fabric service's call, pinned the same way by the Paper contract
-            // test (of()/contentOf() delegation named at the call site).
+            // the Fabric service's call, pinned the same way by the store environment
+            // contract test (of()/contentOf() delegation named at the call site).
             var registryIds = storeRegistryIdentity(server);
             var env = new dev.vox.lss.common.store.SqliteLodStore.Environment(
                     dev.vox.lss.common.store.LodStores.brandedStoreDir(worldRoot), server.getServerVersion(),
-                    LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints::get,
+                    LSSConstants.PROTOCOL_VERSION, regionDirs::get, maskFingerprints,
                     config.lodStoreResweepSeconds(), config.lodStoreMaxBytes(),
                     dev.vox.lss.common.store.RegistryFingerprint.of(
                             registryIds.states(), registryIds.biomes()),
@@ -700,8 +602,8 @@ public class SpongeRequestProcessingService {
      *  every stored row + backfill progress (batcher-side, tombstoned). The tscache is
      *  deliberately untouched: its stamps describe REGION truth, not store contents —
      *  re-asks re-resolve via tscache/probe/NBT as normal and re-warm the store. Only
-     *  meaningful for the persistent store. Safe from any thread (Folia command
-     *  dispatch is region-threaded): tombstones + a control-queue offer. */
+     *  meaningful for the persistent store. Safe from any thread: tombstones + a
+     *  control-queue offer. */
     public boolean invalidateStoreAllDimensions() {
         if (this.lodStore instanceof dev.vox.lss.common.store.SqliteLodStore sqlite) {
             sqlite.requestDropAllRows();
@@ -720,10 +622,10 @@ public class SpongeRequestProcessingService {
         return this.regionStamps;
     }
 
-    /** Cross-thread lifecycle ingress. On Folia, handshakes and PlayerQuit arrive on region
-     *  threads; registerPlayer/removePlayer mutate pump-owned state (including the generation
-     *  service's non-concurrent maps), so region-thread callers enqueue here and tick() drains
-     *  first — one queue preserves arrival order across a kick→rejoin of the same UUID. */
+    /** Lifecycle ingress. registerPlayer/removePlayer mutate pump-owned state (including
+     *  the generation service's non-concurrent maps), so handshake and disconnect handlers
+     *  enqueue here and tick() drains the mailbox before anything else reads player state —
+     *  the ordering contract every platform twin shares, whichever thread a handler runs on. */
     private sealed interface LifecycleEvent {
         /** {@code beforeRegister} runs on the PUMP immediately before registerPlayer;
          *  {@code replyAfterRegister} immediately after. See the enqueueRegister javadoc
@@ -732,7 +634,7 @@ public class SpongeRequestProcessingService {
                         Runnable beforeRegister, Runnable replyAfterRegister)
                 implements LifecycleEvent {}
         /** {@code connectionEpoch} = the dying connection's epoch at quit time —
-         *  the R4 guard's comparator (Folia review 2026-08-27). */
+         *  the R4 guard's comparator (review 2026-08-27). */
         record Remove(UUID uuid, long connectionEpoch) implements LifecycleEvent {}
     }
 
@@ -751,10 +653,9 @@ public class SpongeRequestProcessingService {
     /**
      * Any thread. Applied at the top of the next tick(); {@code replyAfterRegister} runs on
      * the pump IMMEDIATELY AFTER the player state exists. This ordering is the fix for the
-     * Folia pre-registration drop (soak-diagnosed 2026-07-27): the handshake used to reply
-     * SessionConfig inline on the region thread while the registration waited here, so a
-     * well-behaved client's FIRST want-set could arrive before any state existed and was
-     * dropped uncounted. Replying only after the drain makes that window unreachable for
+     * pre-registration drop (soak-diagnosed 2026-07-27): the handshake used to reply
+     * SessionConfig inline while the registration waited here, so a well-behaved client's
+     * FIRST want-set could arrive before any state existed and was dropped uncounted. Replying only after the drain makes that window unreachable for
      * clients that declare only after receiving SessionConfig (all of them).
      */
     public void enqueueRegister(ServerPlayer player, int capabilities,
@@ -769,16 +670,16 @@ public class SpongeRequestProcessingService {
                 this.connectionEpochs.getOrDefault(uuid, 0L)));
     }
 
-    // Connection epochs (Folia review 2026-08-27 R4): the mailboxed Remove drains up
-    // to a pump tick (or more, on a lagging Folia global thread) after the quit, and
-    // two structures are written SYNCHRONOUSLY on the successor session's region
-    // threads — the service gate's denial memo (at handshake) and the region-summary
+    // Connection epochs (review 2026-08-27 R4): the mailboxed Remove drains up to a
+    // pump tick after the quit, and two structures are written SYNCHRONOUSLY by the
+    // successor session's handlers — the service gate's denial memo (at handshake) and
+    // the region-summary
     // request + eligibility mark (at dimension entry). A fast rejoin landing between
     // the old quit and the old Remove's drain would have that fresh state wiped by
     // the Remove's connection-scoped belts: the gate case strands a disarmed rejoiner
     // with no re-offer; the summary case leaves summaries + stamped up_to_date dark
     // for the whole dimension visit (the client requests only at entry). Every
-    // handshake marks its connection's epoch (region thread, CHM); the Remove carries
+    // handshake marks its connection's epoch (CHM); the Remove carries
     // the epoch captured at quit; the two belts run only when no NEWER connection has
     // handshaked since. Mailbox-FIFO-protected structures (dialects, far players —
     // whose rejoin writes ride the mailbox or the runtime-task queue, both drained
@@ -789,7 +690,7 @@ public class SpongeRequestProcessingService {
     private final java.util.concurrent.atomic.AtomicLong connectionEpochCounter =
             new java.util.concurrent.atomic.AtomicLong();
 
-    /** Any thread (the plugin's handshake ingress, region threads on Folia). */
+    /** Any thread (the plugin's handshake ingress). */
     public void markConnection(UUID uuid) {
         this.connectionEpochs.put(uuid, this.connectionEpochCounter.incrementAndGet());
     }
@@ -895,11 +796,11 @@ public class SpongeRequestProcessingService {
 
     /**
      * The two service-gate sweeps (service-permission-gate-plan.md §2.3) — the textual
-     * twin of {@code RequestProcessingService.runServiceGateSweeps}, with the Paper
-     * differences: Bukkit permissible reads on the pump, the widened
+     * twin of {@code RequestProcessingService.runServiceGateSweeps}, with the plugin
+     * differences: Sponge permission reads on the pump, the widened
      * {@link SessionConfigSender} for the enabled=false push, and the replay through
      * the plugin's production receiver via {@link #setHandshakeReplayer} (deferred
-     * reply — the Folia pre-registration gap stays closed). Public so tests drive one
+     * reply — the pre-registration gap stays closed). Public so tests drive one
      * sweep directly; the one production caller is the tick cadence. Pump thread only.
      */
     public void runServiceGateSweeps() {
@@ -954,7 +855,7 @@ public class SpongeRequestProcessingService {
             for (UUID uuid : gateState.deniedSnapshot()) {
                 if (this.players.containsKey(uuid)) {
                     // SKIP, never clear (implementation review, 2026-08-27): a denied
-                    // re-handshake deposits the memo on a region thread while the
+                    // re-handshake deposits the memo from its handler while the
                     // unregister composite is still queued behind the lifecycle drain —
                     // clearing here would wipe the deposit and strand the player past
                     // its own revocation. A stale entry is retained one sweep and
@@ -1017,9 +918,9 @@ public class SpongeRequestProcessingService {
                 switch (ev) {
                     case LifecycleEvent.Register r -> {
                         // On the PUMP, before registration: the wire-dialect flip. It must
-                        // be here rather than on the calling thread, because on Folia the
-                        // handshake arrives on a REGION thread and the flip takes effect
-                        // instantly, while the SessionConfig that re-arms the client's
+                        // be here rather than in the handshake handler, because a flip made
+                        // there takes effect instantly, while the SessionConfig that re-arms
+                        // the client's
                         // decoder is deferred to this drain — so a flip made off-pump can
                         // land mid-tick and let the rest of that tick's flush ship
                         // NEW-dialect columns to a decoder still armed for the OLD one,
@@ -1098,7 +999,6 @@ public class SpongeRequestProcessingService {
             var s = new SpongePlayerRequestState(player,
                     LSSConstants.SYNC_ON_LOAD_SLOT_CAP,
                     this.config.generationLimits().perPlayer());
-            if (this.regionizedProbing) s.requireProbeHandoff();
             // Session identity for the router's stale-snapshot guard (set before the map
             // publish so the processing thread never sees it null on a live state).
             s.setRegisteredDimension(player.level().dimension().identifier().toString());
@@ -1117,7 +1017,7 @@ public class SpongeRequestProcessingService {
                 && !this.dialects.isV16(player.getUUID())
                 && !this.dialects.isV18(player.getUUID()));
         state.markHandshakeComplete();
-        // Service gate: deliberately NOT cleared here (Folia review 2026-08-27 R3) —
+        // Service gate: deliberately NOT cleared here (review 2026-08-27 R3) —
         // registerPlayer is also the dimension-change reuse path (see the Register
         // drain, which clears it for handshake registrations).
         return state;
@@ -1126,11 +1026,9 @@ public class SpongeRequestProcessingService {
     public void removePlayer(UUID uuid) {
         var removed = this.players.remove(uuid);
         if (removed != null) removed.registration().retire();
-        this.regionProbeResults.remove(uuid);
-        this.heldForProbe.remove(uuid);
-        // STAMP, don't clear: a removal (dimension change on Folia, quit) makes the very
-        // next state==null batch the EXPECTED remove→register race, not an orphan — the
-        // prompt interval doubles as a post-removal grace, so the Folia window can never
+        // STAMP, don't clear: a removal (dimension change, quit) makes the very next
+        // state==null batch the EXPECTED remove→register race, not an orphan — the
+        // prompt interval doubles as a post-removal grace, so that window can never
         // fire a spurious prompt at a healthy mid-stream client, and a dimension hop
         // extends the 60 s bound instead of resetting it. Quit entries are pruned by the
         // size-bounded sweep below; a genuine orphan (plugin /reload) hits a FRESH map —
@@ -1161,7 +1059,7 @@ public class SpongeRequestProcessingService {
      * The service-gate unregistration composite (service-permission-gate-plan.md
      * §2.3): {@code removePlayer} + the far-player viewer shed + the region-summary
      * cleanup — the departed-player sweep's trio, NEVER a modified removePlayer
-     * (that is the dimension-change reuse path on Folia; teaching it to shed viewers
+     * (that is the dimension-change reuse path; teaching it to shed viewers
      * would break every dimension change). The dialect mark and v16 identity are
      * deliberately KEPT — connection-lifecycle facts, and the mark is what any
      * per-player disable push read. No-op for an unregistered uuid. Pump thread only.
@@ -1173,7 +1071,7 @@ public class SpongeRequestProcessingService {
         if (this.regionSummaries != null) this.regionSummaries.removePlayer(uuid);
     }
 
-    /** Any thread (the handshake's denial hook runs on a region thread on Folia):
+    /** Any thread (the handshake's denial hook runs in the handshake handler):
      *  marshals the composite onto the pump, where the registered-check happens at
      *  drain time. A registration RACING the denial (two opposite-outcome handshakes
      *  in one drain window) can still invert — the lifecycle Register applies before
@@ -1222,8 +1120,8 @@ public class SpongeRequestProcessingService {
                 this.config.generationLimits().perPlayer(),
                 generationEnabledForSession());
     }
-    // Per-UUID last-prompt/last-removal stamps (millis). Concurrent: batches arrive on
-    // region threads on Folia. removePlayer STAMPS entries (the post-removal grace) and
+    // Per-UUID last-prompt/last-removal stamps (millis). Concurrent: batches arrive in
+    // the channel handler. removePlayer STAMPS entries (the post-removal grace) and
     // size-bounded-sweeps stale ones.
     private final java.util.concurrent.ConcurrentHashMap<UUID, Long> reattachPromptAt =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -1249,7 +1147,7 @@ public class SpongeRequestProcessingService {
      * today's behavior; the current 4-field shape would buffer-underflow its decoder and
      * hard-kick it.
      *
-     * <p>Rate-limited per UUID (60 s), and removePlayer STAMPS the same map, so the Folia
+     * <p>Rate-limited per UUID (60 s), and removePlayer STAMPS the same map, so the
      * dimension-change remove→register window sits inside a post-removal grace and cannot
      * fire a spurious prompt at a healthy mid-stream client (the client-side backstop:
      * V16ClientWire's announce gate keeps even a delivered stray prompt from flipping
@@ -1289,7 +1187,7 @@ public class SpongeRequestProcessingService {
         // v16 compat branch: legacy drip batches MERGE into the synthetic want-set (the 1 Hz
         // pump tick is the sole declarer) instead of replacing the backlog. Placed before the
         // state guard: merges are session-only and must not depend on registration timing —
-        // on Paper the handshake reply outruns the mailboxed registration by up to a tick.
+        // the handshake reply outruns the mailboxed registration by up to a tick.
         var v16Merge = this.v16Compat.onClientBatch(player.getUUID(), batch.packedPositions(),
                 batch.clientTimestamps(), batch.count(), playerCx, playerCz, maxDist);
         if (v16Merge != null) {
@@ -1494,9 +1392,7 @@ public class SpongeRequestProcessingService {
         }
         var generationReady = tickGenerationService();
         // v16 declares BEFORE the lifecycle pass: the sync probe reads the mailbox during
-        // processPlayerLifecycle, and on Folia holdAndScheduleRegionProbe reads the mailbox
-        // first (falling back to the published want-set when it is empty — the R1 arm) — a
-        // declare offered after that pass would lose the race to the processing thread's
+        // processPlayerLifecycle — a declare offered after that pass would lose the race to the processing thread's
         // take and route with reduced probe coverage (release-review finding 1).
         tickV16Compat();
         var lifecycle = processPlayerLifecycle(generationReady);
@@ -1528,12 +1424,6 @@ public class SpongeRequestProcessingService {
                 this.serviceGateState.onDisconnect(uuid);
                 this.connectionEpochs.remove(uuid);
             }
-        }
-
-        if (this.regionizedProbing && !this.regionProbeResults.isEmpty()) {
-            // A region task can publish after its player was removed (late publish); without
-            // this sweep the batch would pin its column data until the same UUID rejoined.
-            this.regionProbeResults.keySet().removeIf(uuid -> !this.players.containsKey(uuid));
         }
 
         postSnapshot(lifecycle, generationReady);
@@ -1598,7 +1488,7 @@ public class SpongeRequestProcessingService {
 
     private boolean regionSummaryTickErrorWarned;
 
-    /** Ingress for {@code lss:region_summary_req} (messenger/region thread — stores
+    /** Ingress for {@code lss:region_summary_req} (channel handler — stores
      *  pure data, no entity access). The HANDLER-checked kill switch (plan §5). */
     public void handleRegionSummaryRequest(UUID player, byte[] body) throws Exception {
         if (this.regionSummaries == null) return;
@@ -1623,7 +1513,7 @@ public class SpongeRequestProcessingService {
     /** The v16 shim's 1 Hz declare pass (PUMP): the SOLE declarer for legacy sessions. A
      *  server without v16 clients pays one no-op map lookup per player per tick. MUST run
      *  before processPlayerLifecycle: the declare then sits in the mailbox when the sync
-     *  probe (or, on Folia, the hold-release take) reads it, giving shim batches the same
+     *  probe reads it, giving shim batches the same
      *  arrival-tick probe alignment a network-received client batch gets. */
     private void tickV16Compat() {
         for (var state : this.players.values()) {
@@ -1709,8 +1599,8 @@ public class SpongeRequestProcessingService {
                 // Re-push ONLY when the new world's distance differs — the client rebuilds
                 // its whole request manager on any SessionConfig, so an unconditional push
                 // would tax every portal even with no overrides (see the Fabric twin). The
-                // previous world's distance resolves from its ResourceKey via the loaded
-                // level so a Bukkit-name-keyed override still matches.
+                // previous world's distance resolves from its ResourceKey (the dimension
+                // id is the only distance key on Sponge).
                 int newDist = SpongeWorldLod.distance(this.config, changed);
                 int prevDist = SpongeWorldLod.distanceForDimKey(this.config, prevDim);
                 if (newDist != prevDist && this.dialects.isCurrent(changed.getUUID())) {
@@ -1739,17 +1629,9 @@ public class SpongeRequestProcessingService {
 
             var skipPositions = genReadyPositions != null
                     ? genReadyPositions.get(state.registration()) : null;
-            Long2ObjectMap<LoadedColumnData> probes;
-            if (this.regionizedProbing) {
-                // Consume last tick's region-published batch, then advance the hold-release
-                // pipeline (release last tick's arrivals, park + probe this tick's). The
-                // sync probe is skipped entirely: the pump owns no chunks on Folia.
-                probes = consumeRegionProbes(player.getUUID(), dimension, skipPositions);
-                holdAndScheduleRegionProbe(state, player, level, skipPositions, probes);
-            } else {
-                probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
-                globalProbeBudget -= probes.size();   // charge only actual serializations (pump path)
-            }
+            // The main thread owns every chunk, so the pump probes loaded chunks directly
+            var probes = this.probeLoadedChunks(state, level, skipPositions, globalProbeBudget);
+            globalProbeBudget -= probes.size();   // charge only actual serializations
             if (probes != null && !probes.isEmpty()) {
                 loadedChunkProbes.put(player.getUUID(), probes);
             }
@@ -1822,19 +1704,16 @@ public class SpongeRequestProcessingService {
     }
 
     /**
-     * Probe loaded chunks for positions the player still wants (Paper's sync path — Folia
-     * uses the regionized hold-release instead).
+     * Probe loaded chunks for positions the player still wants. The pump owns every chunk
+     * on Sponge, so the probe reads them synchronously.
      *
      * <p><b>Source: the mailbox first, then the published want-set.</b> The MAILBOX holds a
      * batch that arrived since the last routing cycle; probing it on its ARRIVAL tick is what
      * puts its probes in the snapshot the router routes it against. Without that a freshly
      * declared position is never probed on its first routing cycle, and a want-set that fits
      * under the per-player slot cap — the converged steady state, and every single-position
-     * dirty-broadcast re-request — has no second cycle, so it disk-reads. Folia's one-tick
-     * hold-release makes the same alignment deterministic for the ARRIVAL-tick arm, and
-     * since the 2026-08-27 review (R1) the regionized path carries the published-want-set
-     * arm too — before that it probed only on arrival ticks, collapsing coverage to the
-     * client's declaration cadence. The PUBLISHED want-set covers the other ~19 ticks of each second
+     * dirty-broadcast re-request — has no second cycle, so it disk-reads. The PUBLISHED
+     * want-set covers the other ~19 ticks of each second
      * ({@code takeIncomingBatch()} nulls the mailbox within ~50 ms of arrival while batches
      * arrive at only 1-4 Hz — the client's adaptive cadence) and carries a want-set too large for the slot cap across the
      * cycles that work it off (published exactly while the backlog is non-empty).
@@ -1888,175 +1767,6 @@ public class SpongeRequestProcessingService {
         }
 
         return probes;
-    }
-
-    /** Pump only. Takes ownership of the player's published batch (if any) and applies the
-     *  same skip contract the sync probe honors: a position with a generation outcome in
-     *  this snapshot must not also appear as a probe. Returns null when nothing usable. */
-    private Long2ObjectMap<LoadedColumnData> consumeRegionProbes(UUID uuid, String dimension,
-                                                                 LongOpenHashSet skipPositions) {
-        var batch = this.regionProbeResults.remove(uuid);
-        if (batch == null) return null;
-        var current = this.players.get(uuid);
-        if (this.shuttingDown || current == null || current.registration() != batch.registration()
-                || batch.registration().isRetired()) return null;
-        // Serialized under the dimension the player was in when the task ran; a dimension
-        // change in between must not serve old-dimension bytes under the new dimension.
-        if (!batch.dimension().equals(dimension)) return null;
-        if (skipPositions != null) {
-            for (long packed : skipPositions) {
-                batch.probes().remove(packed);
-            }
-        }
-        return batch.probes();
-    }
-
-    /** Pump only. Release the previous tick's held declaration unconditionally, with
-     * currently ready, generation-filtered probes in the same atomic envelope. A late
-     * callback never extends the hold. Newer offers still defeat both generation/CAS guards.
-     * Only fresh ingress is taken below; released envelopes remain router-owned across
-     * later pump snapshots, so a slow worker cannot lose their ready probes by re-holding.
-     */
-    private void holdAndScheduleRegionProbe(SpongePlayerRequestState state, ServerPlayer player,
-                                            ServerLevel level, LongOpenHashSet skipPositions,
-                                            Long2ObjectMap<LoadedColumnData> readyProbes) {
-        state.updateLateProbeRange(SpongeWorldLod.distance(this.config, level) + LSSConstants.LOD_DISTANCE_BUFFER);
-        var released = this.heldForProbe.remove(player.getUUID());
-        if (released != null
-                && state.republishHeldBatch(released.batch(), released.offerGeneration(), readyProbes)) {
-            return;
-        }
-
-        // Either nothing was held, or the held batch lost the republish (a newer arrival in
-        // the mailbox, or a pass-through the offer-generation guard caught — dropped and
-        // counted superseded either way). Whatever is pending now is the newest declaration.
-        // The generation is recorded BEFORE the take: an offer slipping between the two can
-        // only make the eventual republish refuse spuriously (a healed drop), never let a
-        // stale batch resurrect.
-        long heldAtGeneration = state.offerGeneration();
-        var fresh = state.takeFreshIncomingBatchForProbe();
-        if (fresh == null) {
-            // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
-            // existed, Folia probed ONLY on a declaration's arrival tick — the probe
-            // window advanced at the client's 1-4 Hz cadence instead of every tick, so
-            // any want-set larger than the 512-position window (or the sync slot cap)
-            // routed its later cycles with ZERO probe coverage: loaded chunks took
-            // disk reads, and on gen-disabled servers the loaded-but-never-saved
-            // NOT_GENERATED park became the steady state. This is the sync path's
-            // peekWantSet arm, regionized: same per-player cap, same served-head/
-            // suppress filters (probes are position-keyed, so results merge into the
-            // same consume path regardless of which arm scheduled them). Runs only on
-            // no-fresh-batch ticks, so the one-region-task-per-player-per-tick shape
-            // holds; a release-success tick returns above and the arm picks up next
-            // tick.
-            var late = state.claimLateProbes(MAX_PROBES_PER_TICK_PER_PLAYER);
-            var positions = new LongOpenHashSet();
-            for (var request : late) {
-                if (skipPositions != null && skipPositions.contains(request.position()))
-                    state.cancelLateProbe(request);
-                else positions.add(request.position());
-            }
-            var published = state.peekWantSet();
-            if (published != null) {
-                for (long pos : snapshotProbePositions(state, published, skipPositions)) {
-                    if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
-                    positions.add(pos);
-                }
-            }
-            if (positions.isEmpty()) return;
-            long[] selected = positions.toLongArray();
-            UUID uuid = player.getUUID();
-            try {
-                this.regionTaskScheduler.schedule(player,
-                        () -> runRegionProbe(uuid, state, level, selected, -1, late));
-            } catch (Exception e) {
-                // A rejected schedule must not keep a claimed one-shot obligation alive.
-                for (var request : late) state.completeLateProbe(request, null);
-            }
-            return;
-        }
-        this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
-
-        long[] positions = snapshotProbePositions(state, fresh, skipPositions);
-        if (positions.length == 0) return;
-        UUID uuid = player.getUUID();
-        try {
-            this.regionTaskScheduler.schedule(player,
-                    () -> runRegionProbe(uuid, state, level, positions, heldAtGeneration));
-        } catch (Exception e) {
-            // A plugin-manager disable from a region thread can land between tick()'s
-            // shuttingDown check and this schedule: the EntityScheduler then throws
-            // IllegalPluginAccessException (Folia review R5 — the identical containment
-            // SpongeChunkGenerationService's MainThreadScheduler documents). The probe is
-            // simply lost — the held batch still releases next tick (or dies with the
-            // service), and probe misses are the designed degrade.
-        }
-    }
-
-    private static final long[] NO_POSITIONS = new long[0];
-
-    /** Up to {@link #MAX_PROBES_PER_TICK_PER_PLAYER} distinct positions from the held batch.
-     *  Served-head filter mirrors the sync probes (incl. the review-P1 suppress rung): a
-     *  payload in the send pipeline, recently sent, or just answered up_to_date resolves
-     *  without the probe, so probing it wastes a region-thread serialization (both
-     *  structures are safe off the processing thread). */
-    private long[] snapshotProbePositions(SpongePlayerRequestState state, IncomingBatch held,
-                                          LongOpenHashSet skipPositions) {
-        LongOpenHashSet positions = null;
-        for (var req : held.requests()) {
-            long packed = PositionUtil.packPosition(req.cx(), req.cz());
-            if (skipPositions != null && skipPositions.contains(packed)) continue;
-            if (state.skipProbe(packed)) continue;
-            if (positions == null) positions = new LongOpenHashSet();
-            if (!positions.add(packed)) continue;
-            if (positions.size() >= MAX_PROBES_PER_TICK_PER_PLAYER) break;
-        }
-        return positions == null ? NO_POSITIONS : positions.toLongArray();
-    }
-
-    /** Region-thread task body. Touches no pump state: reads the level behind the ownership
-     *  guard, serializes matches through the shared probe seam, and publishes one batch via
-     *  compute (merge under the bin lock; the pump takes ownership atomically via remove). */
-    private void runRegionProbe(UUID uuid, SpongePlayerRequestState capturedState, ServerLevel level, long[] positions, long heldGeneration) {
-        runRegionProbe(uuid, capturedState, level, positions, heldGeneration,
-                new AbstractPlayerRequestState.LateProbeRequest[0]);
-    }
-
-    private void runRegionProbe(UUID uuid, SpongePlayerRequestState capturedState, ServerLevel level,
-            long[] positions, long heldGeneration, AbstractPlayerRequestState.LateProbeRequest[] late) {
-        var claims = new Long2ObjectOpenHashMap<AbstractPlayerRequestState.LateProbeRequest>();
-        for (var request : late) claims.put(request.position(), request);
-        var registration = capturedState.registration();
-        if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return;
-        Long2ObjectOpenHashMap<LoadedColumnData> found = null;
-        for (long packed : positions) {
-            int cx = PositionUtil.unpackX(packed);
-            int cz = PositionUtil.unpackZ(packed);
-            var claim = claims.get(packed);
-            if (!this.regionOwnershipCheck.ownsChunk(level, cx, cz)) {
-                if (claim != null) capturedState.completeLateProbe(claim, null);
-                continue;
-            }
-            var capture = this.offThreadProcessor.captureLoadedProbe(level.dimension().identifier().toString(), packed, registration);
-            var column = this.loadedColumnProbe.probe(level, cx, cz);
-            if (column != null) {
-                if (found == null) found = new Long2ObjectOpenHashMap<>();
-                var bound = capture.bind(column);
-                found.put(packed, bound);
-                if (claim != null) capturedState.completeLateProbe(claim, bound);
-                else if (heldGeneration >= 0) capturedState.publishLateProbe(heldGeneration, bound);
-            } else if (claim != null) {
-                capturedState.completeLateProbe(claim, null);
-            }
-        }
-        if (found == null) return;
-        var batch = new RegionProbeBatch(level.dimension().identifier().toString(), registration, found);
-        this.regionProbeResults.compute(uuid, (k, prev) -> {
-            if (this.shuttingDown || registration.isRetired() || this.players.get(uuid) != capturedState) return prev;
-            if (prev == null || prev.registration() != registration || !prev.dimension().equals(batch.dimension())) return batch;
-            prev.probes().putAll(batch.probes());
-            return prev;
-        });
     }
 
     private void drainSendActions() {
@@ -2115,11 +1825,11 @@ public class SpongeRequestProcessingService {
             // enqueues the removal event that sweeps the processing thread's registration-keyed
             // generation in-flight tracking (removeGenerationTracking) — without that sweep the
             // dropped ticket's tracking would leak (do not add a drop path that skips it).
-            // Folia timing corner (review 2026-08-27 R17): a region-thread dimension flip
-            // landing BETWEEN this tick's lifecycle pass and this drain reaches the mismatch
-            // with the OLD state still admitting — its pending GENERATION entry then gets no
-            // outcome this tick and the slot is held until the NEXT tick's dimension-change
-            // cycle sweeps the whole state. Bounded to one tick, no leak.
+            // A dimension flip landing BETWEEN this tick's lifecycle pass and this drain
+            // (review 2026-08-27 R17) reaches the mismatch with the OLD state still
+            // admitting — its pending GENERATION entry then gets no outcome this tick and
+            // the slot is held until the NEXT tick's dimension-change cycle sweeps the
+            // whole state. Bounded to one tick, no leak.
             if (!dimension.equals(req.dimension())) continue;
             boolean accepted = req.policyRevision() == this.settingsRevision
                     && !player.isRemoved() && this.generationService.submitGeneration(
@@ -2147,9 +1857,7 @@ public class SpongeRequestProcessingService {
 
     /** Far players (E1): one broadcast pass every farPlayersUpdateIntervalTicks while
      *  armed and subscribed. Mode transitions drain control frames every tick;
-     *  mode "off" skips position and equipment snapshots. Pump thread (Folia: cross-region position/equipment
-     *  reads are stale-tolerant by design — accepted for display-only data, the
-     *  experimental label covers it). */
+     *  mode "off" skips position and equipment snapshots. Pump thread. */
     private void tickFarPlayers() {
         if (this.farPlayerService.subscriberCount() == 0) return;
         try {
@@ -2177,9 +1885,9 @@ public class SpongeRequestProcessingService {
 
     private boolean farPlayerTickErrorWarned;
 
-    /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
-     *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
-     *  the hiddenFor belt did not cover) must not abort the pass for every other
+    /** One snapshot per online player, CONTAINED per player (review 2026-08-27 R2): one
+     *  broken read (equipment, vehicle, a throwing permission service the hiddenFor belt
+     *  did not cover) must not abort the pass for every other
      *  player — the pre-fix shape, where the only catch was around the whole pass.
      *  The skipped player reads as absent this interval; the roster reconciles next
      *  tick (stale-tolerant by the same doctrine as the reads themselves). The
@@ -2267,10 +1975,8 @@ public class SpongeRequestProcessingService {
 
     public void shutdown() {
         cancelSettingsReceipts();
-        // Normal stop and /reload are serialized with the pump (region shutdown thread /
-        // global tick thread), but a runtime plugin manager can disable us from a player
-        // region thread — this flag shrinks the tick-vs-shutdown overlap to at most the one
-        // in-flight tick (runtime disables are documented best-effort on Folia).
+        // Server stop is serialized with the pump (both on the main thread); this flag
+        // still makes a tick that slips past shutdown a no-op.
         this.shuttingDown = true;
         this.runtimeTasks.clear();
         this.serviceGateState.clear();

@@ -12,7 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Paper twin of the Fabric {@code IdentityTables} — textual twin discipline, same
+ * Sponge twin of the Fabric {@code IdentityTables} — textual twin discipline, same
  * enumeration ({@code Block.BLOCK_STATE_REGISTRY} / the dynamic biome registry) and
  * the same {@link IdentityCodec} canonical form, so both platforms emit identical
  * v20 dictionaries for identical content (the wire-parity contract). Ships INERT at

@@ -15,7 +15,7 @@ import org.spongepowered.api.event.block.ChangeBlockEvent;
  */
 public class SpongeWorldHandler {
 
-    /** Read once (-Dlss.soak.dirtyTrace), as on Paper. */
+    /** Read once (-Dlss.soak.dirtyTrace). */
     private static final boolean DIRTY_TRACE = Boolean.getBoolean("lss.soak.dirtyTrace");
 
     private final DirtyColumnTracker dirtyTracker;

@@ -63,7 +63,7 @@ final class SpongeNbtSectionSerializer {
     private static final long[] EMPTY_LONGS = new long[0];
     private static final byte[] ZERO_NIBBLES = new byte[2048];
 
-    /** Test seam: the region-file NBT read — the only NMS call in the Paper disk-read path.
+    /** Test seam: the region-file NBT read — the only NMS call in the disk-read path.
      *  Production wires {@link ChunkMap#read}; tests inject empty / failing / timing-out
      *  futures to pin the submit-envelope triage. */
     @FunctionalInterface
@@ -195,11 +195,8 @@ final class SpongeNbtSectionSerializer {
      * serve nor condemn the column (vanilla saves light-only entries at blockRange±1; the
      * range-free overload above stays unbounded for the corpus goldens).
      */
-    // LevelChunkSection.write(buf) is @Deprecated on Paper (an anti-xray overload was added),
-    // but the 1-arg form is the canonical vanilla serialization and is byte-identical to the
-    // Fabric path. The wire format must match Fabric exactly, so the MASKED branch keeps this
-    // call (do not migrate); the headless branches write the identical shape by construction.
-    @SuppressWarnings("deprecation")
+    // The wire format must match Fabric exactly: the MASKED branch writes through vanilla's
+    // LevelChunkSection.write; the headless branches write the identical shape by construction.
     static byte[] serializeChunkNbt(CompoundTag chunkNbt, RegistryAccess registryAccess,
                                     SpongeXrayMaskManager.MaskEntry maskEntry,
                                     int minSectionY, int maxSectionY, boolean useNbtTranscode) {

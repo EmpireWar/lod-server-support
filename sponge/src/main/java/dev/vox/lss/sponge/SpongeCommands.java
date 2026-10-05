@@ -42,8 +42,8 @@ public class SpongeCommands {
 
     public boolean onCommand(Audience sender, String label, String[] args) {
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
-            // Bare /lsslod = help (v0.11.0 stage C) — shared builder, so Fabric/Paper
-            // render identical lines; backfill verbs stay Fabric-only.
+            // Bare /lsslod = help (v0.11.0 stage C) — shared builder, so every platform
+            // renders identical lines; backfill verbs stay Fabric-only.
             for (var line : dev.vox.lss.common.CommandHelp.lines(label, false)) {
                 send(sender, line);
             }
@@ -161,12 +161,10 @@ public class SpongeCommands {
         }
     }
 
-    /** The store ops verbs (4-agent round R3: Paper shipped the store with no ops
-     *  surface at all — and Paper is the platform whose staleness bound is the
-     *  periodic resweep, so it needs the remediation lever MOST). Backfill verbs stay
-     *  Fabric-only for now (recorded deferral: no Paper backfill wiring). Thread-safe
-     *  from Folia's region-threaded dispatch: diagnostics reads are volatile gauges,
-     *  invalidate-all is tombstones + a control-queue offer. */
+    /** The store ops verbs (4-agent round R3): the store's staleness bound here is the
+     *  periodic resweep, so operators need the remediation lever. Backfill verbs stay
+     *  Fabric-only (no backfill wiring outside Fabric). Thread-safe: diagnostics reads are
+     *  volatile gauges, invalidate-all is tombstones + a control-queue offer. */
     private void storeCommand(Audience sender, String label,
                               SpongeRequestProcessingService service, String[] args) {
         var store = service.getLodStore();

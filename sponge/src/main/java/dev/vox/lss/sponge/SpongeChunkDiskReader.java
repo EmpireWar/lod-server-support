@@ -9,9 +9,9 @@ import net.minecraft.world.level.ChunkPos;
 import java.util.UUID;
 
 /**
- * Async region file reader for Paper. The shared base owns the executor, result queues,
- * and error triage; this class only captures the NMS handles (Paper uses Mojang mappings,
- * so no mixin accessor needed) and serializes via {@link SpongeNbtSectionSerializer}.
+ * Async region file reader for Sponge. The shared base owns the executor, result queues,
+ * and error triage; this class only captures the NMS handles (Sponge runs Mojang mappings)
+ * and serializes via {@link SpongeNbtSectionSerializer}.
  */
 public class SpongeChunkDiskReader extends AbstractChunkDiskReader {
 

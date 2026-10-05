@@ -6,7 +6,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
 /**
- * Per-player state tracking for the Paper plugin. Adapted from Fabric's PlayerRequestState
+ * Per-player state tracking for the Sponge plugin. Adapted from Fabric's PlayerRequestState
  * with QueuedPayload holding encoded byte[] + channel name instead of CustomPacketPayload.
  */
 public class SpongePlayerRequestState extends AbstractPlayerRequestState<byte[]> {

@@ -41,8 +41,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>Headless serve path (2026-07-29 profile — mirrors the Fabric twin exactly): the
  * UNMASKED path never constructs a {@link LevelChunkSection}. The two wire count headers
  * come from {@link #countNonEmptyAndFluid}'s palette histogram instead of the ctor's
- * per-cell recount (on Paper the ctor is even costlier — Moonrise's recalc also builds
- * per-state coordinate lists the wire never needs), and the containers write themselves.
+ * per-cell recount, and the containers write themselves.
  * Palette-entry block-state decode goes through {@link SpongeMemoizedNbtCodec}. The MASKED
  * path still constructs real sections: mask semantics rely on the counting ctor for the
  * masked headers (see SpongeXrayMaskFilter).
@@ -646,8 +645,8 @@ final class SpongeNbtSectionSerializer {
     /**
      * The two wire count headers, packed {@code (nonEmpty << 16) | fluid} — see the Fabric
      * twin (BlockCounter semantics minus the ticking counts; histogram instead of the
-     * per-cell recount). {@code states.data} is public on Paper (Moonrise patch); the
-     * container is thread-confined (freshly parsed on this reader thread).
+     * per-cell recount). {@code states.data} is opened by the access widener (as on
+     * Fabric); the container is thread-confined (freshly parsed on this reader thread).
      */
     static int countNonEmptyAndFluid(PalettedContainer<BlockState> states) {
         var data = states.data;
@@ -808,12 +807,12 @@ final class SpongeNbtSectionSerializer {
                     // (byte) cast — see the Fabric twin: the native route's writeByte
                     // truncates out-of-range sectionY; the direct route must match.
                     (byte) p.sectionY(),
-                    // Derived (V-2 review MAJOR-2) — the PAPER-family twin of the
-                    // fabric direct-route rule: (familyFold, 0) on a 1-short line.
+                    // Derived (V-2 review MAJOR-2): Sponge runs vanilla's section recalc,
+                    // so this is the fabric-family rule — (familyFold, 0) on a 1-short line.
                     dev.vox.lss.common.wire.NativeSectionShape.NATIVE_COUNT_SHORTS == 2
                             ? p.nonEmptyCount()
                             : dev.vox.lss.common.wire.NativeSectionShape
-                                    .foldedCountPaperFamily(p.nonEmptyCount(), p.fluidCount()),
+                                    .foldedCountFabricFamily(p.nonEmptyCount(), p.fluidCount()),
                     dev.vox.lss.common.wire.NativeSectionShape.NATIVE_COUNT_SHORTS == 2
                             ? p.fluidCount() : 0,
                     dev.vox.lss.common.wire.NativeToV20Translator.convertIndexed(
@@ -873,11 +872,10 @@ final class SpongeNbtSectionSerializer {
         factoryMemo = java.util.Map.entry(new java.lang.ref.WeakReference<>(registryAccess), scoped);
         return scoped;
     }
-    /** V-2/S1 headerDerivation, PAPER family: the native count header this family's
-     *  (Moonrise-patched) vanilla writes, derived from {@code NativeSectionShape} —
-     *  26.x: the two-short pair verbatim; a 1-short line writes the family fold
-     *  (1.21.11: {@code nonEmpty} alone — Moonrise's recalc, a DIFFERENT fold from
-     *  Fabric's on the same line). Both headless write sites route here. */
+    /** V-2/S1 headerDerivation: the native count header vanilla's section writes, derived
+     *  from {@code NativeSectionShape}. Sponge runs vanilla's recalc, so this is the
+     *  fabric-family fold (1.21.11: {@code nonEmpty + fluid}), NOT Paper's (Moonrise
+     *  counts {@code nonEmpty} alone). Both headless write sites route here. */
     private static void writeNativeCountHeader(net.minecraft.network.FriendlyByteBuf buf,
                                                int nonEmpty, int fluid) {
         if (dev.vox.lss.common.wire.NativeSectionShape.NATIVE_COUNT_SHORTS == 2) {
@@ -885,7 +883,7 @@ final class SpongeNbtSectionSerializer {
             buf.writeShort(fluid);
         } else {
             buf.writeShort(dev.vox.lss.common.wire.NativeSectionShape
-                    .foldedCountPaperFamily(nonEmpty, fluid));
+                    .foldedCountFabricFamily(nonEmpty, fluid));
         }
     }
 

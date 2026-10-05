@@ -9,13 +9,11 @@ import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.PalettedContainerRO;
 
 /**
- * The Paper-family twin of {@code dev.vox.lss.platform.SectionConstruction} (V-2/S2):
- * the ONLY main-source site invoking a {@link LevelChunkSection} constructor in the
- * paper module — pinned by {@code SectionConstructionPinTest}. Paper's (Moonrise) section
- * ctor takes the MUTABLE container where 26.x Fabric accepts the read-only view, which
- * is exactly the per-family variance this seam exists to hold. See the xplat twin's
- * javadoc for the per-line ctor churn and the carried 1.21.x constraint (never the
- * deserialization ctor — the AntiXray non-null-safe mixin).
+ * The Sponge twin of {@code dev.vox.lss.platform.SectionConstruction} (V-2/S2): the ONLY
+ * main-source site invoking a {@link LevelChunkSection} constructor in the sponge module.
+ * Sponge runs vanilla's section ctor, which accepts the read-only biome view like the
+ * Fabric twin — unlike Paper's, which needs the mutable container. See the xplat twin's
+ * javadoc for the per-line ctor churn.
  */
 final class SpongeSectionConstruction {
     private SpongeSectionConstruction() {}
@@ -26,17 +24,14 @@ final class SpongeSectionConstruction {
     }
 
     /**
-     * A section from parsed containers (the NBT serializer's object path). Unpack always
-     * returns the mutable container, so the instanceof matches for parsed AND default
-     * biomes (the pre-headless code had the same shape); the factory fallback covers the
-     * declared-RO case.
+     * A section from parsed containers (the NBT serializer's object path). Vanilla's
+     * biome codec yields a read-only container; it must be kept as is — substituting
+     * default biomes would ship the wrong biome data.
      */
     static LevelChunkSection fromContainers(PalettedContainer<BlockState> states,
                                             PalettedContainerRO<Holder<Biome>> biomes,
                                             PalettedContainerFactory factory) {
-        return biomes instanceof PalettedContainer<Holder<Biome>> biomeContainer
-                ? new LevelChunkSection(states, biomeContainer)
-                : new LevelChunkSection(states, factory.createForBiomes());
+        return new LevelChunkSection(states, biomes);
     }
 
     /**

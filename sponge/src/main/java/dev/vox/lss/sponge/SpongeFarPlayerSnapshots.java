@@ -25,6 +25,11 @@ final class SpongeFarPlayerSnapshots {
             EquipmentSlot.FEET, EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND};
 
     static FarPlayerBroadcastService.PlayerSnapshot snapshot(ServerPlayer p) {
+        return snapshot(p, hiddenFor(p));
+    }
+
+    /** @param hidden the privacy ladder's verdict for {@code p} (see {@link #hiddenFor}) */
+    static FarPlayerBroadcastService.PlayerSnapshot snapshot(ServerPlayer p, boolean hidden) {
         byte pose = 0;
         if (p.isCrouching()) pose |= POSE_SNEAK;
         if (p.isFallFlying()) pose |= POSE_GLIDE;
@@ -73,41 +78,43 @@ final class SpongeFarPlayerSnapshots {
                 pose,
                 delta.x * 20.0, delta.y * 20.0, delta.z * 20.0,
                 p.isSpectator(), p.isInvisible(), p.isAlive() && !p.isRemoved(),
-                // The privacy ladder (permission nodes + vanish bridge) — contained,
-                // fail-hidden; the ladder's full rationale lives on hiddenFor. Pair-wise
-                // Player#hideEntity remains uncovered (documented: per-viewer filtering
-                // would break the once-per-tick snapshot inversion).
-                hiddenFor(p),
+                // The privacy ladder (permission nodes + vanish) — contained, fail-hidden;
+                // the ladder's full rationale lives on hiddenFor. Per-viewer hiding remains
+                // uncovered (per-viewer filtering would break the once-per-tick snapshot
+                // inversion).
+                hidden,
                 hash, equipmentIds, equipmentCounts, vehicle);
     }
 
     private static volatile boolean hiddenReadWarned;
 
-    /**
-     * The privacy ladder, CONTAINED per player and failing HIDDEN (Folia review
-     * 2026-08-27 R2/R7, reversing the E2 fail-open): on Folia the pump reads a
-     * cross-region {@code PermissibleBase} (a plain-HashMap check-then-act the
-     * target's own region thread can recalculate mid-read) and vanish metadata whose
-     * {@code LazyMetadataValue} callables can hit region-ownership checks that never
-     * fire on Paper's main thread. A raced/throwing read must never LEAK a hidden or
-     * vanished player's position — hiding too much for one interval is recoverable,
-     * a leaked vanished admin is not. The throw is contained HERE so one broken
-     * permissible cannot abort the snapshot pass for every other player (that was the
-     * old failure shape: the only catch was around the whole pass). Once-per-JVM warn.
-     */
     static boolean hiddenFor(ServerPlayer player) {
+        return hiddenFor(node -> SpongePlayers.granted(player, node), () -> SpongePlayers.vanished(player));
+    }
+
+    /**
+     * The privacy ladder, CONTAINED per player and failing HIDDEN: a throwing permission
+     * or vanish read (a broken permission plugin, a data provider error) must never LEAK a
+     * hidden or vanished player's position — hiding too much for one interval is
+     * recoverable, a leaked vanished admin is not. Contained HERE so one broken read cannot
+     * abort the snapshot pass for every other player. Once-per-JVM warn.
+     *
+     * <p>BOTH brand spellings are honored, so a jar swap keeps the grant. Only explicit
+     * grants count: Sponge has no plugin.yml default, and an op must not be hidden merely
+     * for being an op.
+     */
+    static boolean hiddenFor(java.util.function.Predicate<String> granted,
+                             java.util.function.BooleanSupplier vanished) {
         try {
-            // BOTH brand spellings are honored, so a jar swap keeps the grant. Explicit
-            // grants only: Sponge has no plugin.yml default to keep ops visible.
-            return SpongePlayers.granted(player, dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_LSS)
-                    || SpongePlayers.granted(player, dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_VSS)
-                    || SpongePlayers.vanished(player);
+            return granted.test(dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_LSS)
+                    || granted.test(dev.vox.lss.common.LSSPermissions.FARPLAYERS_HIDDEN_VSS)
+                    || vanished.getAsBoolean();
         } catch (Exception e) {
             if (!hiddenReadWarned) {
                 hiddenReadWarned = true;
                 dev.vox.lss.common.LSSLogger.warn(
-                        "Far-player privacy read (permission/vanish/disguise) threw — treating the"
-                                + " affected player as HIDDEN (fail-safe direction; a raced"
+                        "Far-player privacy read (permission/vanish) threw — treating the"
+                                + " affected player as HIDDEN (fail-safe direction; a broken"
                                 + " read must never leak a hidden position). One warn per"
                                 + " session (" + e + ")");
             }

@@ -101,21 +101,21 @@ public class LSSSpongePlugin {
      *  must never escape into handshake silence), the log latch + denied-handshake memo on
      *  the service's {@link ServiceGateState}, and the denial hook marshaling the
      *  unregistration composite onto the pump. Extracted static so both halves are
-     *  pinnable against a mock Player — a hard-coded {@code true} here would make the
+     *  pinnable without a live player — a hard-coded {@code true} here would make the
      *  whole feature inert on a live server while every core test stayed green.
      *
      *  @param state                 the owning service's gate state, or null when no
      *                               service exists (the conjunction then never deposits)
      *  @param deniedWhileRegistered the pump-marshaled unregistration composite
      *                               (enqueueServiceGateUnregister), or null */
-    static PlayerServiceGate serviceGateFor(ServerPlayer player, java.util.UUID uuid,
+    static PlayerServiceGate serviceGateFor(java.util.function.Predicate<String> holds, java.util.UUID uuid,
                                             String playerName, ServiceGateState state,
                                             Runnable deniedWhileRegistered) {
         return new PlayerServiceGate() {
             @Override
             public boolean hasPermission(String node) {
                 try {
-                    return SpongePlayers.holds(player, node);
+                    return holds.test(node);
                 } catch (Throwable e) {
                     if (e instanceof VirtualMachineError vme) throw vme;
                     if (PERMISSIBLE_THROW_WARNED.compareAndSet(false, true)) {
@@ -514,7 +514,7 @@ public class LSSSpongePlugin {
                 // Ticket #6: the per-player service gate. Read inline on this thread (region
                 // thread on Folia) — no scheduling, and an online player's permissible is
                 // safe to read there, the same shape SpongeFarPlayerSnapshots already uses.
-                serviceGateFor(nmsPlayer, nmsPlayer.getUUID(),
+                serviceGateFor(node -> SpongePlayers.holds(nmsPlayer, node), nmsPlayer.getUUID(),
                         nmsPlayer.getName().getString(),
                         service == null ? null : service.getServiceGateState(),
                         service == null ? null

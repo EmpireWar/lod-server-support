@@ -54,6 +54,16 @@ dependencies {
     // an opaque capsule loaded privately.
     implementation 'com.github.luben:zstd-jni:1.5.7-3'
     compileOnly 'org.spongepowered:mixin:0.8.7'
+    // The Sponge Gradle plugin adds the API compile-only; tests need it at runtime too.
+    testImplementation 'org.spongepowered:spongeapi:18.0.0-SNAPSHOT'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.mockito:mockito-core:5.20.0'
+    testImplementation 'org.ow2.asm:asm-tree:9.8'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 java {

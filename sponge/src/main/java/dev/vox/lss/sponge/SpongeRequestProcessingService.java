@@ -545,10 +545,9 @@ public class SpongeRequestProcessingService {
             }
         }
         // Region-dir resolver, HOISTED out of the store branch (region-summary-sync-plan.md
-        // §5 integration M2 — the P1 header rung must work store-LESS). The per-line
-        // layout invariant (surfaces row 17) lives on resolveRegionDirs below.
+        // §5 integration M2 — the P1 header rung must work store-LESS).
         var worldRoot = server.getWorldPath(LevelResource.ROOT).normalize();
-        var regionDirs = resolveRegionDirs(server, worldRoot);
+        var regionDirs = resolveRegionDirs(server, REGION_FOLDER);
         var regionStamps = new dev.vox.lss.common.region.RegionStampTable(regionDirs::get);
         diskReader.attachRegionStamps(regionStamps);
         // Tracker + mark listener BEFORE the processor starts (the Fabric twin's
@@ -624,30 +623,34 @@ public class SpongeRequestProcessingService {
                 regionStamps, regionDirs);
     }
 
+    /**
+     * Where a level's region files live. Read from the level's own chunk storage — the
+     * directory the game really writes — because every Sponge world has its own storage
+     * root, so neither the server world root nor the dimension key gives the path (the
+     * per-line layout question of surfaces row 17 does not arise here).
+     */
+    static final java.util.function.Function<ServerLevel, java.nio.file.Path> REGION_FOLDER =
+            level -> level.getChunkSource().chunkMap.worker.storage.folder;
+
     /** Region-dir resolution for the P1 freshness rungs (one call site in the wiring
-     *  builder above). The per-line layout question (surfaces row 17) does not arise on
-     *  Sponge: see {@link #putRegionDir}. */
+     *  builder above); {@link #onLevelLoaded} adds worlds loaded later. */
     static java.util.concurrent.ConcurrentHashMap<String, java.nio.file.Path> resolveRegionDirs(
-            MinecraftServer server, java.nio.file.Path worldRoot) {
+            MinecraftServer server, java.util.function.Function<ServerLevel, java.nio.file.Path> folderOf) {
         var regionDirs = new java.util.concurrent.ConcurrentHashMap<String, java.nio.file.Path>();
         for (ServerLevel level : server.getAllLevels()) {
-            putRegionDir(regionDirs, level);
+            putRegionDir(regionDirs, level, folderOf);
         }
         return regionDirs;
     }
 
-    /**
-     * Sponge loads worlds after startup too (and each has its own storage root), so the
-     * folder is read from the level's own chunk storage — the directory the game really
-     * writes — and {@link #onLevelLoaded} adds worlds as they appear. Per-level belt: an
-     * unresolvable level degrades that one dimension to UNKNOWN (the table's designed
-     * fail-safe), never takes down service start.
-     */
-    static void putRegionDir(java.util.Map<String, java.nio.file.Path> regionDirs, ServerLevel level) {
+    /** Per-level belt: an unresolvable level degrades that one dimension to UNKNOWN (the
+     *  table's designed fail-safe), never takes down service start. */
+    static void putRegionDir(java.util.Map<String, java.nio.file.Path> regionDirs, ServerLevel level,
+                             java.util.function.Function<ServerLevel, java.nio.file.Path> folderOf) {
         String dim = null;
         try {
             dim = level.dimension().identifier().toString();
-            regionDirs.put(dim, level.getChunkSource().chunkMap.worker.storage.folder.normalize());
+            regionDirs.put(dim, folderOf.apply(level).normalize());
         } catch (Throwable t) {
             LSSLogger.warn("Could not resolve the region directory for "
                     + (dim != null ? dim : "<unresolvable dimension>")
@@ -658,7 +661,7 @@ public class SpongeRequestProcessingService {
     /** Main thread, from the plugin's world-load listener. */
     public void onLevelLoaded(ServerLevel level) {
         var dirs = this.regionDirs;
-        if (dirs != null) putRegionDir(dirs, level);
+        if (dirs != null) putRegionDir(dirs, level, REGION_FOLDER);
     }
 
     private record RegistryIdentity(java.util.List<String> states,

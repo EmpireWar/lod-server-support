@@ -1,10 +1,7 @@
 accessWidener v2 named
-# The region folder a level's chunks are really stored in (Sponge worlds have their own
-# storage roots, so it is read from the chunk storage instead of derived from the key).
-accessible field net/minecraft/world/level/chunk/storage/SimpleRegionStorage worker Lnet/minecraft/world/level/chunk/storage/IOWorker;
-accessible field net/minecraft/world/level/chunk/storage/IOWorker storage Lnet/minecraft/world/level/chunk/storage/RegionFileStorage;
-accessible field net/minecraft/world/level/chunk/storage/RegionFileStorage folder Ljava/nio/file/Path;
-# Headless section serialization: the palette + storage pair, as in the Fabric widener
-# (Paper's Moonrise patch makes these public; vanilla keeps them private).
+# Headless section serialization (disk-read serve path, 2026-07-29 profile): the palette
+# histogram that replaces LevelChunkSection's recalcBlockCounts needs the container's
+# palette + storage pair. Vanilla keeps them behind a private volatile field on a private
+# record; Paper's Moonrise patch makes both public, so the Paper twin needs no widening.
 accessible class net/minecraft/world/level/chunk/PalettedContainer$Data
 accessible field net/minecraft/world/level/chunk/PalettedContainer data Lnet/minecraft/world/level/chunk/PalettedContainer$Data;

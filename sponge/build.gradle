@@ -23,6 +23,30 @@ minecraft {
     accessWideners(file('src/main/resources/lss-sponge.accesswidener'))
 }
 
+// The xplat shared source set, as the fabric/neoforge modules compile it — server half only:
+// this is a dedicated-server plugin, so the client tree and client-only mixins stay out.
+sourceSets {
+    main {
+        java {
+            srcDir '../xplat/src/main/java'
+            exclude 'dev/vox/lss/networking/client/**'
+            exclude 'dev/vox/lss/config/menu/**'
+            exclude 'dev/vox/lss/config/LSSClientConfig.java'
+            exclude 'dev/vox/lss/api/**'
+            exclude 'dev/vox/lss/compat/Xaero*'
+            exclude 'dev/vox/lss/compat/VoxyCompat.java'
+            exclude 'dev/vox/lss/compat/ModCompat.java'
+            exclude 'dev/vox/lss/compat/VoxyStorageOverride.java'
+            exclude 'dev/vox/lss/seed/ClientWorldSeed.java'
+            exclude 'dev/vox/lss/mixin/AccessorClientPacketListener.java'
+            exclude 'dev/vox/lss/mixin/AccessorEntityRenderDispatcher.java'
+            exclude 'dev/vox/lss/mixin/AccessorLivingEntity.java'
+            exclude 'dev/vox/lss/mixin/AccessorBiomeManager.java'
+            exclude 'dev/vox/lss/benchmark/**'
+        }
+    }
+}
+
 sponge {
     apiVersion('18.0.0-SNAPSHOT')
     license('MIT')
@@ -54,11 +78,7 @@ dependencies {
     // an opaque capsule loaded privately.
     implementation 'com.github.luben:zstd-jni:1.5.7-3'
     compileOnly 'org.spongepowered:mixin:0.8.7'
-    // The Sponge Gradle plugin adds the API compile-only; tests need it at runtime too.
-    testImplementation 'org.spongepowered:spongeapi:18.0.0-SNAPSHOT'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
-    testImplementation 'org.mockito:mockito-core:5.20.0'
-    testImplementation 'org.ow2.asm:asm-tree:9.8'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -86,7 +106,7 @@ def storeNativeStrip = { el ->
 }
 
 jar {
-    manifest.attributes('Access-Widener': 'lss-sponge.accesswidener')
+    manifest.attributes('Access-Widener': 'lss-sponge.accesswidener', 'MixinConfigs': 'lss.sponge.mixins.json')
 }
 
 shadowJar {

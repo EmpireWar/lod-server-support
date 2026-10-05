@@ -47,6 +47,11 @@ jobs:
       - name: Paper Tier 1 tests
         run: ./gradlew :paper:test
 
+      # The Sponge plugin (vanilla chunk system, VanillaGradle). shadowJar's finalizer also
+      # produces the VSS-branded jar.
+      - name: Sponge Tier 1 tests + plugin jars
+        run: ./gradlew :sponge:test :sponge:shadowJar
+
       # Stage N: the NeoForge module (best-effort tier — CLAUDE.md "Support tiers").
       # build = compile (xplat under MDG — the twin-contract enforcement) + the contract
       # suite + shadowJar + the VSS repackage; the gametest smoke runs the 8-test subset
@@ -112,6 +117,8 @@ jobs:
             fabric/build/test-results/
             paper/build/reports/
             paper/build/test-results/
+            sponge/build/reports/
+            sponge/build/test-results/
             neoforge/build/reports/
             neoforge/build/test-results/
             neoforge/run/logs/
@@ -141,6 +148,16 @@ jobs:
         with:
           name: voxy-server-side-paper
           path: paper/build/libs/voxy-server-side-paper*.jar
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: lod-server-support-sponge
+          path: sponge/build/libs/lod-server-support-sponge*.jar
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: voxy-server-side-sponge
+          path: sponge/build/libs/voxy-server-side-sponge*.jar
 
       - uses: actions/upload-artifact@v5
         with:

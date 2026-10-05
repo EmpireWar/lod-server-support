@@ -106,3 +106,73 @@ shadowJar {
 }
 
 tasks.named('assemble') { dependsOn tasks.named('shadowJar') }
+
+// ---- Voxy Server Side branding (the Paper twin's vssJar, Sponge metadata) ----
+// A byte-copy rebrand of the shadow jar: the plugin id/name in sponge_plugins.json and
+// lss-brand.properties (which also renames the command to /vsslod and its permission to
+// vss.admin). Wire-identical to the LSS jar.
+import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+def vssSpongeVersion = providers.environmentVariable('CI').map { it == 'true' }.getOrElse(false)
+        ? "${project.mod_version}+${project.minecraft_version}" : ''
+def vssSpongeJarName = "voxy-server-side-sponge" + (vssSpongeVersion ? "-${vssSpongeVersion}" : "") + ".jar"
+
+tasks.register('vssJar') {
+    description = 'Repackages the LSS Sponge jar under the Voxy Server Side branding.'
+    dependsOn tasks.named('shadowJar')
+    def srcJar = tasks.named('shadowJar').flatMap { it.archiveFile }
+    def outFile = layout.buildDirectory.file("libs/${vssSpongeJarName}")
+    inputs.file(srcJar)
+    outputs.file(outFile)
+    doLast {
+        def src = srcJar.get().asFile
+        def out = outFile.get().asFile
+        out.parentFile.mkdirs()
+        def zf = new ZipFile(src)
+        try {
+            new ZipOutputStream(new FileOutputStream(out)).withCloseable { zos ->
+                def entries = zf.entries()
+                while (entries.hasMoreElements()) {
+                    def e = entries.nextElement()
+                    byte[] replaced = null
+                    if (e.name == 'META-INF/sponge_plugins.json') {
+                        def text = zf.getInputStream(e).getText('UTF-8')
+                        def rebranded = text
+                                .replace('"id": "lodserversupport"', '"id": "voxyserverside"')
+                                .replace('"name": "LOD Server Support"', '"name": "Voxy Server Side"')
+                                .replace('"homepage": "https://modrinth.com/plugin/lod-server-support"',
+                                        '"homepage": "https://modrinth.com/plugin/voxy-server-side"')
+                        if (rebranded == text || !rebranded.contains('"id": "voxyserverside"')) {
+                            throw new GradleException('vssJar: sponge_plugins.json shape changed; update the rebrand')
+                        }
+                        replaced = rebranded.getBytes('UTF-8')
+                    } else if (e.name == 'lss-brand.properties') {
+                        replaced = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                                .getBytes('UTF-8')
+                    }
+                    def ne = new ZipEntry(e.name)
+                    if (replaced != null) {
+                        zos.putNextEntry(ne)
+                        zos.write(replaced)
+                    } else {
+                        ne.method = e.method
+                        if (e.method == ZipEntry.STORED) {
+                            ne.size = e.size
+                            ne.compressedSize = e.compressedSize
+                            ne.crc = e.crc
+                        }
+                        zos.putNextEntry(ne)
+                        zf.getInputStream(e).withCloseable { is -> zos << is }
+                    }
+                    zos.closeEntry()
+                }
+            }
+        } finally {
+            zf.close()
+        }
+    }
+}
+
+tasks.named('shadowJar') { finalizedBy tasks.named('vssJar') }

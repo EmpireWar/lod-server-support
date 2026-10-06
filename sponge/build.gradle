@@ -23,7 +23,7 @@ minecraft {
     accessWideners(file('src/main/resources/lss-sponge.accesswidener'))
 }
 
-// The xplat shared source set, as the fabric/neoforge modules compile it — server half only:
+// The xplat shared source set, as the fabric/neoforge modules compile it â€” server half only:
 // this is a dedicated-server plugin, so the client tree and client-only mixins stay out.
 sourceSets {
     main {

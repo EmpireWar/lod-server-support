@@ -8,14 +8,14 @@
 // Each platform's vssJar is a byte-copy rebrand of the LSS jar (wire-identical; see the
 // vssJar tasks in fabric/ and paper/ build.gradle). Version-stamped names: CI=true.
 tasks.register('vssJars') {
-    description = 'Builds the Voxy Server Side branded jars (Fabric + Paper + NeoForge).'
+    description = 'Builds the Voxy Server Side branded jars (Fabric + Paper + NeoForge + Sponge).'
     group = 'build'
-    dependsOn ':fabric:vssJar', ':paper:vssJar', ':neoforge:vssJar'
+    dependsOn ':fabric:vssJar', ':paper:vssJar', ':neoforge:vssJar', ':sponge:vssJar'
 }
 
 // Platform builds retain the pure-Java cases moved out of Fabric's test task.
 subprojects { subproject ->
-    if (subproject.name in ['fabric', 'paper', 'neoforge']) {
+    if (subproject.name in ['fabric', 'paper', 'neoforge', 'sponge']) {
         subproject.tasks.matching { it.name == 'check' }.configureEach {
             dependsOn ':common:test'
         }
